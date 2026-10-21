@@ -62,8 +62,8 @@
 
 ## 10. AppImage
 
-- [ ] 10.1 Pack the shell, the NativeAOT host, and a launcher into one AppImage. Verify no arguments start the shell, `serve` starts the host, and any other arguments reach the CLI.
-- [ ] 10.2 Point the user unit `ExecStart` at the AppImage `serve` entry and verify a user-service start runs the daemon.
+- [x] 10.1 Pack the shell, the NativeAOT host, and a launcher into one AppImage. Verify no arguments start the shell, `serve` starts the host, and any other arguments reach the CLI.
+- [x] 10.2 Point the user unit `ExecStart` at the AppImage `serve` entry and verify a user-service start runs the daemon.
 
 ## 11. Integration
 
