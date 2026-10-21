@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=ContextAll
+Exec=contextall-shell
+Icon=contextall
+Type=Application
+Categories=Network;
