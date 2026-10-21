@@ -134,6 +134,8 @@ public sealed class TransferBook
 
     public void ClearFrames() => frames.Clear();
 
+    public void ClearWorks() => works.Clear();
+
     public IReadOnlyList<(string Peer, string Outcome)> Outcomes => outcomes;
 
     public bool AnnouncedDone => announcedDone;
@@ -141,6 +143,29 @@ public sealed class TransferBook
     public TransferSlot? Outbound(string peerId) => outbound.GetValueOrDefault(peerId);
 
     public TransferSlot? Inbound(string peerId) => inbound.GetValueOrDefault(peerId);
+
+    public IReadOnlyCollection<TransferSlot> Outgoing => outbound.Values;
+
+    public IReadOnlyCollection<TransferSlot> Incoming => inbound.Values;
+
+    public uint NextBulk
+    {
+        get => nextStream;
+        set
+        {
+            if (value > nextStream)
+            {
+                nextStream = value;
+            }
+        }
+    }
+
+    public void RestoreInbound(TransferSlot slot)
+    {
+        slot.Accepted = true;
+        slot.WaitingForAccept = false;
+        inbound[slot.PeerId] = slot;
+    }
 
     public string? Offer(string peerId, string fileName, byte[] content, bool sessionUp)
     {
@@ -413,6 +438,15 @@ public sealed class TransferBook
         else if (outboundSlot is not null)
         {
             outbound.Remove(outboundSlot.PeerId);
+        }
+    }
+
+    public void DropOutbound(string transferId)
+    {
+        var slot = outbound.Values.FirstOrDefault(item => item.TransferId == transferId);
+        if (slot is not null && slot.Completed >= slot.SegmentCount)
+        {
+            outbound.Remove(slot.PeerId);
         }
     }
 

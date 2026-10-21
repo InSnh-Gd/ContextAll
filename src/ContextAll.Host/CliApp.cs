@@ -1,5 +1,4 @@
 using System.CommandLine;
-using ContextAll.Ipc;
 using Spectre.Console;
 
 namespace ContextAll.Host;
@@ -43,25 +42,31 @@ public static class CliApp
         var list = new Command("list", "List devices");
         var device = new Command("device", "Devices");
         device.Subcommands.Add(list);
-        list.SetAction(_ => RequireDaemon(io));
+        list.SetAction(_ => LocalClient.DeviceList(io));
         var pairId = new Argument<string>("device-id");
         var pair = new Command("pair", "Start pairing");
         pair.Arguments.Add(pairId);
-        pair.SetAction(_ => RequireDaemon(io));
+        pair.SetAction(result => LocalClient.Pair(io, result.GetValue(pairId) ?? ""));
+        var clipboardId = new Argument<string>("device-id");
+        var clipboardFlag = new Argument<string>("switch");
         var clipboard = new Command("clipboard", "Set clipboard sync");
-        clipboard.Arguments.Add(new Argument<string>("device-id"));
-        clipboard.Arguments.Add(new Argument<string>("switch"));
-        clipboard.SetAction(_ => RequireDaemon(io));
+        clipboard.Arguments.Add(clipboardId);
+        clipboard.Arguments.Add(clipboardFlag);
+        clipboard.SetAction(result => LocalClient.Clipboard(io, result.GetValue(clipboardId) ?? "", result.GetValue(clipboardFlag) ?? ""));
+        var askId = new Argument<string>("device-id");
+        var askFlag = new Argument<string>("switch");
         var ask = new Command("ask-before-save", "Set ask-before-save");
-        ask.Arguments.Add(new Argument<string>("device-id"));
-        ask.Arguments.Add(new Argument<string>("switch"));
-        ask.SetAction(_ => RequireDaemon(io));
+        ask.Arguments.Add(askId);
+        ask.Arguments.Add(askFlag);
+        ask.SetAction(result => LocalClient.AskBeforeSave(io, result.GetValue(askId) ?? "", result.GetValue(askFlag) ?? ""));
+        var sendId = new Argument<string>("device-id");
+        var sendPath = new Argument<string>("path");
         var send = new Command("send", "Send a file");
-        send.Arguments.Add(new Argument<string>("device-id"));
-        send.Arguments.Add(new Argument<string>("path"));
+        send.Arguments.Add(sendId);
+        send.Arguments.Add(sendPath);
         var file = new Command("file", "Files");
         file.Subcommands.Add(send);
-        send.SetAction(_ => RequireDaemon(io));
+        send.SetAction(result => LocalClient.SendFile(io, result.GetValue(sendId) ?? "", result.GetValue(sendPath) ?? ""));
         var yes = new Option<bool>("--yes");
         var reset = new Command("reset", "Replace this device key");
         reset.Options.Add(yes);
@@ -96,25 +101,6 @@ public static class CliApp
     public static int OpenSpectreMenu()
     {
         AnsiConsole.Prompt(new SelectionPrompt<string>().Title("ContextAll").AddChoices(CliMenu.Actions));
-        return 0;
-    }
-
-    static int RequireDaemon(CliIo io)
-    {
-        if (string.IsNullOrEmpty(io.RuntimeDirectory))
-        {
-            io.Error.WriteLine("The daemon is not running.");
-            return 1;
-        }
-
-        var socket = LocalChannelClient.LinuxSocket(io.RuntimeDirectory);
-        if (!DaemonProcess.Probe(socket))
-        {
-            io.Error.WriteLine("The daemon is not running.");
-            return 1;
-        }
-
-        io.Out.WriteLine("devices");
         return 0;
     }
 }

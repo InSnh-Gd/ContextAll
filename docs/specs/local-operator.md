@@ -18,7 +18,7 @@ Linux 身份目录是 `$XDG_DATA_HOME/contextall/identity`，未设置时用 `~/
 
 Windows 管道名是 `\\.\pipe\ContextAll\<用户 SID>`。`ServePipe` 用最大实例数 1 监听 `ContextAll\<SID>`。第二个同名监听返回 1。客户端连上后先收到类型 80 的快照帧。
 
-桌面客户端发出的帧用任务 1.1 的同一套 16 字节头。连接建立后守护进程先写快照。类型 64 到 75 的命令由 `LocalDesk` 处理，回复类型 96。
+桌面客户端发出的帧用任务 1.1 的同一套 16 字节头。连接建立后守护进程先写快照。Linux 套接字上类型 64 到 75 的命令由 `LanHost` 处理，Windows 管道上由 `LocalDesk` 处理，回复都是类型 96。
 
 ## 本地帧
 

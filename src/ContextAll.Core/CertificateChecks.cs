@@ -21,31 +21,35 @@ public enum CertificateFate
 
 public static class CertificateChecks
 {
-    public static Fin<byte[]> SpkiOfLeaf(X509Certificate2 certificate)
+    public static byte[]? LeafSpki(X509Certificate2 certificate)
     {
         if (!IsP256(certificate))
         {
-            return Fin.Fail<byte[]>("not-p256");
+            return null;
         }
 
         using var key = certificate.GetECDsaPublicKey();
         if (key is null)
         {
-            return Fin.Fail<byte[]>("not-p256");
+            return null;
         }
 
-        return Fin.Succ(key.ExportSubjectPublicKeyInfo());
+        return key.ExportSubjectPublicKeyInfo();
+    }
+
+    public static Fin<byte[]> SpkiOfLeaf(X509Certificate2 certificate)
+    {
+        var bytes = LeafSpki(certificate);
+        return bytes is null ? Fin.Fail<byte[]>("not-p256") : Fin.Succ(bytes);
     }
 
     public static CertificateFate Evaluate(X509Certificate2 certificate, TrustEntry? entry)
     {
-        var spki = SpkiOfLeaf(certificate);
-        if (spki.IsFail)
+        var bytes = LeafSpki(certificate);
+        if (bytes is null)
         {
             return CertificateFate.RejectBeforeId;
         }
-
-        var bytes = spki.Match(Succ: value => value, Fail: _ => Array.Empty<byte>());
         if (entry is null)
         {
             return CertificateFate.Continue;

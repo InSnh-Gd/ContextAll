@@ -67,5 +67,5 @@
 
 ## 11. Integration
 
-- [ ] 11.1 Run two daemons on one machine, pair them, enable clipboard both ways, and verify a text copy and a clear arrive on the other side without a notification.
-- [ ] 11.2 Send one file between those daemons with ask-before-save on, then off, and verify accept writes into the download directory, reject leaves nothing, and a dropped connection resumes the same partial file.
+- [x] 11.1 Run two daemons on one machine, pair them, enable clipboard both ways, and verify a text copy and a clear arrive on the other side without a notification.
+- [x] 11.2 Send one file between those daemons with ask-before-save on, then off, and verify accept writes into the download directory, reject leaves nothing, and a dropped connection resumes the same partial file.
