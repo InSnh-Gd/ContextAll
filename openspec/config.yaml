@@ -2,12 +2,9 @@ schema: spec-driven
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  session-protocol is the merged MVP. lan-device-link was folded into it.
+  Where an older note disagrees with session-protocol, follow session-protocol.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
@@ -22,11 +19,10 @@ schema: spec-driven
 # Per-operation guidance (optional)
 # Add advisory guidance for how apply and archive work should be conducted.
 # This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+operations:
+  apply:
+    guidance:
+      - When every implementation task for one capability is checked, update docs/specs/<capability>.md in Chinese in the same change, then move that row to the synced table in docs/README.md. Document only behavior the spec and the code both already have.
+  archive:
+    guidance:
+      - Before archive, each capability in the change has a current Chinese doc at docs/specs/<capability>.md and a synced row in docs/README.md.

@@ -7,10 +7,10 @@ Gives the operator a graphical view of devices, pairing, and transfer settings o
 ## ADDED Requirements
 
 ### Requirement: Same local state on every shell
-The Windows, Linux, and Android shells SHALL show the discovered and paired devices, and SHALL let the operator pair, unpair, change the local display name, change per-peer clipboard enablement, change per-peer ask-before-save, change the download directory, and send one file. Each shell MUST use the local daemon's state rather than a separate session.
+The Windows and Linux shells SHALL show the discovered and paired devices, and SHALL let the operator pair, unpair, change the local display name, change per-peer clipboard enablement, change per-peer ask-before-save, change the download directory, and send one file. Those shells MUST use the local daemon's state. The Android shell MUST use the state of the service running in that app.
 
 #### Scenario: Switch changed in the shell
-- **WHEN** the operator turns on clipboard sync for a peer in any shell
+- **WHEN** the operator turns on clipboard sync for a peer in the Windows or Linux shell
 - **THEN** the daemon records that enablement and the CLI reports the same value
 
 #### Scenario: Android uses the in-app service
