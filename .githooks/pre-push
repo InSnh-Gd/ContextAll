@@ -1,0 +1,3 @@
+#!/bin/sh
+# dotnet test ContextAll.Tests.slnf -c Release
+dotnet test ContextAll.Tests.slnf -c Release

@@ -1,0 +1,15 @@
+{
+  "solution": {
+    "path": "ContextAll.slnx",
+    "projects": [
+      "src/ContextAll.Protocol/ContextAll.Protocol.csproj",
+      "src/ContextAll.Core/ContextAll.Core.csproj",
+      "src/ContextAll.Ipc/ContextAll.Ipc.csproj",
+      "src/ContextAll.Effects/ContextAll.Effects.csproj",
+      "src/ContextAll.Host/ContextAll.Host.csproj",
+      "src/ContextAll.App/ContextAll.App.csproj",
+      "src/ContextAll.App.Desktop/ContextAll.App.Desktop.csproj",
+      "src/ContextAll.App.Android/ContextAll.App.Android.csproj"
+    ]
+  }
+}

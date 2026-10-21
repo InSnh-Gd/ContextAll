@@ -1,0 +1,19 @@
+{
+  "solution": {
+    "path": "ContextAll.slnx",
+    "projects": [
+      "src/ContextAll.Protocol/ContextAll.Protocol.csproj",
+      "src/ContextAll.Core/ContextAll.Core.csproj",
+      "src/ContextAll.Ipc/ContextAll.Ipc.csproj",
+      "src/ContextAll.Effects/ContextAll.Effects.csproj",
+      "src/ContextAll.Host/ContextAll.Host.csproj",
+      "src/ContextAll.App/ContextAll.App.csproj",
+      "src/ContextAll.App.Desktop/ContextAll.App.Desktop.csproj",
+      "tests/ContextAll.Core.Tests/ContextAll.Core.Tests.csproj",
+      "tests/ContextAll.Protocol.Tests/ContextAll.Protocol.Tests.csproj",
+      "tests/ContextAll.Effects.Tests/ContextAll.Effects.Tests.csproj",
+      "tests/ContextAll.Host.Tests/ContextAll.Host.Tests.csproj",
+      "tests/ContextAll.App.Tests/ContextAll.App.Tests.csproj"
+    ]
+  }
+}

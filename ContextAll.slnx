@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ContextAll.Protocol/ContextAll.Protocol.csproj" />
+    <Project Path="src/ContextAll.Core/ContextAll.Core.csproj" />
+    <Project Path="src/ContextAll.Ipc/ContextAll.Ipc.csproj" />
+    <Project Path="src/ContextAll.Effects/ContextAll.Effects.csproj" />
+    <Project Path="src/ContextAll.Host/ContextAll.Host.csproj" />
+    <Project Path="src/ContextAll.App/ContextAll.App.csproj" />
+    <Project Path="src/ContextAll.App.Desktop/ContextAll.App.Desktop.csproj" />
+    <Project Path="src/ContextAll.App.Windows/ContextAll.App.Windows.csproj" />
+    <Project Path="src/ContextAll.App.Android/ContextAll.App.Android.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ContextAll.Core.Tests/ContextAll.Core.Tests.csproj" />
+    <Project Path="tests/ContextAll.Protocol.Tests/ContextAll.Protocol.Tests.csproj" />
+    <Project Path="tests/ContextAll.Effects.Tests/ContextAll.Effects.Tests.csproj" />
+    <Project Path="tests/ContextAll.Host.Tests/ContextAll.Host.Tests.csproj" />
+    <Project Path="tests/ContextAll.App.Tests/ContextAll.App.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,9 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:theme="using:CCSWE.Avalonia.Material"
+             x:Class="ContextAll.App.App"
+             RequestedThemeVariant="Light">
+  <Application.Styles>
+    <theme:MaterialTheme />
+  </Application.Styles>
+</Application>
