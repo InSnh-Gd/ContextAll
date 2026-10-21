@@ -1,0 +1,15 @@
+---
+description: 一个 OpenSpec capability 的任务全部完成后，同步 docs/ 里的中文文档
+alwaysApply: true
+---
+
+# 完成 spec 后同步文档
+
+一个 capability 的实现任务全部勾选后，在同一次变更里更新文档，再把该 capability 视为完成。
+
+1. 读 `openspec/changes/<change>/specs/<capability>/spec.md` 里已经实现的要求。
+2. 用中文改写 `docs/specs/<capability>.md`。只写代码和测试已经成立的行为。文件名与 capability 目录名相同。
+3. 更新 `docs/README.md` 的表：已同步的放进「已同步」，写上文档链接和变更名。
+4. 决策有变化时另写 `docs/adr/`，正文使用中文。capability 文档链接到 ADR，不把决策论证抄进去。
+
+`docs/README.md` 的「待同步」表列出尚未写文档的 capability。那些 spec 的任务未完成时，不新增对应文档，也不把它们写成当前行为。
