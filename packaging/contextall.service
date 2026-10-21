@@ -1,0 +1,9 @@
+[Unit]
+Description=ContextAll
+
+[Service]
+Type=notify
+ExecStart=%h/.local/bin/ContextAll.AppImage serve
+
+[Install]
+WantedBy=default.target

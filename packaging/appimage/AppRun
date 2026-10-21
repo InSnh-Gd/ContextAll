@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+here=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+if [ "$#" -eq 0 ]; then
+  exec "$here/contextall-shell"
+fi
+if [ "$1" = "serve" ]; then
+  exec "$here/contextall-host" serve
+fi
+exec "$here/contextall-host" "$@"
