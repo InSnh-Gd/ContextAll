@@ -1,0 +1,7 @@
+P:System.Threading.Tasks.Task.Result;Await the task instead of reading Result.
+P:System.Threading.Tasks.Task`1.Result;Await the task instead of reading Result.
+M:System.Threading.Tasks.Task.Wait;Await the task instead of calling Wait.
+M:System.Threading.Tasks.Task.Wait(System.Int32);Await the task instead of calling Wait.
+M:System.Threading.Tasks.Task.Wait(System.TimeSpan);Await the task instead of calling Wait.
+M:System.Runtime.CompilerServices.TaskAwaiter.GetResult;Await the task instead of calling GetResult.
+M:System.Runtime.CompilerServices.TaskAwaiter`1.GetResult;Await the task instead of calling GetResult.
