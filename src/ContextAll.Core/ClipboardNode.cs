@@ -246,30 +246,32 @@ public sealed class ClipboardNode
             return lastSent;
         }
 
-        Remember(delta.Origin, delta.Seq);
-        var clock = new HybridClock(delta.Milliseconds, delta.Counter, delta.Origin);
         if (delta.Text is null)
         {
-            if (delta.StreamId is uint streamId && delta.ByteCount is long count && delta.Sha256 is string hash)
+            if (!mutual || delta.StreamId is not uint streamId || delta.ByteCount is not long count || delta.Sha256 is not string hash)
             {
-                if (count <= 0 || count > ClipboardRestart.MaxBytes)
-                {
-                    return lastSent;
-                }
-
-                DiscardOlder(clock);
-                assemblies[streamId] = new Assembly(clock, delta.Seq, count, hash, new byte[(int)count]);
+                return lastSent;
             }
 
+            if (count <= 0 || count > ClipboardRestart.MaxBytes)
+            {
+                return lastSent;
+            }
+
+            Remember(delta.Origin, delta.Seq);
+            var chunkClock = new HybridClock(delta.Milliseconds, delta.Counter, delta.Origin);
+            DiscardOlder(chunkClock);
+            assemblies[streamId] = new Assembly(chunkClock, delta.Seq, count, hash, new byte[(int)count]);
             return lastSent;
         }
 
+        Remember(delta.Origin, delta.Seq);
         if (!mutual)
         {
             return lastSent;
         }
 
-        ApplyIfNewer(clock, delta.Text, delta.Seq, delta.Origin);
+        ApplyIfNewer(new HybridClock(delta.Milliseconds, delta.Counter, delta.Origin), delta.Text, delta.Seq, delta.Origin);
         return lastSent;
     }
 

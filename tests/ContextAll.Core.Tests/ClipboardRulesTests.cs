@@ -166,6 +166,24 @@ public sealed class ClipboardRulesTests
     }
 
     [Fact]
+    public void A_chunk_header_is_not_buffered_until_sync_is_mutual()
+    {
+        var self = DeviceIds.Text(SpkiA);
+        var peer = DeviceIds.Text(SpkiB);
+        var node = new ClipboardNode(self);
+        node.Connect(peer, true, false);
+        node.OnLocal(ClipboardKind.Plain, "kept", 1_000);
+        var count = (long)ClipboardRestart.MaxBytes;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        node.ReceiveDelta(peer, new DeltaPayload(peer, 4, 2_000, 1, null, 9, count, new string('a', 64)), mutual: false);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        node.ReceiveChunk(9, [0, 0, 0, 0, (byte)'x'], mutual: true);
+
+        Assert.True(allocated < count);
+        Assert.Equal("kept", node.Text);
+    }
+
+    [Fact]
     public void Restart_keeps_the_sequence_for_the_same_text_and_still_listens_without_the_file()
     {
         var stored = new ClipboardDocument("same", new HybridClock(1, 0, DeviceIds.Text(SpkiA)), new Dictionary<string, long> { ["ca1"] = 3 }, new HybridClock(1, 0, DeviceIds.Text(SpkiA)), "old", 3);
