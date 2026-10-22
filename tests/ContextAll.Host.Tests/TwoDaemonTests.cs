@@ -35,7 +35,7 @@ public sealed class TwoDaemonTests
         var psi = new ProcessStartInfo
         {
             FileName = "unshare",
-            WorkingDirectory = RepoRoot(),
+            WorkingDirectory = AppContext.BaseDirectory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -45,7 +45,7 @@ public sealed class TwoDaemonTests
         psi.ArgumentList.Add("-k");
         psi.ArgumentList.Add("5");
         psi.ArgumentList.Add("150");
-        psi.ArgumentList.Add("/usr/local/bin/dotnet");
+        psi.ArgumentList.Add(DotnetPath());
         psi.ArgumentList.Add("exec");
         psi.ArgumentList.Add(typeof(TwoDaemonTests).Assembly.Location);
         psi.ArgumentList.Add("two-daemon");
@@ -203,7 +203,7 @@ public sealed class TwoDaemonTests
     {
         var psi = new ProcessStartInfo
         {
-            FileName = inside ? "/usr/bin/nsenter" : "/usr/local/bin/dotnet",
+            FileName = inside ? "/usr/bin/nsenter" : DotnetPath(),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -213,7 +213,7 @@ public sealed class TwoDaemonTests
             psi.ArgumentList.Add("-t");
             psi.ArgumentList.Add(sleepPid.ToString());
             psi.ArgumentList.Add("-n");
-            psi.ArgumentList.Add("/usr/local/bin/dotnet");
+            psi.ArgumentList.Add(DotnetPath());
         }
 
         psi.ArgumentList.Add("exec");
@@ -518,15 +518,27 @@ public sealed class TwoDaemonTests
         }
     }
 
-    static string RepoRoot()
+    static string DotnetPath()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "ContextAll.sln")))
+        var root = Environment.GetEnvironmentVariable("DOTNET_ROOT");
+        if (!string.IsNullOrEmpty(root))
         {
-            dir = dir.Parent;
+            var fromRoot = Path.Combine(root, "dotnet");
+            if (File.Exists(fromRoot))
+            {
+                return fromRoot;
+            }
         }
 
-        return dir?.FullName ?? "/workspace";
+        foreach (var candidate in new[] { "/usr/local/bin/dotnet", "/usr/share/dotnet/dotnet" })
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return "dotnet";
     }
 
     sealed class Side(string home, string runtime, string state, string downloads)
