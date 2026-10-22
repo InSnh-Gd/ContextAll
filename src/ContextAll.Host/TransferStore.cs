@@ -29,11 +29,13 @@ public sealed class TransferMeta
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(TransferMeta))]
-public partial class TransferJsonContext : JsonSerializerContext;
+public sealed partial class TransferJsonContext : JsonSerializerContext;
 
 public sealed class TransferStore
 {
     readonly string directory;
+    readonly Dictionary<string, FileStream> parts = [];
+    readonly object gate = new();
 
     public TransferStore(string directory)
     {
@@ -68,8 +70,10 @@ public sealed class TransferStore
     public void Create(TransferSlot slot, byte[]? full)
     {
         var part = PartPath(slot.TransferId);
-        using (var stream = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.Read))
+        lock (gate)
         {
+            ClosePart(slot.TransferId);
+            using var stream = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.Read);
             if (full is not null)
             {
                 stream.Write(full);
@@ -86,28 +90,82 @@ public sealed class TransferStore
         Save(slot);
     }
 
-    public void Write(string transferId, long offset, byte[] data)
+    public void Write(string transferId, long offset, ReadOnlySpan<byte> data)
     {
-        using var stream = new FileStream(PartPath(transferId), FileMode.Open, FileAccess.Write, FileShare.Read);
-        stream.Position = offset;
-        stream.Write(data);
-        stream.Flush(true);
+        lock (gate)
+        {
+            var stream = Open(transferId);
+            stream.Position = offset;
+            stream.Write(data);
+            stream.Flush();
+        }
     }
 
-    public byte[] Read(string transferId) => File.ReadAllBytes(PartPath(transferId));
+    public void Flush(string transferId)
+    {
+        lock (gate)
+        {
+            if (parts.TryGetValue(transferId, out var stream))
+            {
+                stream.Flush();
+            }
+        }
+    }
+
+    public byte[] Read(string transferId)
+    {
+        lock (gate)
+        {
+            if (parts.TryGetValue(transferId, out var stream))
+            {
+                var position = stream.Position;
+                stream.Position = 0;
+                var bytes = new byte[stream.Length];
+                stream.ReadExactly(bytes);
+                stream.Position = position;
+                return bytes;
+            }
+        }
+
+        return File.ReadAllBytes(PartPath(transferId));
+    }
 
     public bool Exists(string transferId) => File.Exists(MetaPath(transferId));
 
     public void Delete(string transferId)
     {
-        if (File.Exists(PartPath(transferId)))
+        lock (gate)
         {
-            File.Delete(PartPath(transferId));
-        }
+            ClosePart(transferId);
+            if (File.Exists(PartPath(transferId)))
+            {
+                File.Delete(PartPath(transferId));
+            }
 
-        if (File.Exists(MetaPath(transferId)))
+            if (File.Exists(MetaPath(transferId)))
+            {
+                File.Delete(MetaPath(transferId));
+            }
+        }
+    }
+
+    public void DeletePeer(string peerId)
+    {
+        foreach (var path in Directory.GetFiles(directory, "*.meta.json"))
         {
-            File.Delete(MetaPath(transferId));
+            var name = Path.GetFileName(path);
+            const string suffix = ".meta.json";
+            if (!name.EndsWith(suffix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var id = name[..^suffix.Length];
+            var slot = Load(id);
+            if (slot is not null && slot.PeerId == peerId)
+            {
+                Delete(id);
+            }
         }
     }
 
@@ -162,19 +220,44 @@ public sealed class TransferStore
     public bool TryPlace(TransferSlot slot, string downloads)
     {
         var part = PartPath(slot.TransferId);
-        if (!File.Exists(part) || new FileInfo(part).Length != slot.TotalSize)
+        lock (gate)
         {
-            return false;
-        }
-
-        using var sha = SHA256.Create();
-        using (var stream = File.OpenRead(part))
-        {
-            var hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
-            if (hash != slot.RootSha256)
+            if (!File.Exists(part))
             {
                 return false;
             }
+
+            if (parts.TryGetValue(slot.TransferId, out var open))
+            {
+                open.Flush();
+                if (open.Length != slot.TotalSize)
+                {
+                    return false;
+                }
+
+                open.Position = 0;
+                var openHash = Convert.ToHexString(SHA256.HashData(open)).ToLowerInvariant();
+                if (openHash != slot.RootSha256)
+                {
+                    return false;
+                }
+            }
+            else if (new FileInfo(part).Length != slot.TotalSize)
+            {
+                return false;
+            }
+            else
+            {
+                using var sha = SHA256.Create();
+                using var stream = File.OpenRead(part);
+                var hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+                if (hash != slot.RootSha256)
+                {
+                    return false;
+                }
+            }
+
+            ClosePart(slot.TransferId);
         }
 
         Directory.CreateDirectory(downloads);
@@ -204,4 +287,23 @@ public sealed class TransferStore
     string PartPath(string transferId) => Path.Combine(directory, transferId + ".part");
 
     string MetaPath(string transferId) => Path.Combine(directory, transferId + ".meta.json");
+
+    FileStream Open(string transferId)
+    {
+        if (!parts.TryGetValue(transferId, out var stream))
+        {
+            stream = new FileStream(PartPath(transferId), FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+            parts.Add(transferId, stream);
+        }
+
+        return stream;
+    }
+
+    void ClosePart(string transferId)
+    {
+        if (parts.Remove(transferId, out var stream))
+        {
+            stream.Dispose();
+        }
+    }
 }

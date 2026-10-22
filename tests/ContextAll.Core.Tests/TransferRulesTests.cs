@@ -62,7 +62,7 @@ public sealed class TransferRulesTests
         mismatched.Ready();
         mismatched.Offer(Peer, "out.bin", [9], true);
         OfferTo(mismatched, [1, 2]);
-        mismatched.ReceiveSegment(Peer, 0, new byte[32], [1, 2], null);
+        mismatched.ReceiveSegment(Peer, 0, new byte[32], new byte[] { 1, 2 }, null);
         Assert.NotNull(mismatched.Outbound(Peer));
         Assert.Null(mismatched.Inbound(Peer));
         Assert.Contains(mismatched.Outcomes, outcome => outcome.Outcome == "checksum-failed");
@@ -143,6 +143,112 @@ public sealed class TransferRulesTests
         Assert.False(blocked.TryMove(inbound, renameOk: false, copyOk: false));
         Assert.True(inbound.MoveBlocked);
         Assert.NotNull(blocked.Inbound(Peer));
+    }
+
+    [Fact]
+    public void An_offer_above_one_gigabyte_does_not_take_a_slot()
+    {
+        var book = new TransferBook();
+        book.Ready();
+        var tooBig = TransferBook.MaxFileBytes + 1;
+        var rejected = Sample([], 0) with
+        {
+            TotalSize = tooBig,
+            SegmentCount = (tooBig + TransferBook.SegmentSize - 1) / TransferBook.SegmentSize,
+        };
+        Assert.Equal("invalid", book.ReceiveOffer(rejected, Peer, askBeforeSave: true, nowMs: 0));
+        Assert.Null(book.Inbound(Peer));
+        Assert.Contains(book.Frames, frame => frame.Type == FrameTypes.FileReject);
+
+        var allowed = new TransferBook();
+        allowed.Ready();
+        var atCap = Sample([], 0) with
+        {
+            TotalSize = TransferBook.MaxFileBytes,
+            SegmentCount = (TransferBook.MaxFileBytes + TransferBook.SegmentSize - 1) / TransferBook.SegmentSize,
+        };
+        Assert.Null(allowed.ReceiveOffer(atCap, Peer, askBeforeSave: true, nowMs: 0));
+        Assert.NotNull(allowed.Inbound(Peer));
+        Assert.Empty(allowed.Works);
+    }
+
+    [Fact]
+    public void Unpair_cancels_both_directions_and_frees_the_slots()
+    {
+        var live = new TransferBook();
+        live.Ready();
+        Assert.Null(live.Offer(Peer, "out.bin", [1], true));
+        OfferTo(live, [2]);
+        live.ClearFrames();
+        live.CancelOutstanding(sessionUp: true);
+        Assert.Equal(2, live.Frames.Count(frame => frame.Type == FrameTypes.FileCancel));
+        Assert.Equal(2, live.Works.Count(work => work.Name == "delete"));
+        Assert.Null(live.Inbound(Peer));
+        Assert.Null(live.Outbound(Peer));
+
+        var down = new TransferBook();
+        down.Ready();
+        Assert.Null(down.Offer(Peer, "out.bin", [1], true));
+        OfferTo(down, [2]);
+        down.ClearFrames();
+        down.CancelOutstanding(sessionUp: false);
+        Assert.Empty(down.Frames);
+        Assert.Equal(2, down.Works.Count(work => work.Name == "delete"));
+        Assert.Null(down.Inbound(Peer));
+        Assert.Null(down.Outbound(Peer));
+    }
+
+    [Fact]
+    public void Out_of_range_segments_and_wrong_lengths_do_not_write_or_grow_the_bitmap()
+    {
+        var book = new TransferBook();
+        book.Ready();
+        OfferTo(book, [1, 2, 3, 4]);
+        var slot = Assert.IsType<TransferSlot>(book.Inbound(Peer));
+        foreach (var (index, data) in new (uint, byte[])[] { (8, [1, 2, 3, 4]), (0, [1, 2, 3]), (0, [1, 2, 3, 4, 5]) })
+        {
+            book.ClearFrames();
+            book.ReceiveSegment(Peer, index, System.Security.Cryptography.SHA256.HashData(data), data, null);
+            Assert.Empty(book.Works);
+            Assert.Empty(book.Frames);
+            Assert.Equal(0, slot.Completed);
+            Assert.Single(slot.Bits);
+        }
+    }
+
+    [Fact]
+    public void Duplicate_segments_are_acknowledged_without_rewriting_durable_bytes()
+    {
+        var book = new TransferBook();
+        book.Ready();
+        byte[] data = [1, 2, 3, 4];
+        OfferTo(book, data);
+        var hash = System.Security.Cryptography.SHA256.HashData(data);
+        book.ReceiveSegment(Peer, 0, hash, data, null);
+        book.ClearFrames();
+        var outcomes = book.Outcomes.Count;
+        book.ReceiveSegment(Peer, 0, hash, data, null);
+        Assert.Empty(book.Works);
+        Assert.Equal(FrameTypes.FileAck, Assert.Single(book.Frames).Type);
+        Assert.Equal(outcomes, book.Outcomes.Count);
+        Assert.Equal(1, book.Inbound(Peer)!.Completed);
+    }
+
+    [Fact]
+    public void Invalid_acknowledgements_cannot_resize_the_bitmap_or_complete_unsent_segments()
+    {
+        var book = new TransferBook();
+        var slot = book.SeedOutbound(Peer, 9);
+        book.Release(Peer);
+        foreach (var index in new long[] { 9, -1, long.MaxValue, 8 })
+        {
+            book.ClearFrames();
+            book.Ack(slot.TransferId, index);
+            Assert.Equal(0, slot.Completed);
+            Assert.Equal(2, slot.Bits.Length);
+            Assert.Equal(8, slot.Flying.Count);
+            Assert.Empty(book.Frames);
+        }
     }
 
     static FileOfferPayload OfferTo(TransferBook book, byte[] content)

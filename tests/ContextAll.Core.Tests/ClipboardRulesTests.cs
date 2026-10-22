@@ -145,6 +145,45 @@ public sealed class ClipboardRulesTests
     }
 
     [Fact]
+    public void An_assembly_above_one_mebibyte_is_dropped_and_the_register_stays()
+    {
+        var self = DeviceIds.Text(SpkiA);
+        var peer = DeviceIds.Text(SpkiB);
+        var node = new ClipboardNode(self);
+        node.Connect(peer, true, true);
+        node.OnLocal(ClipboardKind.Plain, "kept", 1_000);
+        var seq = 9L;
+        foreach (var count in new long[] { 0, -1, ClipboardRestart.MaxBytes + 1 })
+        {
+            node.ReceiveDelta(peer, new DeltaPayload(peer, seq, 2_000, 1, null, 4, count, new string('a', 64)), mutual: true);
+            node.ReceiveChunk(4, [0, 0, 0, 0, (byte)'x'], mutual: true);
+            Assert.Equal("kept", node.Text);
+            seq++;
+        }
+
+        node.ReceiveDelta(peer, new DeltaPayload(peer, seq, 3_000, 1, "next", null, null, null), mutual: true);
+        Assert.Equal("next", node.Text);
+    }
+
+    [Fact]
+    public void A_chunk_header_is_not_buffered_until_sync_is_mutual()
+    {
+        var self = DeviceIds.Text(SpkiA);
+        var peer = DeviceIds.Text(SpkiB);
+        var node = new ClipboardNode(self);
+        node.Connect(peer, true, false);
+        node.OnLocal(ClipboardKind.Plain, "kept", 1_000);
+        var count = (long)ClipboardRestart.MaxBytes;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        node.ReceiveDelta(peer, new DeltaPayload(peer, 4, 2_000, 1, null, 9, count, new string('a', 64)), mutual: false);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        node.ReceiveChunk(9, [0, 0, 0, 0, (byte)'x'], mutual: true);
+
+        Assert.True(allocated < count);
+        Assert.Equal("kept", node.Text);
+    }
+
+    [Fact]
     public void Restart_keeps_the_sequence_for_the_same_text_and_still_listens_without_the_file()
     {
         var stored = new ClipboardDocument("same", new HybridClock(1, 0, DeviceIds.Text(SpkiA)), new Dictionary<string, long> { ["ca1"] = 3 }, new HybridClock(1, 0, DeviceIds.Text(SpkiA)), "old", 3);

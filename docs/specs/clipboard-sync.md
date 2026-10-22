@@ -1,6 +1,6 @@
 # 剪贴板同步
 
-对应 `session-protocol` 的 `clipboard-sync`。寄存器、分片和 `clipboard.json` 已有测试。Linux 守护进程通过 `zwlr_data_control_manager_v1` 读写纯文本。
+对应 `session-protocol` 的 `clipboard-sync`。寄存器、分片和 `clipboard.json` 已有测试。Linux 守护进程优先用 `ext-data-control-v1` 读写纯文本，没有该全局对象时用 `wlr-data-control-unstable-v1`。两个协议都没有时剪贴板保持关闭，配对和文件传输继续。纯文本接受 `text/plain` 和 `text/plain;charset=utf-8`，两者都有时用后者。
 
 ## 对端剪贴板
 
@@ -16,7 +16,7 @@
 
 ## 分片
 
-能放进 64 KiB 的 JSON 增量是一条类型 15，流 id 为 1，优先级 1。更大的文本先发不含正文的增量，写明流 id、字节数和 SHA-256，再按类型 18、优先级 3 发送 `u32` 偏移加上字节。字节数、哈希和 UTF-8 都吻合，并且时钟严格更新时才应用。更新的时钟会丢掉尚未收齐、时钟更旧的组装。
+能放进 64 KiB 的 JSON 增量是一条类型 15，流 id 为 1，优先级 1。更大的文本先发不含正文的增量，写明流 id、字节数和 SHA-256，再按类型 18、优先级 3 发送 `u32` 偏移加上字节。字节数、哈希和 UTF-8 都吻合，并且时钟严格更新时才应用。字节数小于等于 0 或大于 1 MiB 时不分配组装缓冲区，已有文本不变。更新的时钟会丢掉尚未收齐、时钟更旧的组装。
 
 ## 重启
 

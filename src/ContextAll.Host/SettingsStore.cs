@@ -27,7 +27,7 @@ public sealed class SettingsDocument
 [YamlStaticContext]
 [YamlSerializable(typeof(SettingsDocument))]
 [YamlSerializable(typeof(TrustDocument))]
-public partial class SettingsYamlContext : StaticContext;
+public sealed partial class SettingsYamlContext : StaticContext;
 
 public sealed record SettingsStart(bool Ok, SettingsDocument? Document, bool Created);
 

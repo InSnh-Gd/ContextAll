@@ -24,7 +24,7 @@ Windows 管道名是 `\\.\pipe\ContextAll\<用户 SID>`。`ServePipe` 用最大�
 
 类型 64 到 75 都回复类型 96，载荷里有 `requestId`、`ok` 和 `error`。重复的 `requestId` 得到 `duplicate-request`。发送目录得到 `not-a-file`。不存在的下载目录得到 `invalid-path`。不合法的显示名得到 `invalid-name`。
 
-快照包含 `localDisplayName`、`downloadDirectory`、`devices`、`pairing`、`filePrompts` 和 `transfers`。连接时若已有尚未写入分段的传输，快照里该传输的已完成分段数是 0。
+快照包含 `localDisplayName`、`downloadDirectory`、`devices`、`pairing`、`filePrompts` 和 `transfers`。每台设备的 presence 是 `offline`、`reachable` 或 `connected`。连接时若已有尚未写入分段的传输，快照里该传输的已完成分段数是 0。
 
 QUIC 上收到类型大于等于 64 的帧时，会话关闭，信任列表不变。
 

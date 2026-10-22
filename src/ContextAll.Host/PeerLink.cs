@@ -1,6 +1,7 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Net.Quic;
-using System.Text;
+using System.Runtime.InteropServices;
 using ContextAll.Core;
 using ContextAll.Protocol;
 
@@ -156,8 +157,30 @@ public sealed class PeerLink
 
     public void SendUnpair()
     {
-        Post([FrameMessages.Json(FrameTypes.Unpair, 0, 0, FrameTypes.SessionStream, new DonePayload(true), ProtocolJsonContext.Default.DonePayload)]);
-        Close();
+        lock (host.Gate)
+        {
+            book.CancelOutstanding(sessionUp: true);
+            var (works, frames) = Take();
+            Apply(works);
+            var outgoing = new Frame[frames.Length + 1];
+            for (var i = 0; i < frames.Length; i++)
+            {
+                outgoing[i] = frames[i];
+            }
+
+            outgoing[^1] = FrameMessages.Json(FrameTypes.Unpair, 0, 0, FrameTypes.SessionStream, new DonePayload(true), ProtocolJsonContext.Default.DonePayload);
+            Post(outgoing);
+            Close();
+        }
+    }
+
+    public void AbandonTransfers()
+    {
+        lock (host.Gate)
+        {
+            book.CancelOutstanding(sessionUp: false);
+            Apply(Take().Works);
+        }
     }
 
     public void PostFrames(IReadOnlyList<Frame> frames) => Post(frames);
@@ -235,7 +258,7 @@ public sealed class PeerLink
             }
         }
 
-        Post(frames.Select(Expand).ToArray());
+        PostExpanded(frames);
         host.Clipboard.NextBulk = book.NextBulk;
         return null;
     }
@@ -250,7 +273,7 @@ public sealed class PeerLink
 
         var (works, frames) = Take();
         Apply(works);
-        Post(frames.Select(Expand).ToArray());
+        PostExpanded(frames);
         host.Publish([Progress(book.Inbound(RemoteId), ended: null)]);
         return null;
     }
@@ -335,19 +358,38 @@ public sealed class PeerLink
             while (!cancel.IsCancellationRequested)
             {
                 await Task.Delay(1000, cancel.Token).ConfigureAwait(false);
+                Frame[]? promptEvents = null;
                 lock (host.Gate)
                 {
-                    if (closed || entered || readyTick < 0)
+                    if (closed)
                     {
                         continue;
                     }
 
-                    pairing.OnClock(Environment.TickCount64 - readyTick);
-                    if (pairing.Closed && !pairing.Trusted)
+                    if (!entered && readyTick >= 0)
                     {
-                        host.EndPairing(this, "timeout");
-                        Close();
+                        pairing.OnClock(Environment.TickCount64 - readyTick);
+                        if (pairing.Closed && !pairing.Trusted)
+                        {
+                            host.EndPairing(this, "timeout");
+                            Close();
+                            continue;
+                        }
                     }
+
+                    var waiting = book.Inbound(RemoteId);
+                    if (book.Timeout(RemoteId, Environment.TickCount64) is string outcome)
+                    {
+                        var (works, frames) = Take();
+                        Apply(works);
+                        Post(frames);
+                        promptEvents = [Ended(waiting?.TransferId ?? "", outcome)];
+                    }
+                }
+
+                if (promptEvents is not null)
+                {
+                    host.Publish(promptEvents);
                 }
             }
         }
@@ -422,8 +464,21 @@ public sealed class PeerLink
         }
     }
 
+    internal void MarkWritable()
+    {
+        pairing.OnWritable();
+        helloSent = true;
+    }
+
+    internal (Frame[] Outgoing, Frame[] Events) Dispatch(Frame frame) => Handle(frame);
+
     (Frame[] Outgoing, Frame[] Events) Handle(Frame frame)
     {
+        if (!entered && frame.Type is not (FrameTypes.Hello or FrameTypes.PairAccept or FrameTypes.PairReject or FrameTypes.SessionDuplicateClose))
+        {
+            return (Array.Empty<Frame>(), Array.Empty<Frame>());
+        }
+
         var events = new List<Frame>();
         switch (frame.Type)
         {
@@ -554,7 +609,7 @@ public sealed class PeerLink
             ordered.AddRange(NewPairingFrames());
         }
 
-        PostImmediate(ordered.Select(Expand).ToArray());
+        PostExpanded(ordered, immediate: true);
         host.Publish([host.DeviceEvent(RemoteId, "connected")]);
     }
 
@@ -570,7 +625,7 @@ public sealed class PeerLink
         book.ReceiveOffer(offer, RemoteId, host.Ask(RemoteId), Environment.TickCount64);
         var (works, frames) = Take();
         Apply(works);
-        Post(frames.Select(Expand).ToArray());
+        PostExpanded(frames);
         var slot = book.Inbound(RemoteId);
         if (slot is { WaitingForAccept: true })
         {
@@ -601,8 +656,8 @@ public sealed class PeerLink
 
     List<Frame> OnResume(Frame frame)
     {
-        var text = Encoding.UTF8.GetString(frame.Payload.Span);
-        if (text.Contains("\"done\"", StringComparison.Ordinal))
+        var done = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.DonePayload).Value;
+        if (done is { Done: true })
         {
             book.PeerDone(RemoteId, announced);
             var (works, _) = Take();
@@ -611,7 +666,7 @@ public sealed class PeerLink
         }
 
         var resume = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.FileResumePayload).Value;
-        if (resume is null)
+        if (resume is null || string.IsNullOrEmpty(resume.TransferId))
         {
             return [];
         }
@@ -645,19 +700,20 @@ public sealed class PeerLink
         var last = (frame.Flags & FrameTypes.BitmapContinued) == 0;
         book.ReceiveBitmap(bitmap.TransferId, bitmap.BitOffset, bits, last);
         var (_, frames) = Take();
-        Post(frames.Select(Expand).ToArray());
+        PostExpanded(frames);
     }
 
     List<Frame> OnSegment(Frame frame)
     {
-        if (frame.Payload.Length < 36)
+        var slot = book.Inbound(RemoteId);
+        if (frame.Payload.Length < 36 || slot is null || frame.StreamId != slot.StreamId)
         {
             return [];
         }
 
         var index = BinaryPrimitives.ReadUInt32BigEndian(frame.Payload.Span);
-        var hash = frame.Payload.Span.Slice(4, 32).ToArray();
-        var data = frame.Payload.Span[36..].ToArray();
+        var hash = frame.Payload.Span.Slice(4, 32);
+        var data = frame.Payload.Slice(36);
         var before = book.Outcomes.Count;
         book.ReceiveSegment(RemoteId, index, hash, data, null);
         var (works, frames) = Take();
@@ -677,7 +733,16 @@ public sealed class PeerLink
         book.Ack(ack.TransferId, ack.SegmentIndex);
         var (works, frames) = Take();
         Apply(works);
-        var slot = book.Outgoing.FirstOrDefault(item => item.TransferId == ack.TransferId);
+        TransferSlot? slot = null;
+        foreach (var item in book.Outgoing)
+        {
+            if (item.TransferId == ack.TransferId)
+            {
+                slot = item;
+                break;
+            }
+        }
+
         if (slot is not null)
         {
             host.Store.Save(slot);
@@ -689,7 +754,7 @@ public sealed class PeerLink
             }
         }
 
-        Post(frames.Select(Expand).ToArray());
+        PostExpanded(frames);
     }
 
     void OnVector(Frame frame)
@@ -823,8 +888,11 @@ public sealed class PeerLink
                     }
 
                     break;
-                case "write" when work.Data is not null:
-                    host.Store.Write(work.TransferId, work.Offset, work.Data);
+                case "write":
+                    host.Store.Write(work.TransferId, work.Offset, work.Data.Span);
+                    break;
+                case "flush":
+                    host.Store.Flush(work.TransferId);
                     break;
                 case "bit":
                     var current = Find(work.TransferId);
@@ -842,9 +910,49 @@ public sealed class PeerLink
         }
     }
 
-    TransferSlot? Find(string transferId) =>
-        book.Incoming.FirstOrDefault(slot => slot.TransferId == transferId)
-        ?? book.Outgoing.FirstOrDefault(slot => slot.TransferId == transferId);
+    TransferSlot? Find(string transferId)
+    {
+        foreach (var slot in book.Incoming)
+        {
+            if (slot.TransferId == transferId)
+            {
+                return slot;
+            }
+        }
+
+        foreach (var slot in book.Outgoing)
+        {
+            if (slot.TransferId == transferId)
+            {
+                return slot;
+            }
+        }
+
+        return null;
+    }
+
+    void PostExpanded(IReadOnlyList<Frame> frames, bool immediate = false)
+    {
+        if (frames.Count == 0)
+        {
+            return;
+        }
+
+        var expanded = new Frame[frames.Count];
+        for (var i = 0; i < frames.Count; i++)
+        {
+            expanded[i] = Expand(frames[i]);
+        }
+
+        if (immediate)
+        {
+            PostImmediate(expanded);
+        }
+        else
+        {
+            Post(expanded);
+        }
+    }
 
     (TransferWork[] Works, Frame[] Frames) Take()
     {
@@ -1004,14 +1112,22 @@ public sealed class PeerLink
                         await Task.Delay(pause, cancel.Token).ConfigureAwait(false);
                     }
 
-                    var bytes = FrameMessages.Encode(frame);
-                    if (bytes.Length == 0)
+                    var rented = ArrayPool<byte>.Shared.Rent(FrameLimits.HeaderBytes + frame.Payload.Length);
+                    try
                     {
-                        continue;
-                    }
+                        if (!FrameCodec.TryEncode(rented, frame, out var written))
+                        {
+                            continue;
+                        }
 
-                    await stream.WriteAsync(bytes, cancel.Token).ConfigureAwait(false);
-                    await stream.FlushAsync(cancel.Token).ConfigureAwait(false);
+                        await stream.WriteAsync(rented.AsMemory(0, written), cancel.Token).ConfigureAwait(false);
+                        await stream.FlushAsync(cancel.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(rented);
+                        ReleaseSegment(frame);
+                    }
                 }
             }
         }
@@ -1031,6 +1147,20 @@ public sealed class PeerLink
         closed = true;
         cancel.Cancel();
         poke.Release();
+    }
+
+    static void ReleaseSegment(Frame frame)
+    {
+        // FrameMessages.Segment rents this buffer. A 4-byte segment placeholder is not rented.
+        if (frame.Type != FrameTypes.FileSegment || frame.Payload.Length < 36)
+        {
+            return;
+        }
+
+        if (MemoryMarshal.TryGetArray(frame.Payload, out ArraySegment<byte> segment) && segment.Array is not null)
+        {
+            ArrayPool<byte>.Shared.Return(segment.Array);
+        }
     }
 
     static TransferSnapshotPayload TransferView(TransferSlot slot) =>
