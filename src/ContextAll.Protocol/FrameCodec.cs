@@ -49,6 +49,31 @@ public static class FrameCodec
         return FrameOutcome<byte[]>.Success(bytes);
     }
 
+    public static bool TryEncode(Span<byte> destination, Frame frame, out int written)
+    {
+        written = 0;
+        if (frame.Priority > FrameTypes.LowestPriority || frame.Payload.Length > FrameLimits.MaxPayloadBytes)
+        {
+            return false;
+        }
+
+        var total = FrameLimits.HeaderBytes + frame.Payload.Length;
+        if (destination.Length < total)
+        {
+            return false;
+        }
+
+        BinaryPrimitives.WriteUInt32BigEndian(destination, (uint)frame.Payload.Length);
+        destination[4] = frame.Type;
+        destination[5] = frame.Priority;
+        BinaryPrimitives.WriteUInt16BigEndian(destination.Slice(6), frame.Flags);
+        BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(8), frame.StreamId);
+        BinaryPrimitives.WriteUInt32BigEndian(destination.Slice(12), 0);
+        frame.Payload.Span.CopyTo(destination.Slice(FrameLimits.HeaderBytes));
+        written = total;
+        return true;
+    }
+
     public static FrameRead Read(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length < FrameLimits.HeaderBytes)
