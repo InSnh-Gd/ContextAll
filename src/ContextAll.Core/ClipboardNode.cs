@@ -252,8 +252,13 @@ public sealed class ClipboardNode
         {
             if (delta.StreamId is uint streamId && delta.ByteCount is long count && delta.Sha256 is string hash)
             {
+                if (count <= 0 || count > ClipboardRestart.MaxBytes)
+                {
+                    return lastSent;
+                }
+
                 DiscardOlder(clock);
-                assemblies[streamId] = new Assembly(clock, delta.Seq, count, hash, new byte[count]);
+                assemblies[streamId] = new Assembly(clock, delta.Seq, count, hash, new byte[(int)count]);
             }
 
             return lastSent;
