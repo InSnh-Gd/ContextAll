@@ -8,6 +8,42 @@ public sealed class WaylandClipboard : IDisposable
 {
     public const string PlainMime = "text/plain;charset=utf-8";
 
+    public static bool IsPlainText(string mime) => mime is "text/plain" or PlainMime;
+
+    public static string PreferPlain(string current, string incoming)
+    {
+        if (incoming == PlainMime)
+        {
+            return PlainMime;
+        }
+
+        if (incoming == "text/plain" && current != PlainMime)
+        {
+            return "text/plain";
+        }
+
+        return current;
+    }
+
+    public static string? PreferredManager(IReadOnlyList<string> interfaces)
+    {
+        string? wlr = null;
+        foreach (var name in interfaces)
+        {
+            if (name == "ext_data_control_manager_v1")
+            {
+                return name;
+            }
+
+            if (name == "zwlr_data_control_manager_v1")
+            {
+                wlr = name;
+            }
+        }
+
+        return wlr;
+    }
+
     readonly WaylandSocket socket;
     readonly Dictionary<uint, string> offers = [];
     readonly Dictionary<uint, string> sources = [];
@@ -19,6 +55,9 @@ public sealed class WaylandClipboard : IDisposable
     uint device;
     uint selection;
     uint syncCallback;
+    readonly List<(uint Name, string Interface)> globals = [];
+    bool chosen;
+    ushort sourceOpcode;
     readonly ManualResetEventSlim ready = new(false);
     bool running = true;
 
@@ -64,7 +103,7 @@ public sealed class WaylandClipboard : IDisposable
 
             var source = nextId++;
             sources[source] = text;
-            socket.Send(WaylandWire.Message(manager, 0, writer => writer.U32(source)));
+            socket.Send(WaylandWire.Message(manager, sourceOpcode, writer => writer.U32(source)));
             socket.Send(WaylandWire.Message(source, 0, writer => writer.Text(PlainMime)));
             socket.Send(WaylandWire.Message(device, 0, writer => writer.U32(source)));
         }
@@ -81,6 +120,8 @@ public sealed class WaylandClipboard : IDisposable
     {
         registry = nextId++;
         socket.Send(WaylandWire.Message(1, 1, writer => writer.U32(registry)));
+        syncCallback = nextId++;
+        socket.Send(WaylandWire.Message(1, 0, writer => writer.U32(syncCallback)));
         _ = Task.Run(Read);
         if (!ready.Wait(TimeSpan.FromSeconds(2)))
         {
@@ -123,33 +164,25 @@ public sealed class WaylandClipboard : IDisposable
             var offset = 0;
             var name = WaylandWire.U32(message.Body, ref offset);
             var interfaceName = WaylandWire.Text(message.Body, ref offset);
-            if (interfaceName == "wl_seat" && seat == 0)
+            if (!chosen)
             {
-                seat = nextId++;
-                socket.Send(WaylandWire.Message(registry, 0, writer =>
-                {
-                    writer.U32(name);
-                    writer.Text("wl_seat");
-                    writer.U32(1);
-                    writer.U32(seat);
-                }));
-                BindDevice();
-            }
-            else if (interfaceName == "zwlr_data_control_manager_v1" && manager == 0)
-            {
-                manager = nextId++;
-                socket.Send(WaylandWire.Message(registry, 0, writer =>
-                {
-                    writer.U32(name);
-                    writer.Text(interfaceName);
-                    writer.U32(1);
-                    writer.U32(manager);
-                }));
-                BindDevice();
+                globals.Add((name, interfaceName));
             }
         }
         else if (message.ObjectId == syncCallback && syncCallback != 0 && message.Opcode == 0)
         {
+            if (!chosen)
+            {
+                chosen = true;
+                BindChosen();
+                if (manager == 0)
+                {
+                    ready.Set();
+                }
+
+                return;
+            }
+
             ready.Set();
         }
         else if (message.ObjectId == device && message.Opcode == 0)
@@ -161,10 +194,7 @@ public sealed class WaylandClipboard : IDisposable
         {
             var offset = 0;
             var mime = WaylandWire.Text(message.Body, ref offset);
-            if (offers[message.ObjectId] != PlainMime)
-            {
-                offers[message.ObjectId] = mime;
-            }
+            offers[message.ObjectId] = PreferPlain(offers[message.ObjectId], mime);
         }
         else if (message.ObjectId == device && message.Opcode == 1)
         {
@@ -183,7 +213,7 @@ public sealed class WaylandClipboard : IDisposable
                 return;
             }
 
-            if (!offers.TryGetValue(offer, out var mime) || mime != PlainMime)
+            if (!offers.TryGetValue(offer, out var mime) || !IsPlainText(mime))
             {
                 return;
             }
@@ -194,7 +224,7 @@ public sealed class WaylandClipboard : IDisposable
                 return;
             }
 
-            socket.Send(WaylandWire.Message(offer, 0, writer => writer.Text(PlainMime)), pipes[1]);
+            socket.Send(WaylandWire.Message(offer, 0, writer => writer.Text(mime)), pipes[1]);
             Native.close(pipes[1]);
             var read = pipes[0];
             _ = Task.Run(() =>
@@ -273,20 +303,60 @@ public sealed class WaylandClipboard : IDisposable
         public static extern nint read(int fd, byte[] buffer, nuint count);
     }
 
-    void BindDevice()
+    void BindChosen()
     {
-        if (seat == 0 || manager == 0 || device != 0)
+        var names = new string[globals.Count];
+        for (var i = 0; i < globals.Count; i++)
+        {
+            names[i] = globals[i].Interface;
+        }
+
+        var preferred = PreferredManager(names);
+        if (preferred is null || !TryGlobal("wl_seat", out var seatName) || !TryGlobal(preferred, out var managerName))
         {
             return;
         }
 
+        var ext = preferred == "ext_data_control_manager_v1";
+        sourceOpcode = ext ? (ushort)1 : (ushort)0;
+        var deviceOpcode = ext ? (ushort)0 : (ushort)1;
+        seat = nextId++;
+        SendBind(seatName, "wl_seat", seat);
+        manager = nextId++;
+        SendBind(managerName, preferred, manager);
         device = nextId++;
-        socket.Send(WaylandWire.Message(manager, 1, writer =>
+        socket.Send(WaylandWire.Message(manager, deviceOpcode, writer =>
         {
             writer.U32(device);
             writer.U32(seat);
         }));
         syncCallback = nextId++;
         socket.Send(WaylandWire.Message(1, 0, writer => writer.U32(syncCallback)));
+    }
+
+    bool TryGlobal(string interfaceName, out uint name)
+    {
+        foreach (var global in globals)
+        {
+            if (global.Interface == interfaceName)
+            {
+                name = global.Name;
+                return true;
+            }
+        }
+
+        name = 0;
+        return false;
+    }
+
+    void SendBind(uint name, string interfaceName, uint id)
+    {
+        socket.Send(WaylandWire.Message(registry, 0, writer =>
+        {
+            writer.U32(name);
+            writer.Text(interfaceName);
+            writer.U32(1);
+            writer.U32(id);
+        }));
     }
 }
