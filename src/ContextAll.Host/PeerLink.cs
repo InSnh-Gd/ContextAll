@@ -705,7 +705,8 @@ public sealed class PeerLink
 
     List<Frame> OnSegment(Frame frame)
     {
-        if (frame.Payload.Length < 36)
+        var slot = book.Inbound(RemoteId);
+        if (frame.Payload.Length < 36 || slot is null || frame.StreamId != slot.StreamId)
         {
             return [];
         }

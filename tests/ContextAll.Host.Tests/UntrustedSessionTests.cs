@@ -83,6 +83,30 @@ public sealed class UntrustedSessionTests
         Assert.Empty(Directory.GetFiles(fixture.Host.Downloads));
     }
 
+    [Fact]
+    public void A_segment_from_another_stream_cannot_write_the_active_receive()
+    {
+        using var fixture = new Fixture();
+        var link = fixture.Link();
+        fixture.Host.Track(link);
+        fixture.Host.SaveTrust(new TrustEntry(link.RemoteId, "peer", Convert.ToBase64String(fixture.RemoteSpki), false, true));
+        fixture.Plant(link.RemoteId);
+        link.MarkWritable();
+        link.Dispatch(FrameMessages.Json(FrameTypes.Hello, 0, 0, FrameTypes.SessionStream,
+            new HelloPayload("trusted", "peer"), ProtocolJsonContext.Default.HelloPayload));
+        link.Dispatch(PlantedResume());
+        byte[] data = [1, 2, 3, 4];
+        var payload = new byte[36 + data.Length];
+        System.Security.Cryptography.SHA256.HashData(data).CopyTo(payload, 4);
+        data.CopyTo(payload, 36);
+        var segment = new Frame(payload.Length, FrameTypes.FileSegment, 3, 0, 5, payload);
+        link.Dispatch(segment);
+
+        Assert.Equal(new byte[4], fixture.Host.Store.Read(PlantedId));
+        Assert.Equal(0, fixture.Host.Store.Load(PlantedId)?.Completed);
+        Assert.Empty(Directory.GetFiles(fixture.Host.Downloads));
+    }
+
     static Frame Resume(string json)
     {
         var body = Encoding.UTF8.GetBytes(json);
