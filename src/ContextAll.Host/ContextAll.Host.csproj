@@ -10,6 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ContextAll.Host.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ContextAll.Core\ContextAll.Core.csproj" />
     <ProjectReference Include="..\ContextAll.Ipc\ContextAll.Ipc.csproj" />
     <ProjectReference Include="..\ContextAll.Effects\ContextAll.Effects.csproj" />

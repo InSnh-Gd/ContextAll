@@ -97,6 +97,33 @@ public sealed class LanHost : IDisposable
 
     public string ClipboardPath { get; }
 
+    internal static LanHost CreateIsolated(string root)
+    {
+        var identity = IdentityStore.Start(Path.Combine(root, "identity"));
+        if (!identity.Ok || identity.Material is null)
+        {
+            throw new InvalidOperationException("identity");
+        }
+
+        var settings = SettingsStore.Start(Path.Combine(root, "config", "settings.yaml"), "ContextAll");
+        if (!settings.Ok || settings.Document is null)
+        {
+            throw new InvalidOperationException("settings");
+        }
+
+        var home = Path.Combine(root, "home");
+        Directory.CreateDirectory(home);
+        return new LanHost(identity.Material, Path.Combine(root, "config", "settings.yaml"), home, settings.Document, Path.Combine(root, "state"));
+    }
+
+    internal void Track(PeerLink link)
+    {
+        lock (Gate)
+        {
+            links.Add(link);
+        }
+    }
+
     public static LanHost? TryCreate()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
