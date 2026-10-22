@@ -33,7 +33,7 @@ public sealed class LanHost : IDisposable
     readonly CancellationTokenSource stop = new();
     CancellationTokenSource? run;
     readonly RouteTable routes;
-    QuicListener? listener;
+    readonly List<QuicListener> listeners = [];
     Socket? udp;
     WaylandClipboard? wayland;
     PeerLink? prompt;
@@ -568,9 +568,9 @@ public sealed class LanHost : IDisposable
         run?.Cancel();
         wayland?.Dispose();
         udp?.Dispose();
-        if (listener is not null)
+        foreach (var item in listeners)
         {
-            _ = listener.DisposeAsync().AsTask();
+            _ = item.DisposeAsync().AsTask();
         }
 
         run?.Dispose();
@@ -589,7 +589,38 @@ public sealed class LanHost : IDisposable
                 return;
             }
 
-            listener = await QuicLink.ListenMutual(IPAddress.Any, certificate, QuicLink.Port, cancellationToken).ConfigureAwait(false);
+            List<IPAddress> addresses;
+            lock (Gate)
+            {
+                RefreshPrefixes();
+                addresses = [];
+                foreach (var prefix in prefixes)
+                {
+                    if (IPAddress.TryParse(prefix.Address, out var address))
+                    {
+                        addresses.Add(address);
+                    }
+                }
+            }
+
+            foreach (var endpoint in QuicLink.ListenerEndpoints(addresses))
+            {
+                try
+                {
+                    listeners.Add(await QuicLink.ListenMutual(endpoint.Address, certificate, endpoint.Port, cancellationToken).ConfigureAwait(false));
+                }
+                catch (Exception ex) when (ex is SocketException or InvalidOperationException or QuicException or IOException or AuthenticationException)
+                {
+                    Console.Error.WriteLine("quic-skipped " + endpoint.Address + " " + ex.GetType().Name + " " + ex.Message);
+                }
+            }
+
+            if (listeners.Count == 0)
+            {
+                Console.Error.WriteLine(QuicLink.Supported ? "quic-skipped no-beacon-address" : "quic-skipped quic-unsupported");
+                return;
+            }
+
             await AcceptLoop(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is SocketException or InvalidOperationException or QuicException or IOException or CryptographicException or AuthenticationException or OperationCanceledException)
@@ -832,17 +863,23 @@ public sealed class LanHost : IDisposable
 
     async Task AcceptLoop(CancellationToken cancellationToken)
     {
-        if (listener is null)
+        var waits = new List<(QuicListener Listener, Task<QuicConnection> Accept)>();
+        foreach (var item in listeners)
         {
-            return;
+            waits.Add((item, item.AcceptConnectionAsync(cancellationToken).AsTask()));
         }
 
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (!cancellationToken.IsCancellationRequested && waits.Count > 0)
             {
-                var connection = await listener.AcceptConnectionAsync(cancellationToken).ConfigureAwait(false);
+                var finished = await Task.WhenAny(waits.Select(item => item.Accept)).ConfigureAwait(false);
+                var index = waits.FindIndex(item => item.Accept == finished);
+                var slot = waits[index];
+                waits.RemoveAt(index);
+                var connection = await slot.Accept.ConfigureAwait(false);
                 _ = Attach(connection, null, initiated: false, cancellationToken, null, null);
+                waits.Add((slot.Listener, slot.Listener.AcceptConnectionAsync(cancellationToken).AsTask()));
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or QuicException)
