@@ -14,6 +14,22 @@ public static class QuicLink
 
     public static bool Supported => QuicListener.IsSupported;
 
+    public static IReadOnlyList<IPEndPoint> ListenerEndpoints(IEnumerable<IPAddress> beaconAddresses)
+    {
+        var endpoints = new List<IPEndPoint>();
+        foreach (var address in beaconAddresses)
+        {
+            if (endpoints.Exists(endpoint => endpoint.Address.Equals(address)))
+            {
+                continue;
+            }
+
+            endpoints.Add(new IPEndPoint(address, Port));
+        }
+
+        return endpoints;
+    }
+
     public static QuicServerConnectionOptions ServerOptions(X509Certificate2 certificate) => new()
     {
         DefaultCloseErrorCode = 0,
@@ -48,7 +64,13 @@ public static class QuicLink
             cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task<QuicConnection> Connect(IPEndPoint remote, CancellationToken cancellationToken = default)
+    public static Task<QuicConnection> Connect(IPEndPoint remote, CancellationToken cancellationToken = default) =>
+        Connect(remote, 0, cancellationToken);
+
+    public static async Task<QuicConnection> Connect(
+        IPEndPoint remote,
+        int maxInboundBidirectionalStreams,
+        CancellationToken cancellationToken = default)
     {
         return await QuicConnection.ConnectAsync(
             new QuicClientConnectionOptions
@@ -58,6 +80,7 @@ public static class QuicLink
                 DefaultStreamErrorCode = 0,
                 IdleTimeout = TimeSpan.FromSeconds(60),
                 KeepAliveInterval = TimeSpan.FromSeconds(15),
+                MaxInboundBidirectionalStreams = maxInboundBidirectionalStreams,
                 ClientAuthenticationOptions = new SslClientAuthenticationOptions
                 {
                     ApplicationProtocols = [new SslApplicationProtocol(Alpn)],
