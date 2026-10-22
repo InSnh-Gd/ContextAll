@@ -4,7 +4,7 @@
 
 ## 提供和名额
 
-每个对端同时有一个发送名额和一个接收名额。提供的 JSON 含 `transferId`（32 位十六进制）、`streamId`、`totalSize`、`segmentSize`、`segmentCount`、`rootSha256`（64 位十六进制）和 `fileName`。不带逐段哈希。不合规则的提供回复 `FILE_REJECT`，原因 `invalid`，不占名额，流 id 不再使用。
+每个对端同时有一个发送名额和一个接收名额。提供的 JSON 含 `transferId`（32 位十六进制）、`streamId`、`totalSize`、`segmentSize`、`segmentCount`、`rootSha256`（64 位十六进制）和 `fileName`。不带逐段哈希。不合规则的提供回复 `FILE_REJECT`，原因 `invalid`，不占名额，流 id 不再使用。总大小超过 1000000000 字节同样是 `invalid`，不分配位图。发送侧超过这个大小返回 `too-large`，不占名额。
 
 对端还没发完 `{"done":true}` 之前，新的提供是 `busy`。同一对端可以一边发一边收。取消接收不影响发送，也不影响剪贴板。校验和不匹配只删除这一次传输，原因 `checksum-failed`。
 
@@ -26,6 +26,6 @@
 
 ## 部分文件
 
-部分文件放在 `$XDG_STATE_HOME/contextall/transfers`。每个传输是 `{id}.part` 和 `{id}.meta.json`。目录模式是 `0700`。
+部分文件放在 `$XDG_STATE_HOME/contextall/transfers`。每个传输是 `{id}.part` 和 `{id}.meta.json`。目录模式是 `0700`。解除信任时删掉该设备的这两类文件并释放名额。会话还在时，本机主动解除先对每个传输发 `FILE_CANCEL`，再发 `UNPAIR`。收到对端的 `UNPAIR` 时释放名额并删掉本地文件，不再回 `FILE_CANCEL`。
 
 两个守护进程之间，拒绝一次提供后，接收侧的下载目录和 `transfers` 里都没有新文件。接受后，文件写入下载目录。关掉这一对端的保存前询问之后，新文件不再询问。发送进程在分段中途退出再启动时，同一传输 id 的部分文件继续接收；完成后下载目录里的字节和原文件一致，`.part` 被删掉。
