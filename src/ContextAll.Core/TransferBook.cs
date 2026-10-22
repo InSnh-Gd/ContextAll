@@ -344,9 +344,13 @@ public sealed class TransferBook
             return;
         }
 
-        slot.Flying.Remove(index);
-        SetBit(slot, (uint)index);
         frames.Clear();
+        if (index < 0 || index >= slot.SegmentCount || !slot.Flying.Remove(index))
+        {
+            return;
+        }
+
+        SetBit(slot, (uint)index);
         Pump(slot);
     }
 
@@ -389,7 +393,20 @@ public sealed class TransferBook
     public void ReceiveSegment(string peerId, uint index, ReadOnlySpan<byte> hash, ReadOnlyMemory<byte> data, byte[]? runningFile)
     {
         works.Clear();
+        frames.Clear();
         if (!inbound.TryGetValue(peerId, out var slot) || !slot.Accepted)
+        {
+            return;
+        }
+
+        if (index >= slot.SegmentCount)
+        {
+            return;
+        }
+
+        var offset = (long)index * slot.SegmentSize;
+        var expectedLength = Math.Min(slot.SegmentSize, slot.TotalSize - offset);
+        if (data.Length != expectedLength)
         {
             return;
         }
@@ -403,7 +420,12 @@ public sealed class TransferBook
             return;
         }
 
-        var offset = (long)index * slot.SegmentSize;
+        if (Bit(slot, index))
+        {
+            frames.Add(Payload(FrameTypes.FileAck, 2, FrameTypes.SessionStream, new FileAckPayload(slot.TransferId, index)));
+            return;
+        }
+
         works.Add(new TransferWork("write", slot.TransferId, offset, data));
         works.Add(new TransferWork("flush", slot.TransferId, offset, default));
         SetBit(slot, index);

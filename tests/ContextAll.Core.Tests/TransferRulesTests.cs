@@ -198,6 +198,59 @@ public sealed class TransferRulesTests
         Assert.Null(down.Outbound(Peer));
     }
 
+    [Fact]
+    public void Out_of_range_segments_and_wrong_lengths_do_not_write_or_grow_the_bitmap()
+    {
+        var book = new TransferBook();
+        book.Ready();
+        OfferTo(book, [1, 2, 3, 4]);
+        var slot = Assert.IsType<TransferSlot>(book.Inbound(Peer));
+        foreach (var (index, data) in new (uint, byte[])[] { (8, [1, 2, 3, 4]), (0, [1, 2, 3]), (0, [1, 2, 3, 4, 5]) })
+        {
+            book.ClearFrames();
+            book.ReceiveSegment(Peer, index, System.Security.Cryptography.SHA256.HashData(data), data, null);
+            Assert.Empty(book.Works);
+            Assert.Empty(book.Frames);
+            Assert.Equal(0, slot.Completed);
+            Assert.Single(slot.Bits);
+        }
+    }
+
+    [Fact]
+    public void Duplicate_segments_are_acknowledged_without_rewriting_durable_bytes()
+    {
+        var book = new TransferBook();
+        book.Ready();
+        byte[] data = [1, 2, 3, 4];
+        OfferTo(book, data);
+        var hash = System.Security.Cryptography.SHA256.HashData(data);
+        book.ReceiveSegment(Peer, 0, hash, data, null);
+        book.ClearFrames();
+        var outcomes = book.Outcomes.Count;
+        book.ReceiveSegment(Peer, 0, hash, data, null);
+        Assert.Empty(book.Works);
+        Assert.Equal(FrameTypes.FileAck, Assert.Single(book.Frames).Type);
+        Assert.Equal(outcomes, book.Outcomes.Count);
+        Assert.Equal(1, book.Inbound(Peer)!.Completed);
+    }
+
+    [Fact]
+    public void Invalid_acknowledgements_cannot_resize_the_bitmap_or_complete_unsent_segments()
+    {
+        var book = new TransferBook();
+        var slot = book.SeedOutbound(Peer, 9);
+        book.Release(Peer);
+        foreach (var index in new long[] { 9, -1, long.MaxValue, 8 })
+        {
+            book.ClearFrames();
+            book.Ack(slot.TransferId, index);
+            Assert.Equal(0, slot.Completed);
+            Assert.Equal(2, slot.Bits.Length);
+            Assert.Equal(8, slot.Flying.Count);
+            Assert.Empty(book.Frames);
+        }
+    }
+
     static FileOfferPayload OfferTo(TransferBook book, byte[] content)
     {
         var offer = Sample(content, content.Length == 0 ? 0 : 1);
