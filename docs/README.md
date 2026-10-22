@@ -21,15 +21,12 @@ capability 的目录名就是文档文件名。
 | `clipboard-sync` | [剪贴板同步](specs/clipboard-sync.md) | `session-protocol` |
 | `file-transfer` | [文件传输](specs/file-transfer.md) | `session-protocol` |
 | `local-operator` | [本地操作](specs/local-operator.md) | `session-protocol` |
+| `framed-channel` | [成帧通道](specs/framed-channel.md) | `session-protocol` |
+| `device-shell` | [图形外壳](specs/device-shell.md) | `session-protocol` |
 
 ## 待同步
 
-`session-protocol` 里还有通道和图形外壳没有做完。下面这些文档要等对应任务勾选完再写。
-
-| capability | 文档 |
-| --- | --- |
-| `framed-channel` | `docs/specs/framed-channel.md` |
-| `device-shell` | `docs/specs/device-shell.md` |
+没有待同步的 capability。
 
 ## 其他
 
