@@ -585,7 +585,7 @@ public sealed class LanHost : IDisposable
             var matches = spki is not null && spki.AsSpan().SequenceEqual(identity.Spki);
             if (!matches)
             {
-                Console.Error.WriteLine("quic-skipped");
+                Console.Error.WriteLine("quic-skipped spki");
                 return;
             }
 
@@ -594,7 +594,7 @@ public sealed class LanHost : IDisposable
         }
         catch (Exception ex) when (ex is SocketException or InvalidOperationException or QuicException or IOException or CryptographicException or AuthenticationException or OperationCanceledException)
         {
-            Console.Error.WriteLine("quic-skipped");
+            Console.Error.WriteLine("quic-skipped " + ex.GetType().Name + " " + ex.Message);
         }
     }
 
