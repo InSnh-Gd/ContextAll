@@ -347,10 +347,19 @@ public sealed class LanHost : IDisposable
             routes.ForgetTrust(deviceId);
             remoteClipboard.Remove(deviceId);
             Persist();
-            live = notify ? Live(deviceId) : null;
+            live = Live(deviceId);
         }
 
-        live?.SendUnpair();
+        if (notify)
+        {
+            live?.SendUnpair();
+        }
+        else
+        {
+            live?.AbandonTransfers();
+        }
+
+        Store.DeletePeer(deviceId);
     }
 
     public void RenamePeer(string deviceId, string name)
@@ -754,7 +763,7 @@ public sealed class LanHost : IDisposable
             return "not-a-file";
         }
 
-        if (new FileInfo(path).Length > 1_000_000_000)
+        if (new FileInfo(path).Length > TransferBook.MaxFileBytes)
         {
             return "too-large";
         }
@@ -1224,7 +1233,7 @@ public sealed class LanHost : IDisposable
         }
 
         return routes.DialCandidates(deviceId).Count > 0 || routes.DiscoveryPaths(deviceId).Count > 0
-            ? "available"
+            ? "reachable"
             : "offline";
     }
 
