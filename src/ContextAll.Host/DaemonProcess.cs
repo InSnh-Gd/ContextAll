@@ -33,22 +33,35 @@ public static class DaemonProcess
             File.Delete(socketPath);
         }
 
+        var host = LanHost.TryCreate();
+        if (host is null)
+        {
+            return 1;
+        }
+
         using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        listener.Bind(new UnixDomainSocketEndPoint(socketPath));
-        listener.Listen(8);
-        IdentityStore.SetFileMode(socketPath);
-        Starts++;
-        ServiceNotify.Ready();
-        var desk = new LocalDesk();
-        var accepting = AcceptLoop(listener, socketPath, desk, cancellationToken);
-        await WaitForStop(onListening, cancellationToken).ConfigureAwait(false);
         try
         {
-            await accepting.ConfigureAwait(false);
+            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            listener.Listen(8);
+            IdentityStore.SetFileMode(socketPath);
+            Starts++;
+            host.Start(cancellationToken);
+            ServiceNotify.Ready();
+            var accepting = AcceptLoop(listener, socketPath, host, cancellationToken);
+            await WaitForStop(onListening, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await accepting.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // The caller stopped the daemon.
+            }
         }
-        catch (OperationCanceledException)
+        finally
         {
-            // The caller stopped the daemon.
+            host.Dispose();
         }
 
         return 0;
@@ -79,7 +92,7 @@ public static class DaemonProcess
         {
             Starts++;
             ServiceNotify.Ready();
-            var desk = new LocalDesk();
+            var desk = new DeskFront();
             var accepting = AcceptPipes(listener, desk, cancellationToken);
             await WaitForStop(onListening, cancellationToken).ConfigureAwait(false);
             try
@@ -114,14 +127,14 @@ public static class DaemonProcess
         }
     }
 
-    static async Task AcceptLoop(Socket listener, string socketPath, LocalDesk desk, CancellationToken cancellationToken)
+    static async Task AcceptLoop(Socket listener, string socketPath, LanHost host, CancellationToken cancellationToken)
     {
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 var accepted = await listener.AcceptAsync(cancellationToken).ConfigureAwait(false);
-                await Pump(new NetworkStream(accepted, ownsSocket: true), desk, cancellationToken).ConfigureAwait(false);
+                _ = Pump(new NetworkStream(accepted, ownsSocket: true), host.Snapshot, host.Command, host.Join, host.Leave, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -137,14 +150,14 @@ public static class DaemonProcess
         }
     }
 
-    static async Task AcceptPipes(NamedPipeServerStream listener, LocalDesk desk, CancellationToken cancellationToken)
+    static async Task AcceptPipes(NamedPipeServerStream listener, DeskFront desk, CancellationToken cancellationToken)
     {
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 await listener.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                await Pump(listener, desk, cancellationToken).ConfigureAwait(false);
+                await Pump(listener, desk.Snapshot, desk.Command, _ => { }, _ => { }, cancellationToken).ConfigureAwait(false);
                 if (listener.IsConnected)
                 {
                     listener.Disconnect();
@@ -161,19 +174,20 @@ public static class DaemonProcess
         }
     }
 
-    static async Task Pump(Stream stream, LocalDesk desk, CancellationToken cancellationToken)
+    static async Task Pump(
+        Stream stream,
+        Func<Frame> snapshot,
+        Action<FrontClient, Frame> command,
+        Action<FrontClient> join,
+        Action<FrontClient> leave,
+        CancellationToken cancellationToken)
     {
+        var client = new FrontClient();
+        var writing = client.CopyTo(stream, cancellationToken);
         try
         {
-            var snapshot = desk.SnapshotFrame();
-            var hello = FrameCodec.Encode(snapshot.Payload, snapshot.Type, snapshot.Priority, snapshot.Flags, snapshot.StreamId);
-            if (hello.Value is null)
-            {
-                return;
-            }
-
-            await stream.WriteAsync(hello.Value, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            client.Post(snapshot());
+            join(client);
             var buffer = new byte[FrameLimits.HeaderBytes + FrameLimits.MaxPayloadBytes];
             var filled = 0;
             while (!cancellationToken.IsCancellationRequested)
@@ -198,22 +212,7 @@ public static class DaemonProcess
                         return;
                     }
 
-                    if (read.Frame.Type is >= FrameTypes.StartPairing and <= FrameTypes.CancelTransfer)
-                    {
-                        Frame result;
-                        lock (desk)
-                        {
-                            result = desk.Handle(read.Frame);
-                        }
-
-                        var encoded = FrameCodec.Encode(result.Payload, result.Type, result.Priority, result.Flags, result.StreamId);
-                        if (encoded.Value is not null)
-                        {
-                            await stream.WriteAsync(encoded.Value, cancellationToken).ConfigureAwait(false);
-                            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-                        }
-                    }
-
+                    command(client, read.Frame);
                     var rest = filled - read.Consumed;
                     Buffer.BlockCopy(buffer, read.Consumed, buffer, 0, rest);
                     filled = rest;
@@ -227,6 +226,42 @@ public static class DaemonProcess
         catch (IOException)
         {
             // The front end left.
+        }
+        finally
+        {
+            leave(client);
+            client.Complete();
+            try
+            {
+                await writing.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // The caller stopped the daemon.
+            }
+        }
+    }
+
+    sealed class DeskFront
+    {
+        readonly LocalDesk desk = new();
+
+        public Frame Snapshot() => desk.SnapshotFrame();
+
+        public void Command(FrontClient client, Frame frame)
+        {
+            if (frame.Type is < FrameTypes.StartPairing or > FrameTypes.CancelTransfer)
+            {
+                return;
+            }
+
+            Frame result;
+            lock (desk)
+            {
+                result = desk.Handle(frame);
+            }
+
+            client.Post(result);
         }
     }
 

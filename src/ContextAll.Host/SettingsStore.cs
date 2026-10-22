@@ -33,7 +33,17 @@ public sealed record SettingsStart(bool Ok, SettingsDocument? Document, bool Cre
 
 public static class SettingsStore
 {
+    static readonly object Gate = new();
+
     public static SettingsStart Start(string path, string displayName)
+    {
+        lock (Gate)
+        {
+            return StartUnlocked(path, displayName);
+        }
+    }
+
+    static SettingsStart StartUnlocked(string path, string displayName)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
@@ -75,6 +85,14 @@ public static class SettingsStore
     }
 
     public static void Write(string path, SettingsDocument document)
+    {
+        lock (Gate)
+        {
+            WriteUnlocked(path, document);
+        }
+    }
+
+    static void WriteUnlocked(string path, SettingsDocument document)
     {
         var serializer = new StaticSerializerBuilder(new SettingsYamlContext()).Build();
         var directory = Path.GetDirectoryName(path);

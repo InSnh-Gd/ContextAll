@@ -33,7 +33,7 @@ public sealed record DonePayload(bool Done);
 
 public sealed record ClockPayload(long Milliseconds, uint Counter, string Origin);
 
-public sealed record VectorPayload(Dictionary<string, long> Versions, ClockPayload? Clock);
+public sealed record VectorPayload(Dictionary<string, long> Versions, ClockPayload? Clock, bool? ClipboardSync = null);
 
 public sealed record DeltaPayload(
     string Origin,

@@ -1,6 +1,10 @@
 # 剪贴板同步
 
-对应 `session-protocol` 的 `clipboard-sync`。寄存器、分片和 `clipboard.json` 已有测试。桌面剪贴板协议本身还不在这条路径里。
+对应 `session-protocol` 的 `clipboard-sync`。寄存器、分片和 `clipboard.json` 已有测试。Linux 守护进程通过 `zwlr_data_control_manager_v1` 读写纯文本。
+
+## 对端剪贴板
+
+两个守护进程互相信任并把剪贴板同步打开之后，一侧写入的纯文本会出现在另一侧。空字符串会清空另一侧。这次更新不写 `notifications.log`。同一时间本地套接字上的帧类型是 80–86 和 96。
 
 ## 时钟和寄存器
 

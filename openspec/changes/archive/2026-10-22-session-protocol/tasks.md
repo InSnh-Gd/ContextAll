@@ -43,7 +43,7 @@
 
 ## 7. Channels
 
-- [ ] 7.1 Bind a QUIC listener to the beacon addresses on port 42461 with ALPN `contextall`, open one bidirectional stream from the initiator, and verify a second application stream is not opened. If Android reports QUIC unsupported, stop and report that instead of adding a TCP fallback.
+- [x] 7.1 Bind a QUIC listener to the beacon addresses on port 42461 with ALPN `contextall`, open one bidirectional stream from the initiator, and verify a second application stream is not opened. If Android reports QUIC unsupported, stop and report that instead of adding a TCP fallback.
 - [x] 7.2 Serve the same frames on `$XDG_RUNTIME_DIR/contextall/daemon.sock` with mode `0600` and on the Windows per-user pipe. Verify a desktop client frame decodes with the codec from task 1.1. Verify a second `serve` exits while the first keeps listening, and a command other than `serve` does not start a daemon.
 - [x] 7.3 Write a failing test that local command types 64 through 75 return type 96 to the sender, a snapshot on connect includes prompts and transfers, and a type of 64 or above on QUIC closes the session without a trust change. Then implement the local frames. Verify the type numbers match design.md.
 
@@ -58,14 +58,14 @@
 - [x] 9.2 Map portal `color-scheme` `1` to dark and `0` or `2` to light, use light when the portal is missing, and ignore accent color. Verify a unit test of that mapping, including the missing-portal case.
 - [x] 9.3 Call `UseWayland()` from the Linux entry and exit with a Wayland-required message when no Wayland display is present. Verify that check's unit test, and verify `serve` still starts without Wayland.
 - [x] 9.4 Add the Android activity and `connectedDevice` foreground service, and verify the manifest declares that service type and the device list is a page list rather than a flyout.
-- [ ] 9.5 Add the unpackaged self-contained WinUI 3 shell (`WindowsPackageType` `None`, trimming off, single-file off) in `ContextAll.App.Windows`, and verify the Linux solution filter still builds without that project.
+- [x] 9.5 Add the unpackaged self-contained WinUI 3 shell (`WindowsPackageType` `None`, trimming off, single-file off) in `ContextAll.App.Windows`, and verify the Linux solution filter still builds without that project.
 
 ## 10. AppImage
 
-- [ ] 10.1 Pack the shell, the NativeAOT host, and a launcher into one AppImage. Verify no arguments start the shell, `serve` starts the host, and any other arguments reach the CLI.
-- [ ] 10.2 Point the user unit `ExecStart` at the AppImage `serve` entry and verify a user-service start runs the daemon.
+- [x] 10.1 Pack the shell, the NativeAOT host, and a launcher into one AppImage. Verify no arguments start the shell, `serve` starts the host, and any other arguments reach the CLI.
+- [x] 10.2 Point the user unit `ExecStart` at the AppImage `serve` entry and verify a user-service start runs the daemon.
 
 ## 11. Integration
 
-- [ ] 11.1 Run two daemons on one machine, pair them, enable clipboard both ways, and verify a text copy and a clear arrive on the other side without a notification.
-- [ ] 11.2 Send one file between those daemons with ask-before-save on, then off, and verify accept writes into the download directory, reject leaves nothing, and a dropped connection resumes the same partial file.
+- [x] 11.1 Run two daemons on one machine, pair them, enable clipboard both ways, and verify a text copy and a clear arrive on the other side without a notification.
+- [x] 11.2 Send one file between those daemons with ask-before-save on, then off, and verify accept writes into the download directory, reject leaves nothing, and a dropped connection resumes the same partial file.

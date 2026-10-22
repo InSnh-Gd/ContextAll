@@ -29,6 +29,14 @@ public sealed class RouteTable
         Peer(deviceId).Trusted = true;
     }
 
+    public void ForgetTrust(string deviceId)
+    {
+        if (peers.TryGetValue(deviceId, out var peer))
+        {
+            peer.Trusted = false;
+        }
+    }
+
     public void AddDiscovery(string deviceId, byte[] digest, string address, int port, long nowMs, string? displayName)
     {
         if (Convert.ToHexString(digest) == localDigestHex)
@@ -43,6 +51,7 @@ public sealed class RouteTable
         }
 
         Upsert(peer.Discovery, address, port, nowMs, fromDiscovery: true);
+        peer.Suppressed.Remove(address);
     }
 
     public void NoteSession(string deviceId, string address)

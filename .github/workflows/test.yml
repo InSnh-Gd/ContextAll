@@ -3,6 +3,9 @@ name: test
 on:
   push:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -11,4 +14,17 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Allow user network namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          if ! command -v ethtool >/dev/null && [ ! -x /usr/sbin/ethtool ]; then
+            sudo apt-get update
+            sudo apt-get install -y ethtool
+          fi
+          if ! ldconfig -p | grep -q 'libmsquic\.so\.2'; then
+            curl -fsSL -o /tmp/libmsquic.deb https://packages.microsoft.com/ubuntu/24.04/prod/pool/main/libm/libmsquic/libmsquic_2.6.3_amd64.deb
+            sudo apt-get install -y /tmp/libmsquic.deb
+          fi
       - run: dotnet test ContextAll.Tests.slnf -c Release

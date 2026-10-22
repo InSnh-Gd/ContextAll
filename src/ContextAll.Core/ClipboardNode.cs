@@ -144,6 +144,34 @@ public sealed class ClipboardNode
 
     public int WindowCount => window.Count;
 
+    public uint NextBulk
+    {
+        get => nextStream;
+        set
+        {
+            if (value > nextStream)
+            {
+                nextStream = value;
+            }
+        }
+    }
+
+    public void Restore(ClipboardDocument document)
+    {
+        Text = document.Text;
+        Clock = document.Clock;
+        Last = document.Last;
+        Sequence = document.Sequence;
+        Vector.Clear();
+        foreach (var pair in document.Vector)
+        {
+            Vector[pair.Key] = pair.Value;
+        }
+    }
+
+    public ClipboardDocument ToDocument(string appliedText) =>
+        new(Text, Clock, new Dictionary<string, long>(Vector), Last, appliedText, Sequence);
+
     public IReadOnlyList<DirectedFrame> LastSent => lastSent;
 
     public void Connect(string peerId, bool localEnabled, bool remoteEnabled) =>

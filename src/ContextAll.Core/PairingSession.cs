@@ -102,6 +102,16 @@ public sealed class PairingSession
         Closed = true;
     }
 
+    public void AdoptIfOnly()
+    {
+        if (!helloSent || !RemoteHelloSeen || Closed || IsSurvivor)
+        {
+            return;
+        }
+
+        BecomeSurvivor();
+    }
+
     public void AcceptLocal()
     {
         if (Closed || !IsSurvivor)
