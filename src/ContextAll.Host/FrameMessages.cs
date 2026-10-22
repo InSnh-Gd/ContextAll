@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization.Metadata;
 using ContextAll.Protocol;
@@ -23,11 +24,12 @@ static class FrameMessages
     public static Frame Segment(uint streamId, long index, ReadOnlySpan<byte> data)
     {
         var hash = SHA256.HashData(data);
-        var payload = new byte[36 + data.Length];
+        var length = 36 + data.Length;
+        var payload = ArrayPool<byte>.Shared.Rent(length);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(payload, (uint)index);
         hash.CopyTo(payload.AsSpan(4));
         data.CopyTo(payload.AsSpan(36));
-        return new Frame(payload.Length, FrameTypes.FileSegment, 3, 0, streamId, payload);
+        return new Frame(length, FrameTypes.FileSegment, 3, 0, streamId, payload.AsMemory(0, length));
     }
 
     public static uint BulkAfter(IEnumerable<Frame> frames, uint current)

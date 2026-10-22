@@ -109,11 +109,12 @@ public sealed class TransferSlot
     public bool Accepted { get; set; }
 }
 
-public sealed record TransferWork(string Name, string TransferId, long Offset, byte[]? Data);
+public sealed record TransferWork(string Name, string TransferId, long Offset, ReadOnlyMemory<byte> Data);
 
 public sealed class TransferBook
 {
     public const int SegmentSize = FrameLimits.MaxPayloadBytes - 36;
+    public const long MaxFileBytes = 1_000_000_000;
     public const long MaxNumber = 9_007_199_254_740_991;
     readonly Dictionary<string, TransferSlot> outbound = [];
     readonly Dictionary<string, TransferSlot> inbound = [];
@@ -385,7 +386,7 @@ public sealed class TransferBook
         return slot;
     }
 
-    public void ReceiveSegment(string peerId, uint index, byte[] hash, byte[] data, byte[]? runningFile)
+    public void ReceiveSegment(string peerId, uint index, ReadOnlySpan<byte> hash, ReadOnlyMemory<byte> data, byte[]? runningFile)
     {
         works.Clear();
         if (!inbound.TryGetValue(peerId, out var slot) || !slot.Accepted)
@@ -393,20 +394,20 @@ public sealed class TransferBook
             return;
         }
 
-        var expected = SHA256.HashData(data);
+        var expected = SHA256.HashData(data.Span);
         if (!expected.AsSpan().SequenceEqual(hash))
         {
             outcomes.Add((peerId, "checksum-failed"));
-            works.Add(new TransferWork("delete", slot.TransferId, 0, null));
+            works.Add(new TransferWork("delete", slot.TransferId, 0, default));
             inbound.Remove(peerId);
             return;
         }
 
         var offset = (long)index * slot.SegmentSize;
         works.Add(new TransferWork("write", slot.TransferId, offset, data));
-        works.Add(new TransferWork("flush", slot.TransferId, offset, null));
+        works.Add(new TransferWork("flush", slot.TransferId, offset, default));
         SetBit(slot, index);
-        works.Add(new TransferWork("bit", slot.TransferId, index, null));
+        works.Add(new TransferWork("bit", slot.TransferId, index, default));
         frames.Add(Payload(FrameTypes.FileAck, 2, FrameTypes.SessionStream, new FileAckPayload(slot.TransferId, index)));
         if (slot.Completed == slot.SegmentCount)
         {
@@ -417,10 +418,56 @@ public sealed class TransferBook
     public void Cancel(string transferId, bool sessionUp)
     {
         works.Clear();
-        var inboundSlot = inbound.Values.FirstOrDefault(item => item.TransferId == transferId);
-        var outboundSlot = outbound.Values.FirstOrDefault(item => item.TransferId == transferId);
-        var slot = inboundSlot ?? outboundSlot;
-        if (slot is null)
+        CancelOne(transferId, sessionUp);
+    }
+
+    public void CancelOutstanding(bool sessionUp)
+    {
+        var ids = new List<string>(inbound.Count + outbound.Count);
+        foreach (var slot in inbound.Values)
+        {
+            ids.Add(slot.TransferId);
+        }
+
+        foreach (var slot in outbound.Values)
+        {
+            ids.Add(slot.TransferId);
+        }
+
+        works.Clear();
+        frames.Clear();
+        foreach (var id in ids)
+        {
+            CancelOne(id, sessionUp);
+        }
+    }
+
+    void CancelOne(string transferId, bool sessionUp)
+    {
+        TransferSlot? inboundSlot = null;
+        foreach (var slot in inbound.Values)
+        {
+            if (slot.TransferId == transferId)
+            {
+                inboundSlot = slot;
+                break;
+            }
+        }
+
+        TransferSlot? outboundSlot = null;
+        if (inboundSlot is null)
+        {
+            foreach (var slot in outbound.Values)
+            {
+                if (slot.TransferId == transferId)
+                {
+                    outboundSlot = slot;
+                    break;
+                }
+            }
+        }
+
+        if (inboundSlot is null && outboundSlot is null)
         {
             return;
         }
@@ -430,7 +477,7 @@ public sealed class TransferBook
             frames.Add(Payload(FrameTypes.FileCancel, 0, FrameTypes.SessionStream, new FileCancelPayload(transferId)));
         }
 
-        works.Add(new TransferWork("delete", transferId, 0, null));
+        works.Add(new TransferWork("delete", transferId, 0, default));
         if (inboundSlot is not null)
         {
             inbound.Remove(inboundSlot.PeerId);
@@ -461,7 +508,7 @@ public sealed class TransferBook
 
         if (!announcedIds.Contains(slot.TransferId))
         {
-            works.Add(new TransferWork("delete", slot.TransferId, 0, null));
+            works.Add(new TransferWork("delete", slot.TransferId, 0, default));
             outcomes.Add((peerId, "gone"));
             inbound.Remove(peerId);
         }
@@ -473,7 +520,7 @@ public sealed class TransferBook
         frames.Add(Reject(transferId, "gone"));
         if (slot is not null)
         {
-            works.Add(new TransferWork("delete", transferId, 0, null));
+            works.Add(new TransferWork("delete", transferId, 0, default));
             outbound.Remove(slot.PeerId);
         }
 
@@ -491,7 +538,7 @@ public sealed class TransferBook
     {
         if (renameOk || copyOk)
         {
-            works.Add(new TransferWork("delete", slot.TransferId, 0, null));
+            works.Add(new TransferWork("delete", slot.TransferId, 0, default));
             inbound.Remove(slot.PeerId);
             outcomes.Add((slot.PeerId, "completed"));
             slot.MoveBlocked = false;
@@ -534,7 +581,7 @@ public sealed class TransferBook
     {
         slot.Accepted = true;
         slot.WaitingForAccept = false;
-        works.Add(new TransferWork("create", slot.TransferId, 0, null));
+        works.Add(new TransferWork("create", slot.TransferId, 0, default));
         frames.Add(Payload(FrameTypes.FileAccept, 0, FrameTypes.SessionStream, new FileAcceptPayload(slot.TransferId)));
         frames.Add(BitmapFrame(slot.TransferId, 0, [], last: true));
         if (slot.SegmentCount == 0)
@@ -652,7 +699,7 @@ public sealed class TransferBook
         && offer.RootSha256.All(Uri.IsHexDigit)
         && offer.SegmentSize == SegmentSize
         && offer.TotalSize >= 0
-        && offer.TotalSize <= MaxNumber
+        && offer.TotalSize <= MaxFileBytes
         && offer.SegmentCount >= 0
         && offer.SegmentCount <= MaxNumber
         && offer.SegmentCount == (offer.TotalSize == 0 ? 0 : (offer.TotalSize + SegmentSize - 1) / SegmentSize);
