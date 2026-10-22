@@ -80,6 +80,10 @@ public sealed class TwoDaemonTests
             Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "addr", "add", "10.50.0.2/24", "dev", "vethb");
             Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "link", "set", "vethb", "up");
             Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "link", "set", "lo", "up");
+            // MsQuic sends with UDP segmentation. On the hosted kernel that offload
+            // corrupts checksums on a veth pair, so beacons arrive and QUIC never does.
+            Exec(Ethtool(), "-K", "vetha", "tx", "off");
+            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", Ethtool(), "-K", "vethb", "tx", "off");
 
             daemonA = StartDaemon(host, left, sleep.Id, inside: false);
             daemonB = StartDaemon(host, right, sleep.Id, inside: true);
@@ -172,9 +176,10 @@ public sealed class TwoDaemonTests
         }
         catch
         {
-            Directory.CreateDirectory("/opt/cursor/artifacts");
-            File.WriteAllText("/opt/cursor/artifacts/two-daemon-a.log", LogOf(daemonA));
-            File.WriteAllText("/opt/cursor/artifacts/two-daemon-b.log", LogOf(daemonB));
+            Console.Error.WriteLine("daemon-a");
+            Console.Error.WriteLine(LogOf(daemonA));
+            Console.Error.WriteLine("daemon-b");
+            Console.Error.WriteLine(LogOf(daemonB));
             throw;
         }
         finally
@@ -516,6 +521,19 @@ public sealed class TwoDaemonTests
         {
             // Already gone.
         }
+    }
+
+    static string Ethtool()
+    {
+        foreach (var candidate in new[] { "/usr/sbin/ethtool", "/sbin/ethtool" })
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return "ethtool";
     }
 
     static string DotnetPath()
