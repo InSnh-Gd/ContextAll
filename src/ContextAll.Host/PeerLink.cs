@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Net.Quic;
 using System.Runtime.InteropServices;
-using System.Text;
 using ContextAll.Core;
 using ContextAll.Protocol;
 
@@ -465,8 +464,21 @@ public sealed class PeerLink
         }
     }
 
+    internal void MarkWritable()
+    {
+        pairing.OnWritable();
+        helloSent = true;
+    }
+
+    internal (Frame[] Outgoing, Frame[] Events) Dispatch(Frame frame) => Handle(frame);
+
     (Frame[] Outgoing, Frame[] Events) Handle(Frame frame)
     {
+        if (!entered && frame.Type is not (FrameTypes.Hello or FrameTypes.PairAccept or FrameTypes.PairReject or FrameTypes.SessionDuplicateClose))
+        {
+            return (Array.Empty<Frame>(), Array.Empty<Frame>());
+        }
+
         var events = new List<Frame>();
         switch (frame.Type)
         {
@@ -644,8 +656,8 @@ public sealed class PeerLink
 
     List<Frame> OnResume(Frame frame)
     {
-        var text = Encoding.UTF8.GetString(frame.Payload.Span);
-        if (text.Contains("\"done\"", StringComparison.Ordinal))
+        var done = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.DonePayload).Value;
+        if (done is { Done: true })
         {
             book.PeerDone(RemoteId, announced);
             var (works, _) = Take();
@@ -654,7 +666,7 @@ public sealed class PeerLink
         }
 
         var resume = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.FileResumePayload).Value;
-        if (resume is null)
+        if (resume is null || string.IsNullOrEmpty(resume.TransferId))
         {
             return [];
         }
