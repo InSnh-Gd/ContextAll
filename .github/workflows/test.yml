@@ -16,4 +16,8 @@ jobs:
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
+          if ! command -v ethtool >/dev/null && [ ! -x /usr/sbin/ethtool ]; then
+            sudo apt-get update
+            sudo apt-get install -y ethtool
+          fi
       - run: dotnet test ContextAll.Tests.slnf -c Release
