@@ -208,7 +208,8 @@ public sealed class IdentityAndDaemonTests
 
         using var client = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         client.Connect(new UnixDomainSocketEndPoint(socketPath));
-        var snapshot = ReadFrame(client);
+        var reader = new SocketFrames(client);
+        var snapshot = reader.Next();
         Assert.Equal(FrameTypes.Snapshot, snapshot.Type);
         var command = FrameCodec.Encode(
             ControlJson.Encode(
@@ -219,7 +220,7 @@ public sealed class IdentityAndDaemonTests
             0,
             0).Value!;
         client.Send(command);
-        var result = ReadFrame(client);
+        var result = ReadCommandResult(reader);
         Assert.Equal(96, result.Type);
         cts.Cancel();
         await serve;
@@ -242,15 +243,17 @@ public sealed class IdentityAndDaemonTests
         await listening.Task;
         var socketPath = LocalChannelClient.LinuxSocket(root);
         using var bad = Connect(socketPath);
-        Assert.Equal(FrameTypes.Snapshot, ReadFrame(bad).Type);
+        var badReader = new SocketFrames(bad);
+        Assert.Equal(FrameTypes.Snapshot, badReader.Next().Type);
         using var good = Connect(socketPath);
-        Assert.Equal(FrameTypes.Snapshot, ReadFrame(good).Type);
+        var goodReader = new SocketFrames(good);
+        Assert.Equal(FrameTypes.Snapshot, goodReader.Next().Type);
 
         bad.Send(FrameCodec.Encode(CommandPayload("ab"), 76, 0, 0, 0).Value!);
         Assert.True(WaitForClose(bad, 3000));
 
         good.Send(FrameCodec.Encode(CommandPayload("cd"), FrameTypes.SetDisplayName, 0, 0, 0).Value!);
-        Assert.Equal(FrameTypes.CommandResult, ReadFrame(good).Type);
+        Assert.Equal(FrameTypes.CommandResult, ReadCommandResult(goodReader).Type);
 
         cts.Cancel();
         await serve;
@@ -347,42 +350,58 @@ public sealed class IdentityAndDaemonTests
         throw new InvalidOperationException("no frame");
     }
 
-    static Frame ReadFrame(Socket client)
+    static Frame ReadCommandResult(SocketFrames reader)
     {
-        client.ReceiveTimeout = 3000;
-        var buffer = new byte[FrameLimits.HeaderBytes + FrameLimits.MaxPayloadBytes];
-        var filled = 0;
-        while (filled < buffer.Length)
+        for (var i = 0; i < 64; i++)
         {
-            int count;
-            try
+            var frame = reader.Next();
+            if (frame.Type == FrameTypes.CommandResult)
             {
-                count = client.Receive(buffer, filled, buffer.Length - filled, SocketFlags.None);
-            }
-            catch (SocketException)
-            {
-                break;
-            }
-
-            if (count == 0)
-            {
-                break;
-            }
-
-            filled += count;
-            var read = FrameCodec.Read(buffer.AsSpan(0, filled));
-            if (read.Frame is not null)
-            {
-                return read.Frame;
-            }
-
-            if (read.IsFailure)
-            {
-                throw new InvalidOperationException(read.Reason);
+                return frame;
             }
         }
 
-        throw new InvalidOperationException("no frame");
+        throw new InvalidOperationException("command-result");
+    }
+
+    sealed class SocketFrames(Socket client)
+    {
+        readonly byte[] buffer = new byte[FrameLimits.HeaderBytes + FrameLimits.MaxPayloadBytes];
+        int filled;
+
+        public Frame Next()
+        {
+            client.ReceiveTimeout = 3000;
+            while (true)
+            {
+                var read = FrameCodec.Read(buffer.AsSpan(0, filled));
+                if (read.Frame is not null)
+                {
+                    var rest = filled - read.Consumed;
+                    Buffer.BlockCopy(buffer, read.Consumed, buffer, 0, rest);
+                    filled = rest;
+                    return read.Frame;
+                }
+
+                if (read.IsFailure)
+                {
+                    throw new InvalidOperationException(read.Reason);
+                }
+
+                if (filled == buffer.Length)
+                {
+                    throw new InvalidOperationException("frame-too-large");
+                }
+
+                var count = client.Receive(buffer, filled, buffer.Length - filled, SocketFlags.None);
+                if (count == 0)
+                {
+                    throw new InvalidOperationException("no frame");
+                }
+
+                filled += count;
+            }
+        }
     }
 
     [Fact]
