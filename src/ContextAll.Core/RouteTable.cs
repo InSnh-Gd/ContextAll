@@ -1,6 +1,11 @@
 namespace ContextAll.Core;
 
-public sealed record OnLinkPrefix(string Address, int PrefixLength);
+public sealed record OnLinkPrefix(string Address, int PrefixLength)
+{
+    public int InterfaceIndex { get; init; }
+
+    public bool LinkLocal { get; init; }
+}
 
 public sealed record RoutePath(string Address, int Port, bool FromDiscovery)
 {
@@ -123,14 +128,11 @@ public sealed class RouteTable
             return false;
         }
 
-        var candidate = DialCandidates(deviceId).FirstOrDefault();
-        if (candidate is null)
-        {
-            return false;
-        }
-
-        return candidate.FailedAt != candidate.RefreshedAt;
+        return NextDialCandidate(deviceId) is not null;
     }
+
+    public RoutePath? NextDialCandidate(string deviceId) =>
+        DialCandidates(deviceId).FirstOrDefault(path => path.FailedAt != path.RefreshedAt);
 
     public IReadOnlyList<RoutePath> DialCandidates(string deviceId)
     {

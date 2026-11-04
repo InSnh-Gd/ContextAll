@@ -58,6 +58,32 @@ public sealed class RouteRulesTests
     }
 
     [Fact]
+    public void An_ipv6_announcement_matches_an_ipv6_prefix_and_keeps_link_local_out()
+    {
+        var table = new RouteTable(Local);
+        var id = DeviceIds.Text(Peer);
+
+        table.Announce(id, ["2001:db8::5", "fe80::1%2", "2001:db9::5"], [new OnLinkPrefix("2001:db8::", 64)], 0);
+
+        Assert.Contains(table.DialCandidates(id), path => path.Address == "2001:db8::5");
+        Assert.DoesNotContain(table.DialCandidates(id), path => path.Address == "fe80::1%2");
+        Assert.DoesNotContain(table.DialCandidates(id), path => path.Address == "2001:db9::5");
+    }
+
+    [Fact]
+    public void A_failed_candidate_does_not_block_another_fresh_candidate()
+    {
+        var table = new RouteTable(Local);
+        var id = DeviceIds.Text(Peer);
+        table.AddDiscovery(id, DeviceIds.Digest(Peer), "10.0.0.5", 42461, 100, "phone");
+        table.AddDiscovery(id, DeviceIds.Digest(Peer), "10.0.0.6", 42461, 200, "phone");
+
+        table.FailDial(id, "10.0.0.6");
+
+        Assert.Equal("10.0.0.5", table.NextDialCandidate(id)?.Address);
+    }
+
+    [Fact]
     public void An_untrusted_peer_is_not_dialed_until_pairing_and_a_failed_dial_waits_for_refresh()
     {
         var table = new RouteTable(Local);
