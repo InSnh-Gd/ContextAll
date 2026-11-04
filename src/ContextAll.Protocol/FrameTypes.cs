@@ -1,5 +1,10 @@
 namespace ContextAll.Protocol;
 
+public static class LocalFrameTypes
+{
+    public static bool IsCommand(byte type) => type is >= FrameTypes.StartPairing and <= FrameTypes.CancelTransfer;
+}
+
 public static class FrameTypes
 {
     public const byte Hello = 1;

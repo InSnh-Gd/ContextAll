@@ -19,12 +19,22 @@ public sealed class QuicLinkTests
     }
 
     [Fact]
+    public void An_ipv6_beacon_address_keeps_its_interface_scope()
+    {
+        var scoped = IPAddress.Parse("fe80::1%2");
+        var endpoint = Assert.Single(QuicLink.ListenerEndpoints([scoped]));
+
+        Assert.Equal(2u, endpoint.Address.ScopeId);
+        Assert.Equal("fe80::1%2", endpoint.Address.ToString());
+        Assert.Equal(QuicLink.Port, endpoint.Port);
+    }
+
+    [Fact]
     public async Task The_initiator_opens_one_bidirectional_stream_on_the_beacon_address()
     {
         using var certificate = Certificate();
         var beacon = IPAddress.Loopback;
-        var endpoint = Assert.Single(QuicLink.ListenerEndpoints([beacon]));
-        Assert.Equal(QuicLink.Port, endpoint.Port);
+        var endpoint = new IPEndPoint(beacon, FreePort(beacon));
         if (!QuicLink.Supported)
         {
             var error = await Record.ExceptionAsync(() => QuicLink.Listen(endpoint.Address, certificate, endpoint.Port));
@@ -56,6 +66,16 @@ public sealed class QuicLinkTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => server.AcceptInboundStreamAsync(fromClient.Token).AsTask());
         using var fromServer = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.AcceptInboundStreamAsync(fromServer.Token).AsTask());
+    }
+
+    static int FreePort(IPAddress address)
+    {
+        using var socket = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.InterNetwork,
+            System.Net.Sockets.SocketType.Dgram,
+            System.Net.Sockets.ProtocolType.Udp);
+        socket.Bind(new IPEndPoint(address, 0));
+        return ((IPEndPoint)socket.LocalEndPoint!).Port;
     }
 
     static X509Certificate2 Certificate()

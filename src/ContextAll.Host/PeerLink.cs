@@ -11,7 +11,7 @@ public sealed class PeerLink
 {
     readonly LanHost host;
     readonly QuicConnection connection;
-    readonly QuicStream stream;
+    readonly Stream stream;
     readonly PairingSession pairing;
     readonly TransferBook book = new();
     readonly FrameOutbox outbox = new();
@@ -24,10 +24,11 @@ public sealed class PeerLink
     bool helloSent;
     bool entered;
     bool closed;
+    bool draining;
     long readyTick = -1;
     Task? writer;
 
-    public PeerLink(LanHost host, QuicConnection connection, QuicStream stream, byte[] remoteSpki, bool initiated)
+    public PeerLink(LanHost host, QuicConnection connection, Stream stream, byte[] remoteSpki, bool initiated)
     {
         this.host = host;
         this.connection = connection;
@@ -60,6 +61,8 @@ public sealed class PeerLink
     public string? Code => pairing.ShortCode;
 
     public string RemoteName => pairing.RemoteName;
+
+    internal PairingSession Pairing => pairing;
 
     public long RemainingMs
     {
@@ -170,7 +173,7 @@ public sealed class PeerLink
 
             outgoing[^1] = FrameMessages.Json(FrameTypes.Unpair, 0, 0, FrameTypes.SessionStream, new DonePayload(true), ProtocolJsonContext.Default.DonePayload);
             Post(outgoing);
-            Close();
+            CloseAfterDrain();
         }
     }
 
@@ -184,6 +187,44 @@ public sealed class PeerLink
     }
 
     public void PostFrames(IReadOnlyList<Frame> frames) => Post(frames);
+
+    public void RenameLocal(string name)
+    {
+        lock (host.Gate)
+        {
+            if (closed)
+            {
+                return;
+            }
+
+            pairing.Rename(name);
+            if (entered)
+            {
+                PostImmediate(NewPairingFrames());
+            }
+        }
+    }
+
+    public void AnnouncePaths() => AnnouncePaths(null);
+
+    internal void AnnouncePaths(IReadOnlyList<string>? addresses)
+    {
+        lock (host.Gate)
+        {
+            if (closed || !entered)
+            {
+                return;
+            }
+
+            var current = addresses is null ? host.LocalAddresses() : addresses.ToArray();
+            if (!pairing.TryAnnounce(current))
+            {
+                return;
+            }
+
+            PostImmediate(NewPairingFrames());
+        }
+    }
 
     static void FinishDuplicate(PeerLink link)
     {
@@ -1043,7 +1084,7 @@ public sealed class PeerLink
 
     void Post(IReadOnlyList<Frame> frames)
     {
-        if (frames.Count == 0 || closed)
+        if (frames.Count == 0 || closed || draining)
         {
             return;
         }
@@ -1061,7 +1102,7 @@ public sealed class PeerLink
 
     void PostImmediate(IReadOnlyList<Frame> frames)
     {
-        if (frames.Count == 0 || closed)
+        if (frames.Count == 0 || closed || draining)
         {
             return;
         }
@@ -1129,12 +1170,29 @@ public sealed class PeerLink
                         ReleaseSegment(frame);
                     }
                 }
+
+                if (draining)
+                {
+                    Close();
+                    return;
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or QuicException)
         {
             // The session closed.
         }
+    }
+
+    void CloseAfterDrain()
+    {
+        if (closed || draining)
+        {
+            return;
+        }
+
+        draining = true;
+        poke.Release();
     }
 
     void Close()
@@ -1145,6 +1203,7 @@ public sealed class PeerLink
         }
 
         closed = true;
+        draining = false;
         cancel.Cancel();
         poke.Release();
     }

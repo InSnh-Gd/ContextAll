@@ -229,6 +229,76 @@ public sealed class IdentityAndDaemonTests
     }
 
     [Fact]
+    public async Task An_unknown_local_type_closes_only_that_front_end()
+    {
+        var root = Temp();
+        using var cts = new CancellationTokenSource();
+        var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var serve = DaemonProcess.Serve(root, _ =>
+        {
+            listening.TrySetResult();
+            return Task.Delay(Timeout.Infinite, cts.Token);
+        }, cts.Token);
+        await listening.Task;
+        var socketPath = LocalChannelClient.LinuxSocket(root);
+        using var bad = Connect(socketPath);
+        Assert.Equal(FrameTypes.Snapshot, ReadFrame(bad).Type);
+        using var good = Connect(socketPath);
+        Assert.Equal(FrameTypes.Snapshot, ReadFrame(good).Type);
+
+        bad.Send(FrameCodec.Encode(CommandPayload("ab"), 76, 0, 0, 0).Value!);
+        Assert.True(WaitForClose(bad, 3000));
+
+        good.Send(FrameCodec.Encode(CommandPayload("cd"), FrameTypes.SetDisplayName, 0, 0, 0).Value!);
+        Assert.Equal(FrameTypes.CommandResult, ReadFrame(good).Type);
+
+        cts.Cancel();
+        await serve;
+    }
+
+    static byte[] CommandPayload(string requestId) =>
+        ControlJson.Encode(
+            new LocalCommandPayload(requestId, null, "Desk", null, null, null),
+            ProtocolJsonContext.Default.LocalCommandPayload).Value!;
+
+    static Socket Connect(string socketPath)
+    {
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        socket.Connect(new UnixDomainSocketEndPoint(socketPath));
+        return socket;
+    }
+
+    static bool WaitForClose(Socket socket, int timeoutMs)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        var buffer = new byte[256];
+        while (DateTime.UtcNow < deadline)
+        {
+            if (!socket.Poll(100_000, SelectMode.SelectRead))
+            {
+                continue;
+            }
+
+            int count;
+            try
+            {
+                count = socket.Receive(buffer);
+            }
+            catch (SocketException)
+            {
+                return true;
+            }
+
+            if (count == 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    [Fact]
     public async Task A_windows_pipe_decodes_a_client_frame_and_a_second_serve_exits()
     {
         using var cts = new CancellationTokenSource();

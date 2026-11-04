@@ -134,7 +134,7 @@ public static class DaemonProcess
             while (!cancellationToken.IsCancellationRequested)
             {
                 var accepted = await listener.AcceptAsync(cancellationToken).ConfigureAwait(false);
-                _ = Pump(new NetworkStream(accepted, ownsSocket: true), host.Snapshot, host.Command, host.Join, host.Leave, cancellationToken);
+                _ = PumpOwned(new NetworkStream(accepted, ownsSocket: true), host.Snapshot, host.Command, host.Join, host.Leave, cancellationToken);
             }
         }
         catch (OperationCanceledException)
@@ -174,6 +174,24 @@ public static class DaemonProcess
         }
     }
 
+    static async Task PumpOwned(
+        Stream stream,
+        Func<Frame> snapshot,
+        Action<FrontClient, Frame> command,
+        Action<FrontClient> join,
+        Action<FrontClient> leave,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Pump(stream, snapshot, command, join, leave, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            await stream.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
     static async Task Pump(
         Stream stream,
         Func<Frame> snapshot,
@@ -207,7 +225,7 @@ public static class DaemonProcess
                         break;
                     }
 
-                    if (read.IsFailure || read.Frame is null)
+                    if (read.IsFailure || read.Frame is null || !LocalFrameTypes.IsCommand(read.Frame.Type))
                     {
                         return;
                     }
@@ -250,7 +268,7 @@ public static class DaemonProcess
 
         public void Command(FrontClient client, Frame frame)
         {
-            if (frame.Type is < FrameTypes.StartPairing or > FrameTypes.CancelTransfer)
+            if (!LocalFrameTypes.IsCommand(frame.Type))
             {
                 return;
             }
