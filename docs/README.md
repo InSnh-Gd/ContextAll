@@ -17,11 +17,11 @@ capability 的目录名就是文档文件名。
 | `repository-baseline` | [仓库](specs/repository-baseline.md) | `engineering-baseline` |
 | `functional-core` | [决策核心](specs/functional-core.md) | `engineering-baseline` |
 | `verification-gates` | [验证](specs/verification-gates.md) | `engineering-baseline` |
-| `lan-session` | [局域网会话](specs/lan-session.md) | `session-protocol` |
+| `lan-session` | [局域网会话](specs/lan-session.md) | `transport-parity` |
 | `clipboard-sync` | [剪贴板同步](specs/clipboard-sync.md) | `session-protocol` |
 | `file-transfer` | [文件传输](specs/file-transfer.md) | `session-protocol` |
 | `local-operator` | [本地操作](specs/local-operator.md) | `session-protocol` |
-| `framed-channel` | [成帧通道](specs/framed-channel.md) | `session-protocol` |
+| `framed-channel` | [成帧通道](specs/framed-channel.md) | `transport-parity` |
 | `device-shell` | [图形外壳](specs/device-shell.md) | `session-protocol` |
 
 ## 待同步

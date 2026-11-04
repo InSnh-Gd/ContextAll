@@ -8,11 +8,15 @@
 
 流 id 0 是会话，1 是同步。文件和剪贴板分块从 2 起分配，同一条连接上不重复使用。新连接再从 2 开始。类型 18 是剪贴板分块。类型 64 及以上是本地命令和事件。QUIC 上收到这种帧时会话关闭，信任项不变。
 
+本地通道的类型判断集中在一处。前端发来未知的本地类型时，只关闭这个前端；同一守护进程上的其他前端继续工作。
+
+写线程有排空阶段。解绑时先写出并刷新 `UNPAIR`，队列写完后再关闭连接，对端能在读循环结束前收到这一帧。
+
 ## QUIC
 
-ALPN 是 `contextall`，端口是 42461。`ListenerEndpoints` 把信标地址收成不重复的端点，每个地址一个。监听绑在这些地址上，不绑 `0.0.0.0`。没有在链路上的本机地址时，守护进程打印 `quic-skipped no-beacon-address` 并返回。
+ALPN 是 `contextall`，端口是 42461。`ListenerEndpoints` 把信标地址收成不重复的端点，每个地址一个；IPv4 和 IPv6 都收，`fe80::1%2` 的接口 scope id 保留到端点。监听绑在这些地址上，不绑 `0.0.0.0`。没有可用的本机地址时，守护进程打印 `quic-skipped no-beacon-address`。
 
-发起方打开一条双向流，接收方接受这一条，不再另开应用流。测试在回环地址上完成握手，协商到的 ALPN 是 `contextall`，随后两边都等不到第二条流。`QuicListener.IsSupported` 为假时，`Listen` 抛出 `quic-unsupported`，不改走 TCP。这台 Windows 上该属性为真，测试走的是监听路径。Android 没有在这台机器上运行，因此没有收到“QUIC 不支持”的报告。
+发起方打开一条双向流，接收方接受这一条，不再另开应用流。测试在回环地址上完成握手，协商到的 ALPN 是 `contextall`，随后两边都等不到第二条流。`QuicListener.IsSupported` 为假时，`Listen` 抛出 `quic-unsupported`，不改走 TCP。
 
 空闲超时 60 秒，保活间隔 15 秒。
 
