@@ -8,7 +8,7 @@ namespace ContextAll.Host.Tests;
 
 public sealed class TwoDaemonTests
 {
-    [Fact(Timeout = 180000)]
+    [Fact(Timeout = 360000)]
     public async Task Two_daemons_copy_text_and_resume_a_partial_file()
     {
         var (code, text) = await Reexec();
@@ -19,7 +19,8 @@ public sealed class TwoDaemonTests
     {
         try
         {
-            await Scenario();
+            await Scenario(ipv6: false);
+            await Scenario(ipv6: true);
             Console.WriteLine("scenario-ok");
             return 0;
         }
@@ -44,7 +45,7 @@ public sealed class TwoDaemonTests
         psi.ArgumentList.Add("timeout");
         psi.ArgumentList.Add("-k");
         psi.ArgumentList.Add("5");
-        psi.ArgumentList.Add("150");
+        psi.ArgumentList.Add("300");
         psi.ArgumentList.Add(DotnetPath());
         psi.ArgumentList.Add("exec");
         psi.ArgumentList.Add(typeof(TwoDaemonTests).Assembly.Location);
@@ -57,33 +58,39 @@ public sealed class TwoDaemonTests
         return (process.ExitCode, text);
     }
 
-    static async Task Scenario()
+    static async Task Scenario(bool ipv6)
     {
-        var root = Path.Combine(Path.GetTempPath(), "contextall-two-" + Guid.NewGuid().ToString("N"));
+        var mode = ipv6 ? "v6" : "v4";
+        var root = Path.Combine(Path.GetTempPath(), "contextall-two-" + mode + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        var sleep = Process.Start(new ProcessStartInfo("unshare", "-n sleep 240")
+        var sleep = Process.Start(new ProcessStartInfo("unshare", "-n sleep 400")
         {
             UseShellExecute = false,
         })!;
         var left = NewSide(root, "a");
         var right = NewSide(root, "b");
         var host = typeof(DaemonProcess).Assembly.Location;
+        var near = ipv6 ? "vethc" : "vetha";
+        var far = ipv6 ? "vethd" : "vethb";
+        var leftAddress = ipv6 ? "fd00::1/64" : "10.50.0.1/24";
+        var rightAddress = ipv6 ? "fd00::2/64" : "10.50.0.2/24";
+        var extraAddress = ipv6 ? "fd00::3/64" : "10.50.0.3/24";
         Process? daemonA = null;
         Process? daemonB = null;
         try
         {
-            Exec("/usr/sbin/ip", "link", "add", "vetha", "type", "veth", "peer", "name", "vethb");
-            Exec("/usr/sbin/ip", "link", "set", "vethb", "netns", sleep.Id.ToString());
-            Exec("/usr/sbin/ip", "addr", "add", "10.50.0.1/24", "dev", "vetha");
-            Exec("/usr/sbin/ip", "link", "set", "vetha", "up");
+            Exec("/usr/sbin/ip", "link", "add", near, "type", "veth", "peer", "name", far);
+            Exec("/usr/sbin/ip", "link", "set", far, "netns", sleep.Id.ToString());
+            Exec("/usr/sbin/ip", "addr", "add", leftAddress, "dev", near);
+            Exec("/usr/sbin/ip", "link", "set", near, "up");
             Exec("/usr/sbin/ip", "link", "set", "lo", "up");
-            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "addr", "add", "10.50.0.2/24", "dev", "vethb");
-            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "link", "set", "vethb", "up");
+            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "addr", "add", rightAddress, "dev", far);
+            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "link", "set", far, "up");
             Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "link", "set", "lo", "up");
             // MsQuic sends with UDP segmentation. On the hosted kernel that offload
             // corrupts checksums on a veth pair, so beacons arrive and QUIC never does.
-            Exec(Ethtool(), "-K", "vetha", "tx", "off");
-            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", Ethtool(), "-K", "vethb", "tx", "off");
+            Exec(Ethtool(), "-K", near, "tx", "off");
+            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", Ethtool(), "-K", far, "tx", "off");
 
             daemonA = StartDaemon(host, left, sleep.Id, inside: false);
             daemonB = StartDaemon(host, right, sleep.Id, inside: true);
@@ -135,6 +142,26 @@ public sealed class TwoDaemonTests
             Assert.All(types, type => Assert.True(type is >= 80 and <= 86 or 96));
 
             Console.Error.WriteLine("step copied");
+
+            Exec("/usr/sbin/ip", "addr", "add", extraAddress, "dev", near);
+            await Task.Delay(1500);
+            left.Compositor.SetText("after-add");
+            Wait(() => right.Compositor.CurrentText == "after-add");
+            Assert.True(Snapshot(left.Runtime).Devices.Any(device => device.DeviceId == bId && device.Trusted && device.Presence == "connected"));
+            Console.Error.WriteLine("step address-added");
+
+            Exec("/usr/sbin/ip", "addr", "del", extraAddress, "dev", near);
+            await Task.Delay(1500);
+            left.Compositor.SetText("after-remove");
+            Wait(() => right.Compositor.CurrentText == "after-remove");
+            Assert.True(Snapshot(right.Runtime).Devices.Any(device => device.DeviceId == aId && device.Trusted && device.Presence == "connected"));
+            Console.Error.WriteLine("step address-removed");
+
+            if (ipv6)
+            {
+                return;
+            }
+
             var rejected = Path.Combine(left.Home, "rejected.txt");
             File.WriteAllText(rejected, "nope");
             Assert.Equal(0, Command(left.Runtime, FrameTypes.SendFile, bId, rejected, null, null));
@@ -246,17 +273,33 @@ public sealed class TwoDaemonTests
             return;
         }
 
-        lock (process)
+        lock (logGate)
         {
-            logs.TryAdd(process.Id, new StringBuilder());
-            logs[process.Id].AppendLine(line);
+            if (!logs.TryGetValue(process.Id, out var log))
+            {
+                log = new StringBuilder();
+                logs[process.Id] = log;
+            }
+
+            log.AppendLine(line);
         }
     }
 
     static readonly Dictionary<int, StringBuilder> logs = [];
+    static readonly object logGate = new();
 
-    static string LogOf(Process? process) =>
-        process is null || !logs.TryGetValue(process.Id, out var log) ? "" : log.ToString();
+    static string LogOf(Process? process)
+    {
+        if (process is null)
+        {
+            return "";
+        }
+
+        lock (logGate)
+        {
+            return logs.TryGetValue(process.Id, out var log) ? log.ToString() : "";
+        }
+    }
 
     static async Task WaitLog(Process process, string text)
     {

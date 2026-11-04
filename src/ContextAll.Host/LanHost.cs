@@ -15,6 +15,31 @@ public sealed class LanHost : IDisposable
 {
     public const int BeaconPort = 42462;
 
+    internal const int BeaconIntervalMs = 5000;
+
+    internal const int ReconcileSeconds = 5;
+
+    static Socket? ListenBeacon(AddressFamily family, IPAddress any)
+    {
+        try
+        {
+            var socket = new Socket(family, SocketType.Dgram, ProtocolType.Udp);
+            socket.EnableBroadcast = true;
+            if (family == AddressFamily.InterNetworkV6)
+            {
+                socket.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+            }
+
+            socket.Bind(new IPEndPoint(any, BeaconPort));
+            return socket;
+        }
+        catch (SocketException)
+        {
+            Console.Error.WriteLine("beacon-skipped " + family);
+            return null;
+        }
+    }
+
     readonly IdentityMaterial identity;
     readonly string settingsPath;
     readonly string home;
@@ -31,10 +56,16 @@ public sealed class LanHost : IDisposable
     readonly List<FrontClient> clients = [];
     readonly List<OnLinkPrefix> prefixes = [];
     readonly CancellationTokenSource stop = new();
+    readonly SemaphoreSlim rebuildGate = new(1, 1);
     CancellationTokenSource? run;
     readonly RouteTable routes;
-    readonly List<QuicListener> listeners = [];
+    IReadOnlyList<OnLinkPrefix> lastNetwork = [];
+    long lastBeaconTick;
+    ListenerSet? listenerSet;
+    NetworkMonitor? networkMonitor;
     Socket? udp;
+    Socket? udp6;
+    MdnsDiscovery? mdns;
     WaylandClipboard? wayland;
     PeerLink? prompt;
     string? pendingText;
@@ -165,18 +196,23 @@ public sealed class LanHost : IDisposable
 
         _ = Task.Run(() => ListenAsync(token), token);
 
-        try
+        udp = ListenBeacon(AddressFamily.InterNetwork, IPAddress.Any);
+        udp6 = ListenBeacon(AddressFamily.InterNetworkV6, IPAddress.IPv6Any);
+
+        List<OnLinkPrefix> localPrefixes;
+        lock (Gate)
         {
-            udp = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            udp.EnableBroadcast = true;
-            udp.Bind(new IPEndPoint(IPAddress.Any, BeaconPort));
+            RefreshPrefixes();
+            localPrefixes = prefixes.ToList();
         }
-        catch (SocketException)
-        {
-            udp?.Dispose();
-            udp = null;
-            Console.Error.WriteLine("beacon-skipped");
-        }
+
+        mdns = new MdnsDiscovery(DeviceIds.Text(identity.Spki), DisplayName, QuicLink.Port, NoteMdns);
+        mdns.Start(localPrefixes);
+        lastNetwork = localPrefixes.ToArray();
+        networkMonitor = new NetworkMonitor(() => _ = SafeRebuildAsync());
+        NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+        NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+        _ = Task.Run(() => ReconcileLoop(token), token);
 
         _ = Task.Run(() => BeaconLoop(token), token);
         _ = Task.Run(() => DialLoop(token), token);
@@ -208,7 +244,7 @@ public sealed class LanHost : IDisposable
 
     public void Command(FrontClient client, Frame frame)
     {
-        if (frame.Type is < FrameTypes.StartPairing or > FrameTypes.CancelTransfer)
+        if (!LocalFrameTypes.IsCommand(frame.Type))
         {
             return;
         }
@@ -603,10 +639,15 @@ public sealed class LanHost : IDisposable
         stop.Cancel();
         run?.Cancel();
         wayland?.Dispose();
+        mdns?.Dispose();
+        networkMonitor?.Dispose();
+        NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
+        NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
         udp?.Dispose();
-        foreach (var item in listeners)
+        udp6?.Dispose();
+        if (listenerSet is not null)
         {
-            _ = item.DisposeAsync().AsTask();
+            _ = listenerSet.DisposeAsync().AsTask();
         }
 
         run?.Dispose();
@@ -625,44 +666,173 @@ public sealed class LanHost : IDisposable
                 return;
             }
 
-            List<IPAddress> addresses;
-            lock (Gate)
+            if (!QuicLink.Supported)
             {
-                RefreshPrefixes();
-                addresses = [];
-                foreach (var prefix in prefixes)
-                {
-                    if (IPAddress.TryParse(prefix.Address, out var address))
-                    {
-                        addresses.Add(address);
-                    }
-                }
-            }
-
-            foreach (var endpoint in QuicLink.ListenerEndpoints(addresses))
-            {
-                try
-                {
-                    listeners.Add(await QuicLink.ListenMutual(endpoint.Address, certificate, endpoint.Port, cancellationToken).ConfigureAwait(false));
-                }
-                catch (Exception ex) when (ex is SocketException or InvalidOperationException or QuicException or IOException or AuthenticationException)
-                {
-                    Console.Error.WriteLine("quic-skipped " + endpoint.Address + " " + ex.GetType().Name + " " + ex.Message);
-                }
-            }
-
-            if (listeners.Count == 0)
-            {
-                Console.Error.WriteLine(QuicLink.Supported ? "quic-skipped no-beacon-address" : "quic-skipped quic-unsupported");
+                Console.Error.WriteLine("quic-skipped quic-unsupported");
                 return;
             }
 
-            await AcceptLoop(cancellationToken).ConfigureAwait(false);
+            listenerSet = new ListenerSet(
+                (address, token) => QuicLink.ListenMutual(address, certificate, QuicLink.Port, token),
+                (connection, token) => Attach(connection, null, initiated: false, token, null, null),
+                message => Console.Error.WriteLine(message),
+                cancellationToken);
+            await RebuildListenersAsync().ConfigureAwait(false);
+            if (listenerSet.Count == 0)
+            {
+                Console.Error.WriteLine(QuicLink.Supported ? "quic-skipped no-beacon-address" : "quic-skipped quic-unsupported");
+            }
+
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is SocketException or InvalidOperationException or QuicException or IOException or CryptographicException or AuthenticationException or OperationCanceledException)
         {
             Console.Error.WriteLine("quic-skipped " + ex.GetType().Name + " " + ex.Message);
         }
+    }
+
+    async Task RebuildListenersAsync(IReadOnlyList<OnLinkPrefix>? local = null)
+    {
+        var set = listenerSet;
+        if (set is null)
+        {
+            return;
+        }
+
+        if (local is null)
+        {
+            lock (Gate)
+            {
+                RefreshPrefixes();
+                local = prefixes.ToArray();
+            }
+        }
+
+        var addresses = new List<IPAddress>();
+        foreach (var prefix in local)
+        {
+            if (IPAddress.TryParse(prefix.Address, out var address) && !addresses.Contains(address))
+            {
+                addresses.Add(address);
+            }
+        }
+
+        await set.RebuildAsync(addresses).ConfigureAwait(false);
+    }
+
+    void OnNetworkAddressChanged(object? sender, EventArgs args) => networkMonitor?.Signal();
+
+    void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs args) => networkMonitor?.Signal();
+
+    async Task ReconcileLoop(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(ReconcileSeconds), cancellationToken).ConfigureAwait(false);
+                await RebuildNetworkAsync().ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The daemon stopped.
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or QuicException or InvalidOperationException)
+        {
+            Console.Error.WriteLine("network-reconcile " + ex.GetType().Name + " " + ex.Message);
+        }
+    }
+
+    async Task SafeRebuildAsync()
+    {
+        try
+        {
+            await RebuildNetworkAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or QuicException or InvalidOperationException)
+        {
+            Console.Error.WriteLine("network-rebuild " + ex.GetType().Name + " " + ex.Message);
+        }
+    }
+
+    async Task RebuildNetworkAsync(IReadOnlyList<OnLinkPrefix>? local = null, bool force = false)
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        await rebuildGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            bool changed;
+            lock (Gate)
+            {
+                if (local is null)
+                {
+                    RefreshPrefixes();
+                    local = prefixes.ToArray();
+                }
+
+                changed = force || !SamePrefixes(lastNetwork, local);
+                lastNetwork = local.ToArray();
+            }
+
+            if (changed)
+            {
+                mdns?.Rebuild(local);
+            }
+
+            await RebuildListenersAsync(local).ConfigureAwait(false);
+            if (!changed)
+            {
+                return;
+            }
+
+            SendBeacon();
+
+            PeerLink[] live;
+            lock (Gate)
+            {
+                live = links.Where(link => link.Entered && !link.Closed).ToArray();
+            }
+
+            var addresses = local.Select(prefix => prefix.Address).Distinct().ToArray();
+            foreach (var link in live)
+            {
+                link.AnnouncePaths(addresses);
+            }
+        }
+        finally
+        {
+            rebuildGate.Release();
+        }
+    }
+
+    internal Task RebuildNetworkForTest(IReadOnlyList<OnLinkPrefix> local) => RebuildNetworkAsync(local, force: true);
+
+    internal Task ReconcileNetworkForTest(IReadOnlyList<OnLinkPrefix> local) => RebuildNetworkAsync(local);
+
+    internal long LastBeaconTick => Volatile.Read(ref lastBeaconTick);
+
+    static bool SamePrefixes(IReadOnlyList<OnLinkPrefix> left, IReadOnlyList<OnLinkPrefix> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        return left.Select(Key).Order(StringComparer.Ordinal)
+            .SequenceEqual(right.Select(Key).Order(StringComparer.Ordinal));
+
+        static string Key(OnLinkPrefix prefix) =>
+            prefix.Address + "/" + prefix.PrefixLength + "/" + prefix.InterfaceIndex + "/" + prefix.LinkLocal;
     }
 
     string? Apply(LocalCommandPayload body, byte type)
@@ -680,10 +850,7 @@ public sealed class LanHost : IDisposable
                 Persist();
                 foreach (var link in links)
                 {
-                    if (link.Entered)
-                    {
-                        link.PostFrames([FrameMessages.Json(FrameTypes.DisplayName, 0, 0, FrameTypes.SessionStream, new DisplayNamePayload(DisplayName), ProtocolJsonContext.Default.DisplayNamePayload)]);
-                    }
+                    link.RenameLocal(DisplayName);
                 }
 
                 return null;
@@ -897,33 +1064,6 @@ public sealed class LanHost : IDisposable
         }
     }
 
-    async Task AcceptLoop(CancellationToken cancellationToken)
-    {
-        var waits = new List<(QuicListener Listener, Task<QuicConnection> Accept)>();
-        foreach (var item in listeners)
-        {
-            waits.Add((item, item.AcceptConnectionAsync(cancellationToken).AsTask()));
-        }
-
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested && waits.Count > 0)
-            {
-                var finished = await Task.WhenAny(waits.Select(item => item.Accept)).ConfigureAwait(false);
-                var index = waits.FindIndex(item => item.Accept == finished);
-                var slot = waits[index];
-                waits.RemoveAt(index);
-                var connection = await slot.Accept.ConfigureAwait(false);
-                _ = Attach(connection, null, initiated: false, cancellationToken, null, null);
-                waits.Add((slot.Listener, slot.Listener.AcceptConnectionAsync(cancellationToken).AsTask()));
-            }
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or QuicException)
-        {
-            // The daemon stopped.
-        }
-    }
-
     async Task Attach(
         QuicConnection connection,
         X509Certificate2? peer,
@@ -1013,19 +1153,29 @@ public sealed class LanHost : IDisposable
 
     async Task BeaconLoop(CancellationToken cancellationToken)
     {
-        if (udp is null)
+        if (udp is null && udp6 is null)
         {
             return;
         }
 
-        var buffer = new byte[2048];
+        var buffer4 = new byte[2048];
+        var buffer6 = new byte[2048];
         try
         {
-            _ = ReceiveBeacons(buffer, cancellationToken);
+            if (udp is not null)
+            {
+                _ = ReceiveBeacons(udp, buffer4, cancellationToken);
+            }
+
+            if (udp6 is not null)
+            {
+                _ = ReceiveBeacons(udp6, buffer6, cancellationToken);
+            }
+
             while (!cancellationToken.IsCancellationRequested)
             {
                 SendBeacon();
-                await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(BeaconIntervalMs, cancellationToken).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or SocketException)
@@ -1034,19 +1184,14 @@ public sealed class LanHost : IDisposable
         }
     }
 
-    async Task ReceiveBeacons(byte[] buffer, CancellationToken cancellationToken)
+    async Task ReceiveBeacons(Socket socket, byte[] buffer, CancellationToken cancellationToken)
     {
-        if (udp is null)
-        {
-            return;
-        }
-
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                EndPoint remote = new IPEndPoint(IPAddress.Any, 0);
-                var result = await udp.ReceiveFromAsync(buffer, SocketFlags.None, remote, cancellationToken).ConfigureAwait(false);
+                EndPoint remote = new IPEndPoint(socket.AddressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any, 0);
+                var result = await socket.ReceiveFromAsync(buffer, SocketFlags.None, remote, cancellationToken).ConfigureAwait(false);
                 NoteBeacon(buffer.AsSpan(0, result.ReceivedBytes), result.RemoteEndPoint);
             }
         }
@@ -1058,11 +1203,7 @@ public sealed class LanHost : IDisposable
 
     void SendBeacon()
     {
-        if (udp is null)
-        {
-            return;
-        }
-
+        Volatile.Write(ref lastBeaconTick, Environment.TickCount64);
         var digest = DeviceIds.Digest(identity.Spki);
         var encoded = BeaconCodec.Encode(digest, QuicLink.Port, DisplayName);
         if (encoded.Value is null)
@@ -1075,28 +1216,61 @@ public sealed class LanHost : IDisposable
             RefreshPrefixes();
         }
 
-        var targets = new List<IPAddress> { IPAddress.Broadcast };
+        OnLinkPrefix[] snapshot;
         lock (Gate)
         {
-            foreach (var prefix in prefixes)
+            snapshot = prefixes.ToArray();
+        }
+
+        if (udp is not null)
+        {
+            var targets = new List<IPAddress> { IPAddress.Broadcast };
+            foreach (var prefix in snapshot)
             {
-                if (IPAddress.TryParse(prefix.Address, out var address))
+                if (IPAddress.TryParse(prefix.Address, out var address) && address.AddressFamily == AddressFamily.InterNetwork)
                 {
                     targets.Add(Broadcast(address, prefix.PrefixLength));
                 }
             }
+
+            foreach (var target in targets.Distinct())
+            {
+                TrySend(udp, encoded.Value, new IPEndPoint(target, BeaconPort));
+            }
         }
 
-        foreach (var target in targets.Distinct())
+        if (udp6 is not null)
         {
-            try
+            var interfaces = snapshot
+                .Where(prefix => IPAddress.TryParse(prefix.Address, out var address) && address.AddressFamily == AddressFamily.InterNetworkV6)
+                .Select(prefix => prefix.InterfaceIndex)
+                .Where(index => index > 0)
+                .Distinct();
+            foreach (var index in interfaces)
             {
-                udp.SendTo(encoded.Value, new IPEndPoint(target, BeaconPort));
+                try
+                {
+                    udp6.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.MulticastInterface, index);
+                }
+                catch (SocketException)
+                {
+                    continue;
+                }
+
+                TrySend(udp6, encoded.Value, new IPEndPoint(IPAddress.Parse("ff02::1"), BeaconPort));
             }
-            catch (SocketException)
-            {
-                // This interface is not up.
-            }
+        }
+    }
+
+    static void TrySend(Socket socket, byte[] payload, IPEndPoint target)
+    {
+        try
+        {
+            socket.SendTo(payload, target);
+        }
+        catch (SocketException)
+        {
+            // This interface is not up.
         }
     }
 
@@ -1114,17 +1288,40 @@ public sealed class LanHost : IDisposable
             return;
         }
 
-        var address = end.Address.IsIPv4MappedToIPv6 ? end.Address.MapToIPv4() : end.Address;
-        if (address.AddressFamily != AddressFamily.InterNetwork)
+        NoteDiscovered("ca1" + Base32.Encode(digest), digest, LocalNetwork.Text(end.Address), beacon.Value.Port, beacon.Value.Name);
+    }
+
+    internal void NoteMdns(MdnsPeer peer)
+    {
+        byte[] digest;
+        try
+        {
+            digest = Base32.DigestFromDeviceId(peer.DeviceId);
+        }
+        catch (FormatException)
         {
             return;
         }
 
-        var id = "ca1" + Base32.Encode(digest);
+        if (digest.AsSpan().SequenceEqual(DeviceIds.Digest(identity.Spki)) || !IPAddress.TryParse(peer.Address, out _))
+        {
+            return;
+        }
+
+        NoteDiscovered(peer.DeviceId, digest, peer.Address, peer.Port, peer.DisplayName);
+    }
+
+    void NoteDiscovered(string id, byte[] digest, string address, int port, string? name)
+    {
         lock (Gate)
         {
+            if (disposed)
+            {
+                return;
+            }
+
             seen.Add(id);
-            routes.AddDiscovery(id, digest, address.ToString(), beacon.Value.Port, Environment.TickCount64, beacon.Value.Name);
+            routes.AddDiscovery(id, digest, address, port, Environment.TickCount64, name);
             if (trust.ContainsKey(id))
             {
                 routes.RememberTrust(id);
@@ -1165,7 +1362,7 @@ public sealed class LanHost : IDisposable
                             continue;
                         }
 
-                        var candidate = routes.DialCandidates(id).FirstOrDefault();
+                        var candidate = routes.NextDialCandidate(id);
                         if (candidate is null)
                         {
                             dialing.Remove(id);
@@ -1284,23 +1481,7 @@ public sealed class LanHost : IDisposable
     void RefreshPrefixes()
     {
         prefixes.Clear();
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-        {
-            if (nic.OperationalStatus != OperationalStatus.Up)
-            {
-                continue;
-            }
-
-            foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
-            {
-                if (unicast.Address.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(unicast.Address))
-                {
-                    continue;
-                }
-
-                prefixes.Add(new OnLinkPrefix(unicast.Address.ToString(), unicast.PrefixLength));
-            }
-        }
+        prefixes.AddRange(LocalNetwork.Enumerate());
     }
 
     bool OnLinkUnlocked(string address)
