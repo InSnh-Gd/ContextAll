@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ContextAll.Host" />
+    <InternalsVisibleTo Include="ContextAll.Host.Tests" />
+    <InternalsVisibleTo Include="ContextAll.Tests.E2E" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ContextAll.Protocol\ContextAll.Protocol.csproj" />
+    <ProjectReference Include="..\ContextAll.Core\ContextAll.Core.csproj" />
+    <ProjectReference Include="..\ContextAll.Effects\ContextAll.Effects.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+    <PackageReference Include="Vecc.YamlDotNet.Analyzers.StaticGenerator" Version="18.1.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
