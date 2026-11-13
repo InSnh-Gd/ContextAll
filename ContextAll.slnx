@@ -17,5 +17,6 @@
     <Project Path="tests/ContextAll.Effects.Tests/ContextAll.Effects.Tests.csproj" />
     <Project Path="tests/ContextAll.Host.Tests/ContextAll.Host.Tests.csproj" />
     <Project Path="tests/ContextAll.App.Tests/ContextAll.App.Tests.csproj" />
+    <Project Path="tests/ContextAll.Tests.E2E/ContextAll.Tests.E2E.csproj" />
   </Folder>
 </Solution>

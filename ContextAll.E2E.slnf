@@ -1,0 +1,14 @@
+{
+  "solution": {
+    "path": "ContextAll.slnx",
+    "projects": [
+      "src/ContextAll.Protocol/ContextAll.Protocol.csproj",
+      "src/ContextAll.Core/ContextAll.Core.csproj",
+      "src/ContextAll.Ipc/ContextAll.Ipc.csproj",
+      "src/ContextAll.Effects/ContextAll.Effects.csproj",
+      "src/ContextAll.Session/ContextAll.Session.csproj",
+      "src/ContextAll.Host/ContextAll.Host.csproj",
+      "tests/ContextAll.Tests.E2E/ContextAll.Tests.E2E.csproj"
+    ]
+  }
+}
