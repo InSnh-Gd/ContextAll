@@ -6,7 +6,6 @@
       "src/ContextAll.Core/ContextAll.Core.csproj",
       "src/ContextAll.Ipc/ContextAll.Ipc.csproj",
       "src/ContextAll.Effects/ContextAll.Effects.csproj",
-      "src/ContextAll.Session/ContextAll.Session.csproj",
       "src/ContextAll.Host/ContextAll.Host.csproj",
       "src/ContextAll.App/ContextAll.App.csproj",
       "src/ContextAll.App.Desktop/ContextAll.App.Desktop.csproj",

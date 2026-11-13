@@ -17,11 +17,11 @@ capability 的目录名就是文档文件名。
 | `repository-baseline` | [仓库](specs/repository-baseline.md) | `engineering-baseline` |
 | `functional-core` | [决策核心](specs/functional-core.md) | `engineering-baseline` |
 | `verification-gates` | [验证](specs/verification-gates.md) | `engineering-baseline` |
-| `lan-session` | [局域网会话](specs/lan-session.md) | `android-transport` |
+| `lan-session` | [局域网会话](specs/lan-session.md) | `transport-parity` |
 | `clipboard-sync` | [剪贴板同步](specs/clipboard-sync.md) | `session-protocol` |
 | `file-transfer` | [文件传输](specs/file-transfer.md) | `session-protocol` |
-| `local-operator` | [本地操作](specs/local-operator.md) | `android-transport` |
-| `framed-channel` | [成帧通道](specs/framed-channel.md) | `android-transport` |
+| `local-operator` | [本地操作](specs/local-operator.md) | `session-protocol` |
+| `framed-channel` | [成帧通道](specs/framed-channel.md) | `transport-parity` |
 | `device-shell` | [图形外壳](specs/device-shell.md) | `session-protocol` |
 
 ## 待同步
@@ -35,5 +35,3 @@ capability 的目录名就是文档文件名。
 - [ADR 0001](adr/0001-linux-color-scheme.md)：Linux 外观只读桌面门户。
 - [ADR 0002](adr/0002-file-sync-is-a-transfer.md)：文件走传输，剪贴板只放文本。
 - [ADR 0003](adr/0003-shared-effects.md)：共享效果放在一个模块里。
-- [ADR 0004](adr/0004-quic-android-transport.md)：Android 端采用 QUIC 且不设降级传输。
-- [ADR 0005](adr/0005-session-layer-split.md)：会话层与底层效果解耦独立。

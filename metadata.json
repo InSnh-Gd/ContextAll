@@ -1,0 +1,6 @@
+{
+  "name": "ContextAll",
+  "description": "局域网 QUIC 直连剪贴板同步与分段文件传输安卓端界面",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

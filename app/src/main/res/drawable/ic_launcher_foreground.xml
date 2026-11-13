@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Left device card silhouette -->
+    <path
+        android:fillColor="#E0F7FF"
+        android:pathData="M30,33h20c2.2,0 4,1.8 4,4v26c0,2.2 -1.8,4 -4,4H30c-2.2,0 -4,-1.8 -4,-4V37c0,-2.2 1.8,-4 4,-4z" />
+    <!-- Right device card silhouette -->
+    <path
+        android:fillColor="#70D2FF"
+        android:pathData="M58,41h20c2.2,0 4,1.8 4,4v26c0,2.2 -1.8,4 -4,4H58c-2.2,0 -4,-1.8 -4,-4V45c0,-2.2 1.8,-4 4,-4z" />
+    <!-- Bidirectional direct link badge -->
+    <path
+        android:fillColor="#003547"
+        android:pathData="M54,46c4.4,0 8,3.6 8,8s-3.6,8 -8,8s-8,-3.6 -8,-8S49.6,46 54,46z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,53h8v2h-8zM53,50l4,4l-4,4v-8z" />
+</vector>

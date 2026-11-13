@@ -5,7 +5,6 @@ using ContextAll.Protocol;
 
 namespace ContextAll.Host.Tests;
 
-[Collection("DiscoverySockets")]
 public sealed class DiscoveryTests
 {
     [Fact]
@@ -65,10 +64,8 @@ public sealed class DiscoveryTests
 
         using var sender = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         sender.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        sender.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastInterface, IPAddress.Loopback.GetAddressBytes());
-        sender.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastLoopback, true);
         var packet = MdnsCodec.EncodeResponse("ca1bbbbbbbbbbbbbbbbbbbbbbbbbb", "phone", 42461, IPAddress.Loopback);
-        sender.SendTo(packet, new IPEndPoint(IPAddress.Parse("224.0.0.251"), MdnsDiscovery.Port));
+        sender.SendTo(packet, new IPEndPoint(IPAddress.Loopback, MdnsDiscovery.Port));
 
         var peer = await found.Task.WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal("ca1bbbbbbbbbbbbbbbbbbbbbbbbbb", peer.DeviceId);

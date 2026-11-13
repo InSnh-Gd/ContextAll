@@ -480,3 +480,14 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Android / Gradle build outputs & caches
+.gradle/
+.kotlin/
+.build-outputs/
+.aistudio/
+/build/
+app/build/
+local.properties
+debug.keystore
+

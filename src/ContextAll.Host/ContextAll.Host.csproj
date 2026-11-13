@@ -17,12 +17,6 @@
     <ProjectReference Include="..\ContextAll.Core\ContextAll.Core.csproj" />
     <ProjectReference Include="..\ContextAll.Ipc\ContextAll.Ipc.csproj" />
     <ProjectReference Include="..\ContextAll.Effects\ContextAll.Effects.csproj" />
-    <ProjectReference Include="..\ContextAll.Session\ContextAll.Session.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="ContextAll.Session" />
-    <Using Include="ContextAll.Session.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

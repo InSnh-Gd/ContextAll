@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ContextAll</string>
+    <string name="brand_logo_content_desc">ContextAll 应用标志</string>
+
+    <!-- Navigation & Top actions -->
+    <string name="nav_devices">设备</string>
+    <string name="nav_transfers">传输</string>
+    <string name="nav_this_device">本机</string>
+    <string name="action_open_scenario_lab">打开交互演练台</string>
+    <string name="action_open_user_guide">打开使用指引</string>
+    <string name="action_toggle_appearance">外观与取色设置</string>
+
+    <!-- Screen Headers -->
+    <string name="header_devices_title">局域网设备</string>
+    <string name="header_devices_subtitle">同一局域网 QUIC 直连 · 共享纯文本剪贴板与大文件</string>
+    <string name="header_transfers_title">文件传输</string>
+    <string name="header_transfers_subtitle">65,500 B 分段 SHA-256 校验 · 断线仅补发缺失段</string>
+    <string name="header_local_title">本机与服务</string>
+    <string name="header_local_subtitle">进程内 SessionHost 引擎 · 字节不经过云端中继</string>
+
+    <!-- LinkService Quick Tile -->
+    <string name="status_lan_ready_title">LAN QUIC 会话就绪</string>
+    <string name="status_lan_ready_subtitle">Wi-Fi / 以太网直连监听中 · 端口 42461</string>
+    <string name="status_lan_ready_pill">运行中</string>
+    <string name="status_cellular_paused_title">局域网信标已暂停</string>
+    <string name="status_cellular_paused_subtitle">当前为移动数据，仅在 Wi-Fi 或以太网下广播与直连</string>
+    <string name="status_cellular_paused_pill">已暂停</string>
+    <string name="status_service_stopped_title">后台连接服务已停止</string>
+    <string name="status_service_stopped_subtitle">点击重新启动 LinkService 常驻局域网会话</string>
+    <string name="status_service_stopped_pill">已停止</string>
+
+    <!-- Clipboard Quick Card -->
+    <string name="clipboard_card_title">跨设备纯文本剪贴板</string>
+    <string name="clipboard_card_mutual_peers">已与 %1$d 台在线设备双向开启 · 上限 1 MiB</string>
+    <string name="clipboard_card_no_peers">暂无双向开启剪贴板同步的在线设备</string>
+    <string name="clipboard_card_empty_preview">尚未同步文本，可读取系统剪贴板或推送新文本</string>
+    <string name="clipboard_action_push_system">同步系统剪贴板</string>
+    <string name="clipboard_action_compose">输入并推送文本</string>
+    <string name="clipboard_dialog_title">推送纯文本到已开启对端</string>
+    <string name="clipboard_dialog_hint">输入要同步的纯文本（上限 1 MiB，图片与文件请走文件传输）</string>
+    <string name="clipboard_dialog_send">立即同步</string>
+
+    <!-- Device list sections & badges -->
+    <string name="section_trusted_devices">已信任对端 (%1$d)</string>
+    <string name="section_nearby_devices">附近可配对设备 (%1$d)</string>
+    <string name="presence_connected">已连接</string>
+    <string name="presence_reachable">可达</string>
+    <string name="presence_offline">离线</string>
+    <string name="device_summary_clipboard_on">剪贴板同步已开 · %1$s</string>
+    <string name="device_summary_clipboard_off">剪贴板同步关闭 · %1$s</string>
+    <string name="device_summary_ask_on">保存前询问</string>
+    <string name="device_summary_ask_off">自动存入下载</string>
+    <string name="device_summary_tap_to_pair">点击发起双向 6 位短码核验配对</string>
+    <string name="device_summary_offline_pair_disabled">设备当前离线，可达时可发起配对</string>
+    <string name="empty_devices_title">局域网内暂无其他设备</string>
+    <string name="empty_devices_subtitle">请确认对端处于同一 Wi-Fi / 以太网并运行 ContextAll，或打开右上角演练台模拟发现设备</string>
+    <string name="empty_detail_pane_title">选择一台已信任设备</string>
+    <string name="empty_detail_pane_subtitle">在左侧点选设备以配置纯文本剪贴板同步、保存询问开关或发起分段文件直传</string>
+
+    <!-- Peer Detail -->
+    <string name="detail_back_content_desc">返回设备列表</string>
+    <string name="detail_quic_session_badge">QUIC 单双向流会话已建立 · ALPN contextall</string>
+    <string name="detail_reachable_session_badge">局域网可达 · 点击连接会话</string>
+    <string name="detail_offline_session_badge">设备离线 · 重新上线后自动恢复传输</string>
+    <string name="detail_send_file_button">选择本机文件发送</string>
+    <string name="detail_send_preset_button">快速演练发送数据包</string>
+    <string name="detail_reconnect_button">重连会话</string>
+    <string name="detail_device_id_card_label">证书公钥派生设备 ID (SPKI SHA-256)</string>
+    <string name="detail_copy_peer_id_desc">复制对端设备 ID</string>
+    <string name="detail_section_policies">对端同步与接收策略</string>
+    <string name="detail_clipboard_sync_title">纯文本剪贴板同步</string>
+    <string name="detail_clipboard_sync_subtitle">双向开启时自动同步上限 1 MiB 纯文本；图片与文件不走剪贴板</string>
+    <string name="detail_ask_before_save_title">接收文件保存前询问</string>
+    <string name="detail_ask_before_save_subtitle">收到文件时弹出 60 秒确认卡片，关闭后校验通过直接写入 Downloads</string>
+    <string name="detail_section_active_transfers">当前对端在途传输</string>
+    <string name="detail_section_danger">信任管理</string>
+    <string name="detail_unpair_title">解除信任（解绑设备）</string>
+    <string name="detail_unpair_subtitle">先发出 FILE_CANCEL 终止该设备在途传输、清理暂存并发送 UNPAIR</string>
+
+    <!-- Send File Sheet -->
+    <string name="send_sheet_title">向「%1$s」发送文件</string>
+    <string name="send_sheet_subtitle">支持选取真实系统文档（单文件上限 1 GB，每对端单发送名额）或一键发送演练载荷</string>
+    <string name="send_sheet_pick_system">从系统文档选择器挑选文件</string>
+    <string name="send_sheet_pick_system_sub">零存储权限 · 读取真实文件名与字节大小</string>
+    <string name="send_sheet_preset_small">发送日志归档 diagnostics.tar.gz (18.4 MB)</string>
+    <string name="send_sheet_preset_large">发送镜像分卷 rootfs-arm64.img (142.6 MB)</string>
+    <string name="send_sheet_preset_zero">发送零字节空标记文件 .ready (0 B)</string>
+    <string name="send_sheet_preset_oversize">测试超限拦截 dataset-raw.bin (1.12 GB &gt; 1 GB)</string>
+
+    <!-- Pairing Bottom Sheet -->
+    <string name="pairing_sheet_title">核对 6 位配对短码</string>
+    <string name="pairing_sheet_subtitle">请确认本机与「%1$s」显示完全一致的 6 位 Base32 短码，双方都接受后写入信任</string>
+    <string name="pairing_sheet_waiting_remote">本机已接受 · 正在等待对端确认…</string>
+    <string name="pairing_sheet_remote_accepted">对端已接受 · 本机确认后立即完成配对</string>
+    <string name="pairing_sheet_countdown">剩余 %1$d 秒超时关闭</string>
+    <string name="pairing_reject_button">拒绝</string>
+    <string name="pairing_accept_button">接受并信任</string>
+    <string name="pairing_accepted_waiting_button">等待对端…</string>
+
+    <!-- Unpair Dialog -->
+    <string name="unpair_dialog_title">解除与「%1$s」的信任？</string>
+    <string name="unpair_dialog_body">主动解除信任将取消与该设备相关的在途收发任务、删除无备份目录中的 .part / .meta.json 暂存，并关闭 QUIC 会话。</string>
+    <string name="unpair_confirm_button">确认解除</string>
+    <string name="common_cancel_button">取消</string>
+
+    <!-- Transfers Screen -->
+    <string name="transfers_incoming_header">待确认入站文件</string>
+    <string name="transfers_incoming_from">来自 %1$s · %2$s · 共 %3$d 段</string>
+    <string name="transfers_incoming_countdown">剩余 %1$d 秒未确认将自动释放该对端接收名额</string>
+    <string name="transfers_decline_button">拒绝</string>
+    <string name="transfers_accept_button">接收并存入下载</string>
+    <string name="transfers_active_section">进行中队列 (%1$d)</string>
+    <string name="transfers_completed_section">已完成记录 (%1$d)</string>
+    <string name="transfers_clear_completed">清空已完成</string>
+    <string name="transfers_direction_send">上行发送 → %1$s · %2$s</string>
+    <string name="transfers_direction_receive">下行接收 ← %1$s · %2$s</string>
+    <string name="transfers_segment_progress">%1$d / %2$d 段 · 窗口 8 段 · SHA-256</string>
+    <string name="transfers_waiting_reconnect">%1$d / %2$d 段 · 会话中断，重连后按位图续传</string>
+    <string name="transfers_move_blocked">%1$d / %2$d 段 · 提交 Downloads 受阻 (moveBlocked)，名额保持占用</string>
+    <string name="transfers_retry_commit">重试写入下载</string>
+    <string name="transfers_cancel_desc">取消传输</string>
+    <string name="transfers_completed_send_sub">对端已完成全部 %1$d 段校验接收</string>
+    <string name="transfers_completed_recv_sub">整文件 SHA-256 校验通过 · 已提交系统 Downloads (%1$s)</string>
+    <string name="empty_transfers_title">当前没有传输任务</string>
+    <string name="empty_transfers_subtitle">从已信任设备详情页发送文件，或在右上角演练台模拟对端发来文件请求</string>
+
+    <!-- This Device Screen -->
+    <string name="local_identity_section">本机节点身份</string>
+    <string name="local_display_name_label">本机显示名称</string>
+    <string name="local_edit_name_desc">编辑本机显示名称</string>
+    <string name="local_device_id_label">证书公钥派生 ID (Base32)</string>
+    <string name="local_copy_id_desc">复制本机设备 ID</string>
+    <string name="local_appearance_section">Android 16 外观与取色</string>
+    <string name="local_dynamic_color_title">系统壁纸动态取色 (Material You)</string>
+    <string name="local_dynamic_color_subtitle">跟随 Android 12+ 系统调色板，关闭时使用经典钴蓝主题</string>
+    <string name="local_dark_mode_title">深色界面模式</string>
+    <string name="local_dark_mode_subtitle">切换深石板高对比分层容器配色</string>
+    <string name="local_runtime_section">进程内会话与系统权限</string>
+    <string name="local_service_label">LinkService 前台服务 (connectedDevice)</string>
+    <string name="local_service_running_sub">常驻运行中 · 进程内直接驱动 SessionHost，不打开本地套接字</string>
+    <string name="local_service_stopped_sub">服务已暂停 · 点击重新拉起局域网常驻会话</string>
+    <string name="local_permissions_label">通知与附近 Wi-Fi 设备权限</string>
+    <string name="local_permissions_granted_sub">系统运行时权限已就绪（neverForLocation 不获取位置）</string>
+    <string name="local_permissions_request_sub">点击请求 Android 通知与局域网 Wi-Fi 发现权限</string>
+    <string name="local_storage_label">暂存与下载落盘路径</string>
+    <string name="local_storage_value">NoBackupFilesDir/transfers 暂存校验 → MediaStore.Downloads</string>
+    <string name="local_security_section">安全与密钥管理</string>
+    <string name="local_reset_identity_title">重置设备身份密钥</string>
+    <string name="local_reset_identity_subtitle">重新生成 ECDSA P-256 密钥对、清空全部信任记录并清理暂存文件</string>
+    <string name="edit_name_dialog_title">修改本机显示名称</string>
+    <string name="edit_name_dialog_supporting">1–64 个字符，不可包含控制字符 (%1$d/64)</string>
+    <string name="edit_name_dialog_error">显示名称需为 1–64 个可见字符，不含换行或控制符</string>
+    <string name="edit_name_save_button">保存</string>
+    <string name="reset_dialog_title">确认重置本机身份密钥？</string>
+    <string name="reset_dialog_body">重置将更换本机 ECDSA P-256 证书密钥并生成全新 ca1 设备 ID，同时清空已信任列表与在途传输暂存。</string>
+    <string name="reset_confirm_button">确认重置</string>
+
+    <!-- Scenario Lab Sheet -->
+    <string name="lab_sheet_title">交互场景演练台</string>
+    <string name="lab_sheet_subtitle">驱动内置进程内会话状态机，验证配对、分段续传、超限拦截与超时边界</string>
+    <string name="lab_action_discover_peer">发现新局域网设备</string>
+    <string name="lab_action_discover_peer_sub">在附近列表新增一台携带真实公钥派生 ID 的可达节点</string>
+    <string name="lab_action_inbound_pair">模拟收到对端配对请求</string>
+    <string name="lab_action_inbound_pair_sub">立即弹出 60 秒实时倒计时的 6 位短码双向验证面板</string>
+    <string name="lab_action_inbound_file">模拟已信任对端发来文件</string>
+    <string name="lab_action_inbound_file_sub">根据该对端「保存前询问」开关进入 60 秒确认卡或自动接收</string>
+    <string name="lab_action_inbound_blocked">模拟入站文件重名/落盘受阻 (moveBlocked)</string>
+    <string name="lab_action_inbound_blocked_sub">演练接收完成但最终提交受阻时的名额占用与重试恢复</string>
+    <string name="lab_action_remote_clipboard">模拟收到对端纯文本剪贴板</string>
+    <string name="lab_action_remote_clipboard_sub">从双向开启同步的在线对端推送一段代码片段到本机</string>
+    <string name="lab_action_flap_connection">模拟对端网络闪断 / 恢复重连</string>
+    <string name="lab_action_flap_connection_sub">观察在途分段传输挂起保留位图，重连后自动 FILE_RESUME 续传</string>
+
+    <!-- Notices -->
+    <string name="notice_paired_success">已与「%1$s」完成双向验证并建立信任</string>
+    <string name="notice_pairing_timeout">与「%1$s」的配对验证已超时关闭</string>
+    <string name="notice_pairing_rejected">已拒绝配对请求</string>
+    <string name="notice_unpaired">已解除与「%1$s」的信任并清理相关传输</string>
+    <string name="notice_send_busy">「%1$s」当前已有在途发送任务（单发送名额占用：busy）</string>
+    <string name="notice_send_too_large">文件超过 1,000,000,000 字节上限（too-large），未占用发送名额</string>
+    <string name="notice_send_started">开始向「%1$s」分段发送 %2$s（共 %3$d 段）</string>
+    <string name="notice_send_held">对端暂未连接，任务已挂起等待会话恢复后自动发送</string>
+    <string name="notice_inbound_auto_accepted">「%1$s」已关闭保存前询问，自动开始接收 %2$s</string>
+    <string name="notice_inbound_timeout">来自「%1$s」的文件请求超过 60 秒未确认，已释放接收名额</string>
+    <string name="notice_transfer_completed">「%1$s」校验完成</string>
+    <string name="notice_clipboard_pushed">已向 %1$d 台双向开启对端同步纯文本（%2$d B）</string>
+    <string name="notice_clipboard_too_large">剪贴板文本超过 1 MiB 上限，请改用文件传输发送</string>
+    <string name="notice_clipboard_empty">当前剪贴板没有可同步的纯文本内容</string>
+    <string name="notice_clipboard_no_mutual">请先在已连接对端详情页开启「纯文本剪贴板同步」</string>
+    <string name="notice_clipboard_received">收到来自「%1$s」的剪贴板文本同步</string>
+    <string name="notice_copied_id">已复制设备 ID 到系统剪贴板</string>
+    <string name="notice_identity_reset">已重新生成 ECDSA P-256 密钥与本机 ID，并清空旧信任列表</string>
+    <string name="notice_display_name_saved">已更新本机显示名称为「%1$s」</string>
+    <string name="notice_invalid_name">显示名称不合法（需 1–64 个可见字符）</string>
+
+    <!-- Help & Onboarding Guide -->
+    <string name="local_help_section">使用指南与协议演练</string>
+    <string name="local_reopen_guide_title">查看使用指引</string>
+    <string name="local_reopen_guide_subtitle">重温局域网发现、6 位短码配对、剪贴板与分段续传流程</string>
+    <string name="local_open_lab_title">打开交互场景演练台</string>
+    <string name="local_open_lab_subtitle">一键触发远端配对、入站文件、落盘受阻与闪断重连演练</string>
+
+    <string name="guide_badge_step">指引 %1$d / %2$d</string>
+    <string name="guide_skip_button">跳过</string>
+    <string name="guide_prev_button">上一步</string>
+    <string name="guide_next_button">下一步</string>
+    <string name="guide_finish_button">开始使用 ContextAll</string>
+    <string name="guide_try_lab_button">进入并打开交互演练台</string>
+
+    <string name="guide_step1_tag">零云端 · 纯局域网</string>
+    <string name="guide_step1_title">同一局域网 QUIC 端到端直连</string>
+    <string name="guide_step1_desc">在 Wi‑Fi 或有线网络下自动发现附近节点，基于单双向流 QUIC（端口 42461）直连通信。所有剪贴板与文件字节均在本地网络传输，切至蜂窝网络时自动静默暂停广播。</string>
+    <string name="guide_step1_node_desktop">桌面工作站</string>
+    <string name="guide_step1_node_android">本机 Android</string>
+    <string name="guide_step1_pill">ALPN contextall · 42461 直连就绪</string>
+
+    <string name="guide_step2_tag">双向核验 · ECDSA P-256</string>
+    <string name="guide_step2_title">60 秒双端 6 位短码配对</string>
+    <string name="guide_step2_desc">每台设备由公钥 SPKI 派生唯一 ca1 身份标识。首次建立信任时，双端同步展示 6 位 Base32 短码，60 秒内双端核对一致并均点「接受」后才写入持久信任。</string>
+    <string name="guide_step2_demo_peer">与「Arch Workstation」核对短码</string>
+    <string name="guide_step2_demo_timer">60s 双端共同确认生效</string>
+
+    <string name="guide_step3_tag">按设备授权 · 安全边界</string>
+    <string name="guide_step3_title">独立剪贴板与保存前询问开关</string>
+    <string name="guide_step3_desc">新配对设备默认关闭剪贴板同步、开启保存前询问。仅当双方均开启开关且在线时，才双向同步 ≤ 1 MiB 纯文本；图片与文件始终走独立文件通道（可点按下方卡片体验手感）。</string>
+    <string name="guide_step3_demo_clip_title">纯文本剪贴板同步</string>
+    <string name="guide_step3_demo_clip_sub">双向开启且在线时自动同步 ≤ 1 MiB 文本</string>
+    <string name="guide_step3_demo_ask_title">接收文件保存前询问</string>
+    <string name="guide_step3_demo_ask_sub">关闭后整文件校验通过直接写入 Downloads</string>
+
+    <string name="guide_step4_tag">65,500 B 分段 · SHA-256</string>
+    <string name="guide_step4_title">大文件断点续传与场景演练</string>
+    <string name="guide_step4_desc">单文件最高 1 GB，按 65,500 B 分段校验直传；断线保留已完成位图，重连后仅补发缺失段。随时点击右上角「烧瓶」图标或在本机页重新打开本指引与演练台。</string>
+    <string name="guide_step4_demo_file">rootfs-arm64.img · 142.6 MB</string>
+    <string name="guide_step4_demo_meta">分段窗口 8 段 · 断线自动 FILE_RESUME 续传</string>
+
+    <!-- Manual IP + Port Connect & Pair -->
+    <string name="manual_connect_entry_title">手动输入 IP 与端口连接配对</string>
+    <string name="manual_connect_entry_subtitle">跨子网或组播受限时直连 IP:端口 并发起 6 位短码验证</string>
+    <string name="manual_connect_button_short">手动连接</string>
+    <string name="manual_sheet_title">手动连接并配对设备</string>
+    <string name="manual_sheet_subtitle">输入对端局域网 IP 地址（支持 IPv4 / IPv6 或主机名）与 QUIC 监听端口，握手后双端核对 6 位短码</string>
+    <string name="manual_ip_label">对端 IP 地址或主机名</string>
+    <string name="manual_ip_placeholder">例如 192.168.1.42 或 fd00::1（支持直接粘贴 IP:端口）</string>
+    <string name="manual_ip_error">请输入合法的 IPv4、IPv6 地址或局域网主机名</string>
+    <string name="manual_port_label">QUIC 监听端口 (1–65535)</string>
+    <string name="manual_port_error">端口范围需在 1–65535 之间</string>
+    <string name="manual_port_reset">恢复默认 42461</string>
+    <string name="manual_alias_label">备注显示名称（可选）</string>
+    <string name="manual_alias_placeholder">留空则默认使用对端广播名或 IP 标识</string>
+    <string name="manual_quick_prefix_label">常用网段快捷填入</string>
+    <string name="manual_submit_button">直连并核验配对</string>
+    <string name="device_endpoint_format">直连端点 %1$s</string>
+
+    <string name="notice_manual_reconnected">已通过 %2$s 重新直连已信任设备「%1$s」</string>
+    <string name="notice_manual_unavailable">请先开启局域网连接并启动后台 LinkService 后再发起手动直连</string>
+    <string name="notice_manual_invalid">请输入合法的 IP 地址与端口（1–65535）</string>
+</resources>

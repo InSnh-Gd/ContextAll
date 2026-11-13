@@ -17,14 +17,11 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="ContextAll.Session" />
-    <Using Include="ContextAll.Session.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ContextAll.Host\ContextAll.Host.csproj" />
     <ProjectReference Include="..\..\src\ContextAll.Protocol\ContextAll.Protocol.csproj" />
-    <ProjectReference Include="..\..\src\ContextAll.Session\ContextAll.Session.csproj" />
   </ItemGroup>
 
 </Project>
