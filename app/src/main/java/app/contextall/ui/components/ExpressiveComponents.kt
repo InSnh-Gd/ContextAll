@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.contextall.R
+import app.contextall.ui.theme.JetBrainsMonoFamily
+import app.contextall.ui.theme.LocalExpressivePalette
 
 /**
  * Computes Android 16 Settings signature split-card geometry:
@@ -328,7 +330,7 @@ fun <T> ExpressiveFloatingNavDock(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Surface(
@@ -338,8 +340,8 @@ fun <T> ExpressiveFloatingNavDock(
             shadowElevation = 10.dp
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEach { item ->
@@ -361,7 +363,7 @@ fun <T> ExpressiveFloatingNavDock(
                         label = "dockContentColor"
                     )
                     val horizontalPad by animateDpAsState(
-                        targetValue = if (isSelected) 20.dp else 16.dp,
+                        targetValue = if (isSelected) 13.dp else 9.dp,
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioMediumBouncy,
                             stiffness = Spring.StiffnessMediumLow
@@ -378,7 +380,7 @@ fun <T> ExpressiveFloatingNavDock(
                             .testTag(item.testTag)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = horizontalPad, vertical = 12.dp),
+                            modifier = Modifier.padding(horizontal = horizontalPad, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {
@@ -393,10 +395,10 @@ fun <T> ExpressiveFloatingNavDock(
                                     imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
                                     contentDescription = item.label,
                                     tint = contentColor,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = item.label,
                                 style = if (isSelected) {
@@ -404,7 +406,9 @@ fun <T> ExpressiveFloatingNavDock(
                                 } else {
                                     MaterialTheme.typography.labelMedium
                                 },
-                                color = contentColor
+                                color = contentColor,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -422,8 +426,11 @@ fun <T> ExpressiveFloatingNavDock(
 fun ContextAllCollapsibleBrandBar(
     visible: Boolean,
     centeredMaxWidth: Boolean,
+    showDebugBadge: Boolean = false,
+    onDebugBadgeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalExpressivePalette.current
     AnimatedVisibility(
         visible = visible,
         enter = expandVertically(
@@ -483,6 +490,27 @@ fun ContextAllCollapsibleBrandBar(
                     letterSpacing = (-0.4).sp,
                     color = MaterialTheme.colorScheme.onBackground
                 )
+                if (showDebugBadge) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Surface(
+                        onClick = onDebugBadgeClick,
+                        shape = CircleShape,
+                        color = palette.amberIconBg,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .testTag("brand_debug_badge")
+                    ) {
+                        Text(
+                            text = stringResource(R.string.debug_badge_label),
+                            fontFamily = JetBrainsMonoFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 0.6.sp,
+                            color = palette.amberIconFg,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
         }
     }

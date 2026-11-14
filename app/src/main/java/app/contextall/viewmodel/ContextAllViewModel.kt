@@ -9,10 +9,13 @@ import android.os.Build
 import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import app.contextall.BuildConfig
 import app.contextall.core.EndpointValidator
 import app.contextall.core.FrameTypes
 import app.contextall.core.InProcessSessionEngine
 import app.contextall.model.LocalCommand
+import app.contextall.model.OutgoingFileSpec
+import app.contextall.model.SeedDataProfile
 import app.contextall.model.SessionSnapshotUi
 import app.contextall.model.TopTab
 import app.contextall.model.UiEventNotice
@@ -34,7 +37,8 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
 
     private val engine = InProcessSessionEngine(
         scope = viewModelScope,
-        initialDisplayName = initialDeviceDisplayName()
+        initialDisplayName = initialDeviceDisplayName(),
+        initialDebugMode = BuildConfig.DEBUG
     )
 
     val state: StateFlow<SessionSnapshotUi> = engine.snapshot
@@ -155,6 +159,32 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun sendPickedDocument(deviceId: String, uri: Uri) {
+        val spec = resolveUriSpec(uri)
+        sendFilePayload(deviceId = deviceId, fileName = spec.fileName, totalBytes = spec.totalBytes)
+    }
+
+    fun uploadPickedUris(deviceId: String, uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        val specs = uris.map { resolveUriSpec(it) }
+        engine.enqueueOrSendFiles(deviceId = deviceId, files = specs)
+    }
+
+    fun uploadTextAsFile(deviceId: String, fileName: String, content: String) {
+        val totalBytes = content.toByteArray(Charsets.UTF_8).size.toLong()
+        engine.enqueueOrSendFiles(
+            deviceId = deviceId,
+            files = listOf(OutgoingFileSpec(fileName = fileName, totalBytes = totalBytes))
+        )
+    }
+
+    fun uploadPresetFromTransfers(deviceId: String, fileName: String, totalBytes: Long) {
+        engine.enqueueOrSendFiles(
+            deviceId = deviceId,
+            files = listOf(OutgoingFileSpec(fileName = fileName, totalBytes = totalBytes))
+        )
+    }
+
+    private fun resolveUriSpec(uri: Uri): OutgoingFileSpec {
         val resolver = getApplication<Application>().contentResolver
         var resolvedName = uri.lastPathSegment ?: "document.bin"
         var resolvedSize = 0L
@@ -177,7 +207,7 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
             resolvedSize = 1_048_576L
         }
 
-        sendFilePayload(deviceId = deviceId, fileName = resolvedName, totalBytes = resolvedSize)
+        return OutgoingFileSpec(fileName = resolvedName, totalBytes = resolvedSize)
     }
 
     fun sendFilePayload(deviceId: String, fileName: String, totalBytes: Long) {
@@ -215,6 +245,10 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
+    fun togglePauseTransfer(transferId: String) {
+        engine.togglePauseTransfer(transferId)
+    }
+
     fun cancelTransfer(transferId: String) {
         engine.submitCommand(
             LocalCommand(
@@ -227,6 +261,18 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
 
     fun retryBlockedCommit(transferId: String) {
         engine.retryBlockedCommit(transferId)
+    }
+
+    fun removeQueuedUpload(queueId: String) {
+        engine.removeQueuedUpload(queueId)
+    }
+
+    fun clearQueuedUploads() {
+        engine.clearQueuedUploads()
+    }
+
+    fun resendCompletedTransfer(transferId: String) {
+        engine.resendCompletedTransfer(transferId)
     }
 
     fun clearCompletedTransfers() {
@@ -269,9 +315,21 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         engine.resetIdentity()
     }
 
-    // --- Scenario Lab Actions ---
+    fun triggerLanScan() {
+        engine.triggerDiscoveryScan(initialBootSweep = false, discoverNew = true)
+    }
 
-    fun labDiscoverPeer() = engine.simulateDiscoverNearbyPeer()
+    // --- Developer Debug & Scenario Lab Actions ---
+
+    fun setDeveloperUiEnabled(enabled: Boolean) {
+        engine.setDeveloperUiEnabled(enabled, emitNotice = true)
+    }
+
+    fun switchSeedProfile(profile: SeedDataProfile) {
+        engine.applySeedDataProfile(profile)
+    }
+
+    fun labDiscoverPeer() = engine.triggerDiscoveryScan(initialBootSweep = false, discoverNew = true)
 
     fun labInboundPairing() = engine.simulateInboundPairingRequest()
 
@@ -294,6 +352,30 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         engine.toggleTrustedPeerConnectivity(deviceId)
     }
 
+    fun labTelemetryBurst() {
+        engine.simulateTelemetryJitterBurst()
+    }
+
+    fun copyDebugFrameLogs() {
+        val logs = state.value.debugState.frameLogs
+        val formatted = logs.joinToString("\n") { entry ->
+            "#%03d [%s] %s (%d=%s) %s".format(
+                entry.seq,
+                entry.timestampText,
+                entry.category,
+                entry.frameCode,
+                entry.frameName,
+                entry.summary
+            )
+        }
+        val cm = getApplication<Application>().getSystemService(ClipboardManager::class.java)
+        cm?.setPrimaryClip(ClipData.newPlainText("ContextAll Frame Trace", formatted))
+    }
+
+    fun clearDebugFrameLogs() {
+        engine.clearDebugFrameLogs()
+    }
+
     fun openOnboardingGuide() {
         _showOnboardingGuide.value = true
     }
@@ -301,6 +383,9 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     fun dismissOnboardingGuide() {
         uiPrefs.edit().putBoolean(KEY_HAS_SEEN_ONBOARDING, true).apply()
         _showOnboardingGuide.value = false
+        if (!state.value.isScanningLan) {
+            engine.triggerDiscoveryScan(initialBootSweep = false, discoverNew = false)
+        }
     }
 
     private fun nextRequestId(): String =

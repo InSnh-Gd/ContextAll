@@ -5,255 +5,443 @@
 
     <!-- Navigation & Top actions -->
     <string name="nav_devices">设备</string>
+    <string name="nav_connection">连接</string>
     <string name="nav_transfers">传输</string>
     <string name="nav_this_device">本机</string>
-    <string name="action_open_scenario_lab">打开交互演练台</string>
-    <string name="action_open_user_guide">打开使用指引</string>
-    <string name="action_toggle_appearance">外观与取色设置</string>
+    <string name="action_open_scenario_lab">功能体验与连接模拟</string>
+    <string name="action_open_user_guide">查看使用指引</string>
+    <string name="action_toggle_appearance">切换深浅色外观</string>
 
     <!-- Screen Headers -->
     <string name="header_devices_title">局域网设备</string>
-    <string name="header_devices_subtitle">同一局域网 QUIC 直连 · 共享纯文本剪贴板与大文件</string>
+    <string name="header_devices_subtitle">同一网络下点对点直连，安全共享剪贴板与文件</string>
     <string name="header_transfers_title">文件传输</string>
-    <string name="header_transfers_subtitle">65,500 B 分段 SHA-256 校验 · 断线仅补发缺失段</string>
-    <string name="header_local_title">本机与服务</string>
-    <string name="header_local_subtitle">进程内 SessionHost 引擎 · 字节不经过云端中继</string>
+    <string name="header_transfers_subtitle">局域网高速直传 · 支持断点续传与完整性校验</string>
+    <string name="header_local_title">本机设置</string>
+    <string name="header_local_subtitle">管理本机名称、MD3E 取色外观、权限与安全设置</string>
 
     <!-- LinkService Quick Tile -->
-    <string name="status_lan_ready_title">LAN QUIC 会话就绪</string>
-    <string name="status_lan_ready_subtitle">Wi-Fi / 以太网直连监听中 · 端口 42461</string>
+    <string name="status_lan_ready_title">局域网直连已就绪</string>
+    <string name="status_lan_ready_subtitle">已连接 Wi‑Fi / 有线网络 · 随时可发现并连接设备</string>
     <string name="status_lan_ready_pill">运行中</string>
-    <string name="status_cellular_paused_title">局域网信标已暂停</string>
-    <string name="status_cellular_paused_subtitle">当前为移动数据，仅在 Wi-Fi 或以太网下广播与直连</string>
+    <string name="status_cellular_paused_title">等待连接局域网</string>
+    <string name="status_cellular_paused_subtitle">当前使用移动数据，连接 Wi‑Fi 或有线网络后自动恢复</string>
     <string name="status_cellular_paused_pill">已暂停</string>
-    <string name="status_service_stopped_title">后台连接服务已停止</string>
-    <string name="status_service_stopped_subtitle">点击重新启动 LinkService 常驻局域网会话</string>
+    <string name="status_service_stopped_title">后台连接服务已暂停</string>
+    <string name="status_service_stopped_subtitle">开启后可在后台保持设备在线并随时接收文件</string>
     <string name="status_service_stopped_pill">已停止</string>
 
     <!-- Clipboard Quick Card -->
-    <string name="clipboard_card_title">跨设备纯文本剪贴板</string>
-    <string name="clipboard_card_mutual_peers">已与 %1$d 台在线设备双向开启 · 上限 1 MiB</string>
-    <string name="clipboard_card_no_peers">暂无双向开启剪贴板同步的在线设备</string>
-    <string name="clipboard_card_empty_preview">尚未同步文本，可读取系统剪贴板或推送新文本</string>
-    <string name="clipboard_action_push_system">同步系统剪贴板</string>
-    <string name="clipboard_action_compose">输入并推送文本</string>
-    <string name="clipboard_dialog_title">推送纯文本到已开启对端</string>
-    <string name="clipboard_dialog_hint">输入要同步的纯文本（上限 1 MiB，图片与文件请走文件传输）</string>
-    <string name="clipboard_dialog_send">立即同步</string>
+    <string name="clipboard_card_title">跨设备剪贴板</string>
+    <string name="clipboard_card_mutual_peers">已与 %1$d 台在线设备开启自动同步</string>
+    <string name="clipboard_card_no_peers">在已配对设备详情中开启「剪贴板同步」即可共享复制内容</string>
+    <string name="clipboard_card_empty_preview">暂无同步记录，可一键发送当前剪贴板或直接输入文本</string>
+    <string name="clipboard_action_push_system">发送当前剪贴板</string>
+    <string name="clipboard_action_compose">直接输入文本</string>
+    <string name="clipboard_dialog_title">发送文本到其他设备</string>
+    <string name="clipboard_dialog_hint">输入或粘贴要同步的文本内容（单次上限 1 MB，图片与文档请使用文件传输）</string>
+    <string name="clipboard_dialog_send">发送</string>
 
     <!-- Device list sections & badges -->
-    <string name="section_trusted_devices">已信任对端 (%1$d)</string>
+    <string name="section_trusted_devices">已配对设备 (%1$d)</string>
     <string name="section_nearby_devices">附近可配对设备 (%1$d)</string>
     <string name="presence_connected">已连接</string>
-    <string name="presence_reachable">可达</string>
+    <string name="presence_reachable">可连接</string>
     <string name="presence_offline">离线</string>
     <string name="device_summary_clipboard_on">剪贴板同步已开 · %1$s</string>
-    <string name="device_summary_clipboard_off">剪贴板同步关闭 · %1$s</string>
-    <string name="device_summary_ask_on">保存前询问</string>
-    <string name="device_summary_ask_off">自动存入下载</string>
-    <string name="device_summary_tap_to_pair">点击发起双向 6 位短码核验配对</string>
-    <string name="device_summary_offline_pair_disabled">设备当前离线，可达时可发起配对</string>
-    <string name="empty_devices_title">局域网内暂无其他设备</string>
-    <string name="empty_devices_subtitle">请确认对端处于同一 Wi-Fi / 以太网并运行 ContextAll，或打开右上角演练台模拟发现设备</string>
-    <string name="empty_detail_pane_title">选择一台已信任设备</string>
-    <string name="empty_detail_pane_subtitle">在左侧点选设备以配置纯文本剪贴板同步、保存询问开关或发起分段文件直传</string>
+    <string name="device_summary_clipboard_off">剪贴板同步已关 · %1$s</string>
+    <string name="device_summary_ask_on">接收前询问</string>
+    <string name="device_summary_ask_off">自动保存至下载</string>
+    <string name="device_summary_tap_to_pair">点击核对 6 位配对码建立连接</string>
+    <string name="device_summary_offline_pair_disabled">设备当前离线，上线后可发起配对</string>
+    <string name="empty_devices_title">附近暂无其他设备</string>
+    <string name="empty_devices_subtitle">请确认其他设备连接在同一 Wi‑Fi 或局域网下并已打开 ContextAll，也可通过 IP 地址手动连接</string>
+    <string name="empty_detail_pane_title">选择一台已配对设备</string>
+    <string name="empty_detail_pane_subtitle">在左侧点选设备，即可管理剪贴板同步、文件接收偏好或直接发送文件</string>
 
     <!-- Peer Detail -->
     <string name="detail_back_content_desc">返回设备列表</string>
-    <string name="detail_quic_session_badge">QUIC 单双向流会话已建立 · ALPN contextall</string>
-    <string name="detail_reachable_session_badge">局域网可达 · 点击连接会话</string>
-    <string name="detail_offline_session_badge">设备离线 · 重新上线后自动恢复传输</string>
-    <string name="detail_send_file_button">选择本机文件发送</string>
-    <string name="detail_send_preset_button">快速演练发送数据包</string>
-    <string name="detail_reconnect_button">重连会话</string>
-    <string name="detail_device_id_card_label">证书公钥派生设备 ID (SPKI SHA-256)</string>
-    <string name="detail_copy_peer_id_desc">复制对端设备 ID</string>
-    <string name="detail_section_policies">对端同步与接收策略</string>
-    <string name="detail_clipboard_sync_title">纯文本剪贴板同步</string>
-    <string name="detail_clipboard_sync_subtitle">双向开启时自动同步上限 1 MiB 纯文本；图片与文件不走剪贴板</string>
-    <string name="detail_ask_before_save_title">接收文件保存前询问</string>
-    <string name="detail_ask_before_save_subtitle">收到文件时弹出 60 秒确认卡片，关闭后校验通过直接写入 Downloads</string>
-    <string name="detail_section_active_transfers">当前对端在途传输</string>
-    <string name="detail_section_danger">信任管理</string>
-    <string name="detail_unpair_title">解除信任（解绑设备）</string>
-    <string name="detail_unpair_subtitle">先发出 FILE_CANCEL 终止该设备在途传输、清理暂存并发送 UNPAIR</string>
+    <string name="detail_quic_session_badge">局域网端到端加密直连中</string>
+    <string name="detail_reachable_session_badge">已在同一网络发现该设备 · 点击即可连接</string>
+    <string name="detail_offline_session_badge">设备当前不在线 · 重新连接后将自动继续未完成的传输</string>
+    <string name="detail_send_file_button">发送文件</string>
+    <string name="detail_send_preset_button">快速发送</string>
+    <string name="detail_reconnect_button">重新连接</string>
+    <string name="detail_device_id_card_label">设备安全标识 ID</string>
+    <string name="detail_copy_peer_id_desc">复制设备 ID</string>
+    <string name="detail_section_policies">同步与接收偏好</string>
+    <string name="detail_clipboard_sync_title">剪贴板文本同步</string>
+    <string name="detail_clipboard_sync_subtitle">双方均开启且在线时，自动同步复制的纯文本内容（上限 1 MB）</string>
+    <string name="detail_ask_before_save_title">接收文件前先询问</string>
+    <string name="detail_ask_before_save_subtitle">收到文件时弹出确认提醒；关闭后将自动保存至系统「下载」目录</string>
+    <string name="detail_section_active_transfers">正在进行的传输</string>
+    <string name="detail_section_danger">配对管理</string>
+    <string name="detail_unpair_title">取消配对</string>
+    <string name="detail_unpair_subtitle">断开与该设备的连接，停止未完成的传输并移除配对记录</string>
 
     <!-- Send File Sheet -->
-    <string name="send_sheet_title">向「%1$s」发送文件</string>
-    <string name="send_sheet_subtitle">支持选取真实系统文档（单文件上限 1 GB，每对端单发送名额）或一键发送演练载荷</string>
-    <string name="send_sheet_pick_system">从系统文档选择器挑选文件</string>
-    <string name="send_sheet_pick_system_sub">零存储权限 · 读取真实文件名与字节大小</string>
-    <string name="send_sheet_preset_small">发送日志归档 diagnostics.tar.gz (18.4 MB)</string>
-    <string name="send_sheet_preset_large">发送镜像分卷 rootfs-arm64.img (142.6 MB)</string>
-    <string name="send_sheet_preset_zero">发送零字节空标记文件 .ready (0 B)</string>
-    <string name="send_sheet_preset_oversize">测试超限拦截 dataset-raw.bin (1.12 GB &gt; 1 GB)</string>
+    <string name="send_sheet_title">向「%1$s」发送内容</string>
+    <string name="send_sheet_subtitle">通过局域网点对点加密直传，无需存储权限，单个文件最高支持 1 GB</string>
+    <string name="send_sheet_pick_system">选择本地文件</string>
+    <string name="send_sheet_pick_system_sub">挑选文档、压缩包、演示文稿或安装包</string>
+    <string name="send_sheet_pick_media">发送照片与视频</string>
+    <string name="send_sheet_pick_media_sub">从系统相册挑选原图或高清视频无损发送</string>
+    <string name="send_sheet_preset_small">发送文档归档 (18.4 MB)</string>
+    <string name="send_sheet_preset_large">发送高清素材包 (142.6 MB)</string>
+    <string name="send_sheet_preset_zero">发送空标记文件 (0 B)</string>
+    <string name="send_sheet_preset_oversize">超限文件检测示例 (1.12 GB)</string>
 
     <!-- Pairing Bottom Sheet -->
-    <string name="pairing_sheet_title">核对 6 位配对短码</string>
-    <string name="pairing_sheet_subtitle">请确认本机与「%1$s」显示完全一致的 6 位 Base32 短码，双方都接受后写入信任</string>
-    <string name="pairing_sheet_waiting_remote">本机已接受 · 正在等待对端确认…</string>
-    <string name="pairing_sheet_remote_accepted">对端已接受 · 本机确认后立即完成配对</string>
-    <string name="pairing_sheet_countdown">剩余 %1$d 秒超时关闭</string>
+    <string name="pairing_sheet_title">核对 6 位配对码</string>
+    <string name="pairing_sheet_subtitle">请确认本机与「%1$s」屏幕上显示的 6 位配对码完全一致，双方确认后即完成配对</string>
+    <string name="pairing_sheet_waiting_remote">本机已确认 · 正在等待对方确认…</string>
+    <string name="pairing_sheet_remote_accepted">对方已确认 · 点击下方按钮即可完成配对</string>
+    <string name="pairing_sheet_countdown">请在 %1$d 秒内完成确认</string>
     <string name="pairing_reject_button">拒绝</string>
-    <string name="pairing_accept_button">接受并信任</string>
-    <string name="pairing_accepted_waiting_button">等待对端…</string>
+    <string name="pairing_cancel_button">取消</string>
+    <string name="pairing_accept_button">确认配对</string>
+    <string name="pairing_accepted_waiting_button">等待对方确认…</string>
 
     <!-- Unpair Dialog -->
-    <string name="unpair_dialog_title">解除与「%1$s」的信任？</string>
-    <string name="unpair_dialog_body">主动解除信任将取消与该设备相关的在途收发任务、删除无备份目录中的 .part / .meta.json 暂存，并关闭 QUIC 会话。</string>
-    <string name="unpair_confirm_button">确认解除</string>
-    <string name="common_cancel_button">取消</string>
+    <string name="unpair_dialog_title">取消与「%1$s」的配对？</string>
+    <string name="unpair_dialog_body">取消配对后将立即断开连接，停止与该设备之间未完成的传输并清理临时缓存。后续如需互传可随时重新配对。</string>
+    <string name="unpair_confirm_button">取消配对</string>
+    <string name="common_cancel_button">返回</string>
 
     <!-- Transfers Screen -->
-    <string name="transfers_incoming_header">待确认入站文件</string>
-    <string name="transfers_incoming_from">来自 %1$s · %2$s · 共 %3$d 段</string>
-    <string name="transfers_incoming_countdown">剩余 %1$d 秒未确认将自动释放该对端接收名额</string>
+    <string name="transfers_incoming_header">收到文件接收请求</string>
+    <string name="transfers_incoming_from">来自 %1$s · %2$s · 共 %3$d 个分块</string>
+    <string name="transfers_incoming_countdown">请在 %1$d 秒内确认是否接收</string>
     <string name="transfers_decline_button">拒绝</string>
-    <string name="transfers_accept_button">接收并存入下载</string>
-    <string name="transfers_active_section">进行中队列 (%1$d)</string>
-    <string name="transfers_completed_section">已完成记录 (%1$d)</string>
-    <string name="transfers_clear_completed">清空已完成</string>
-    <string name="transfers_direction_send">上行发送 → %1$s · %2$s</string>
-    <string name="transfers_direction_receive">下行接收 ← %1$s · %2$s</string>
-    <string name="transfers_segment_progress">%1$d / %2$d 段 · 窗口 8 段 · SHA-256</string>
-    <string name="transfers_waiting_reconnect">%1$d / %2$d 段 · 会话中断，重连后按位图续传</string>
-    <string name="transfers_move_blocked">%1$d / %2$d 段 · 提交 Downloads 受阻 (moveBlocked)，名额保持占用</string>
-    <string name="transfers_retry_commit">重试写入下载</string>
+    <string name="transfers_accept_button">接收并保存到下载</string>
+    <string name="transfers_active_section">正在传输 (%1$d)</string>
+    <string name="transfers_completed_section">传输记录 (%1$d)</string>
+    <string name="transfers_clear_completed">清空记录</string>
+    <string name="transfers_direction_send">发送至 %1$s · %2$s</string>
+    <string name="transfers_direction_receive">接收自 %1$s · %2$s</string>
+    <string name="transfers_segment_progress">已完成 %1$d / %2$d 分块 · 完整性校验中</string>
+    <string name="transfers_waiting_reconnect">已完成 %1$d / %2$d 分块 · 连接中断，恢复后自动续传</string>
+    <string name="transfers_move_blocked">文件已接收完毕，保存到「下载」目录受阻，请点击重试</string>
+    <string name="transfers_retry_commit">重试保存</string>
     <string name="transfers_cancel_desc">取消传输</string>
-    <string name="transfers_completed_send_sub">对端已完成全部 %1$d 段校验接收</string>
-    <string name="transfers_completed_recv_sub">整文件 SHA-256 校验通过 · 已提交系统 Downloads (%1$s)</string>
-    <string name="empty_transfers_title">当前没有传输任务</string>
-    <string name="empty_transfers_subtitle">从已信任设备详情页发送文件，或在右上角演练台模拟对端发来文件请求</string>
+    <string name="transfers_completed_send_sub">对方已完整接收并通过校验（共 %1$d 个分块）</string>
+    <string name="transfers_completed_recv_sub">校验无误 · 已保存至系统「下载」(%1$s)</string>
+    <string name="empty_transfers_title">暂无传输记录</string>
+    <string name="empty_transfers_subtitle">与设备完成配对后，可在上方直接选择本地文件、照片视频或文本发送给对方</string>
 
     <!-- This Device Screen -->
-    <string name="local_identity_section">本机节点身份</string>
+    <string name="local_identity_section">本机信息</string>
     <string name="local_display_name_label">本机显示名称</string>
-    <string name="local_edit_name_desc">编辑本机显示名称</string>
-    <string name="local_device_id_label">证书公钥派生 ID (Base32)</string>
-    <string name="local_copy_id_desc">复制本机设备 ID</string>
-    <string name="local_appearance_section">Android 16 外观与取色</string>
-    <string name="local_dynamic_color_title">系统壁纸动态取色 (Material You)</string>
-    <string name="local_dynamic_color_subtitle">跟随 Android 12+ 系统调色板，关闭时使用经典钴蓝主题</string>
-    <string name="local_dark_mode_title">深色界面模式</string>
-    <string name="local_dark_mode_subtitle">切换深石板高对比分层容器配色</string>
-    <string name="local_runtime_section">进程内会话与系统权限</string>
-    <string name="local_service_label">LinkService 前台服务 (connectedDevice)</string>
-    <string name="local_service_running_sub">常驻运行中 · 进程内直接驱动 SessionHost，不打开本地套接字</string>
-    <string name="local_service_stopped_sub">服务已暂停 · 点击重新拉起局域网常驻会话</string>
-    <string name="local_permissions_label">通知与附近 Wi-Fi 设备权限</string>
-    <string name="local_permissions_granted_sub">系统运行时权限已就绪（neverForLocation 不获取位置）</string>
-    <string name="local_permissions_request_sub">点击请求 Android 通知与局域网 Wi-Fi 发现权限</string>
-    <string name="local_storage_label">暂存与下载落盘路径</string>
-    <string name="local_storage_value">NoBackupFilesDir/transfers 暂存校验 → MediaStore.Downloads</string>
-    <string name="local_security_section">安全与密钥管理</string>
-    <string name="local_reset_identity_title">重置设备身份密钥</string>
-    <string name="local_reset_identity_subtitle">重新生成 ECDSA P-256 密钥对、清空全部信任记录并清理暂存文件</string>
-    <string name="edit_name_dialog_title">修改本机显示名称</string>
-    <string name="edit_name_dialog_supporting">1–64 个字符，不可包含控制字符 (%1$d/64)</string>
-    <string name="edit_name_dialog_error">显示名称需为 1–64 个可见字符，不含换行或控制符</string>
+    <string name="local_edit_name_desc">修改本机名称</string>
+    <string name="local_device_id_label">本机安全标识 ID</string>
+    <string name="local_copy_id_desc">复制本机安全标识 ID</string>
+    <string name="local_appearance_section">MD3E 取色与外观</string>
+    <string name="local_dynamic_color_title">MD3E 动态壁纸取色</string>
+    <string name="local_dynamic_color_subtitle">提取系统壁纸色彩生成个性化主题，关闭时使用经典钴蓝配色</string>
+    <string name="local_dark_mode_title">深色模式</string>
+    <string name="local_dark_mode_subtitle">适合夜间与暗光环境的柔和深色分层界面</string>
+    <string name="local_runtime_section">连接服务与权限</string>
+    <string name="local_service_label">后台常驻连接服务</string>
+    <string name="local_service_running_sub">运行中 · 保持局域网在线并随时响应剪贴板同步与文件接收</string>
+    <string name="local_service_stopped_sub">已暂停 · 点击开启以在后台保持局域网连接</string>
+    <string name="local_permissions_label">通知与附近设备发现权限</string>
+    <string name="local_permissions_granted_sub">已授权 · 仅用于发现局域网设备与显示传输进度，不获取位置信息</string>
+    <string name="local_permissions_request_sub">点击授予通知提醒与局域网设备发现权限</string>
+    <string name="local_storage_label">默认接收保存位置</string>
+    <string name="local_storage_value">接收并校验无误后，自动保存至系统「下载 (Downloads)」目录</string>
+    <string name="local_security_section">安全与隐私</string>
+    <string name="local_reset_identity_title">重置本机安全身份</string>
+    <string name="local_reset_identity_subtitle">重新生成本机加密证书与设备 ID，并清空所有已配对设备记录</string>
+    <string name="edit_name_dialog_title">修改本机名称</string>
+    <string name="edit_name_dialog_supporting">请输入 1–64 个字符 (%1$d/64)</string>
+    <string name="edit_name_dialog_error">名称需为 1–64 个可见字符，且不含换行符</string>
     <string name="edit_name_save_button">保存</string>
-    <string name="reset_dialog_title">确认重置本机身份密钥？</string>
-    <string name="reset_dialog_body">重置将更换本机 ECDSA P-256 证书密钥并生成全新 ca1 设备 ID，同时清空已信任列表与在途传输暂存。</string>
+    <string name="reset_dialog_title">确认重置本机安全身份？</string>
+    <string name="reset_dialog_body">重置后将生成全新的本机加密证书与设备 ID，同时清空所有已配对设备并取消未完成的传输任务。</string>
     <string name="reset_confirm_button">确认重置</string>
 
-    <!-- Scenario Lab Sheet -->
-    <string name="lab_sheet_title">交互场景演练台</string>
-    <string name="lab_sheet_subtitle">驱动内置进程内会话状态机，验证配对、分段续传、超限拦截与超时边界</string>
-    <string name="lab_action_discover_peer">发现新局域网设备</string>
-    <string name="lab_action_discover_peer_sub">在附近列表新增一台携带真实公钥派生 ID 的可达节点</string>
-    <string name="lab_action_inbound_pair">模拟收到对端配对请求</string>
-    <string name="lab_action_inbound_pair_sub">立即弹出 60 秒实时倒计时的 6 位短码双向验证面板</string>
-    <string name="lab_action_inbound_file">模拟已信任对端发来文件</string>
-    <string name="lab_action_inbound_file_sub">根据该对端「保存前询问」开关进入 60 秒确认卡或自动接收</string>
-    <string name="lab_action_inbound_blocked">模拟入站文件重名/落盘受阻 (moveBlocked)</string>
-    <string name="lab_action_inbound_blocked_sub">演练接收完成但最终提交受阻时的名额占用与重试恢复</string>
-    <string name="lab_action_remote_clipboard">模拟收到对端纯文本剪贴板</string>
-    <string name="lab_action_remote_clipboard_sub">从双向开启同步的在线对端推送一段代码片段到本机</string>
-    <string name="lab_action_flap_connection">模拟对端网络闪断 / 恢复重连</string>
-    <string name="lab_action_flap_connection_sub">观察在途分段传输挂起保留位图，重连后自动 FILE_RESUME 续传</string>
+    <!-- Scenario Lab / Functional Preview Sheet -->
+    <string name="lab_sheet_title">功能体验与连接模拟</string>
+    <string name="lab_sheet_subtitle">当身边暂时只有一台手机时，可在此模拟多设备发现、配对确认、文件接收与断线续传流程</string>
+    <string name="lab_action_discover_peer">模拟发现附近新设备</string>
+    <string name="lab_action_discover_peer_sub">在设备页新增一台同一局域网下的可配对设备</string>
+    <string name="lab_action_inbound_pair">模拟收到配对请求</string>
+    <string name="lab_action_inbound_pair_sub">弹出 6 位配对码核对面板，体验收到其他设备连接请求的流程</string>
+    <string name="lab_action_inbound_file">模拟收到对方发来的文件</string>
+    <string name="lab_action_inbound_file_sub">根据该设备的「接收前先询问」设置，弹出接收确认或直接开始接收</string>
+    <string name="lab_action_inbound_blocked">模拟保存至下载目录受阻</string>
+    <string name="lab_action_inbound_blocked_sub">体验文件接收完成后遇到同名冲突或写入受阻时的重试恢复</string>
+    <string name="lab_action_remote_clipboard">模拟收到对方复制的文本</string>
+    <string name="lab_action_remote_clipboard_sub">从已开启同步的在线设备同步一段文本到本机剪贴板卡片</string>
+    <string name="lab_action_flap_connection">模拟网络波动与重连续传</string>
+    <string name="lab_action_flap_connection_sub">切换设备在线/离线状态，观察未完成的文件在恢复连接后自动断点续传</string>
 
     <!-- Notices -->
-    <string name="notice_paired_success">已与「%1$s」完成双向验证并建立信任</string>
-    <string name="notice_pairing_timeout">与「%1$s」的配对验证已超时关闭</string>
+    <string name="notice_paired_success">已与「%1$s」完成配对</string>
+    <string name="notice_pairing_timeout">与「%1$s」的配对确认已超时</string>
     <string name="notice_pairing_rejected">已拒绝配对请求</string>
-    <string name="notice_unpaired">已解除与「%1$s」的信任并清理相关传输</string>
-    <string name="notice_send_busy">「%1$s」当前已有在途发送任务（单发送名额占用：busy）</string>
-    <string name="notice_send_too_large">文件超过 1,000,000,000 字节上限（too-large），未占用发送名额</string>
-    <string name="notice_send_started">开始向「%1$s」分段发送 %2$s（共 %3$d 段）</string>
-    <string name="notice_send_held">对端暂未连接，任务已挂起等待会话恢复后自动发送</string>
-    <string name="notice_inbound_auto_accepted">「%1$s」已关闭保存前询问，自动开始接收 %2$s</string>
-    <string name="notice_inbound_timeout">来自「%1$s」的文件请求超过 60 秒未确认，已释放接收名额</string>
-    <string name="notice_transfer_completed">「%1$s」校验完成</string>
-    <string name="notice_clipboard_pushed">已向 %1$d 台双向开启对端同步纯文本（%2$d B）</string>
-    <string name="notice_clipboard_too_large">剪贴板文本超过 1 MiB 上限，请改用文件传输发送</string>
-    <string name="notice_clipboard_empty">当前剪贴板没有可同步的纯文本内容</string>
-    <string name="notice_clipboard_no_mutual">请先在已连接对端详情页开启「纯文本剪贴板同步」</string>
-    <string name="notice_clipboard_received">收到来自「%1$s」的剪贴板文本同步</string>
-    <string name="notice_copied_id">已复制设备 ID 到系统剪贴板</string>
-    <string name="notice_identity_reset">已重新生成 ECDSA P-256 密钥与本机 ID，并清空旧信任列表</string>
-    <string name="notice_display_name_saved">已更新本机显示名称为「%1$s」</string>
-    <string name="notice_invalid_name">显示名称不合法（需 1–64 个可见字符）</string>
+    <string name="notice_pairing_cancelled">已取消配对请求</string>
+    <string name="notice_unpaired">已取消与「%1$s」的配对</string>
+    <string name="notice_send_busy">正在向「%1$s」发送文件，新任务可通过传输页排队发送</string>
+    <string name="notice_send_too_large">单个文件暂不支持超过 1 GB</string>
+    <string name="notice_send_started">开始向「%1$s」发送 %2$s</string>
+    <string name="notice_send_held">对方暂不在线，将在恢复连接后自动开始发送</string>
+    <string name="notice_inbound_auto_accepted">正在自动接收来自「%1$s」的 %2$s</string>
+    <string name="notice_inbound_timeout">来自「%1$s」的文件接收请求已超时关闭</string>
+    <string name="notice_transfer_completed">「%1$s」传输完成</string>
+    <string name="notice_clipboard_pushed">已将剪贴板文本同步至 %1$d 台设备（%2$d B）</string>
+    <string name="notice_clipboard_too_large">剪贴板文本超过 1 MB，请使用文件传输发送</string>
+    <string name="notice_clipboard_empty">当前剪贴板中没有可同步的纯文本内容</string>
+    <string name="notice_clipboard_no_mutual">请先在已连接设备详情中开启「剪贴板文本同步」</string>
+    <string name="notice_clipboard_received">收到来自「%1$s」的剪贴板文本</string>
+    <string name="notice_copied_id">已复制安全标识 ID</string>
+    <string name="notice_identity_reset">已重置本机安全身份并清空配对记录</string>
+    <string name="notice_display_name_saved">本机名称已更新为「%1$s」</string>
+    <string name="notice_invalid_name">请输入 1–64 个有效字符作为本机名称</string>
 
     <!-- Help & Onboarding Guide -->
-    <string name="local_help_section">使用指南与协议演练</string>
-    <string name="local_reopen_guide_title">查看使用指引</string>
-    <string name="local_reopen_guide_subtitle">重温局域网发现、6 位短码配对、剪贴板与分段续传流程</string>
-    <string name="local_open_lab_title">打开交互场景演练台</string>
-    <string name="local_open_lab_subtitle">一键触发远端配对、入站文件、落盘受阻与闪断重连演练</string>
+    <string name="local_help_section">帮助与功能体验</string>
+    <string name="local_reopen_guide_title">使用指引</string>
+    <string name="local_reopen_guide_subtitle">快速了解局域网发现、6 位配对码核对、剪贴板共享与断点续传</string>
+    <string name="local_open_lab_title">单机功能模拟体验</string>
+    <string name="local_open_lab_subtitle">身边暂无第二台设备时，可模拟发现设备、配对与收发文件</string>
 
-    <string name="guide_badge_step">指引 %1$d / %2$d</string>
+    <string name="guide_badge_step">欢迎使用 · %1$d / %2$d</string>
     <string name="guide_skip_button">跳过</string>
     <string name="guide_prev_button">上一步</string>
     <string name="guide_next_button">下一步</string>
     <string name="guide_finish_button">开始使用 ContextAll</string>
-    <string name="guide_try_lab_button">进入并打开交互演练台</string>
+    <string name="guide_try_lab_button">单机模拟体验</string>
 
-    <string name="guide_step1_tag">零云端 · 纯局域网</string>
-    <string name="guide_step1_title">同一局域网 QUIC 端到端直连</string>
-    <string name="guide_step1_desc">在 Wi‑Fi 或有线网络下自动发现附近节点，基于单双向流 QUIC（端口 42461）直连通信。所有剪贴板与文件字节均在本地网络传输，切至蜂窝网络时自动静默暂停广播。</string>
-    <string name="guide_step1_node_desktop">桌面工作站</string>
-    <string name="guide_step1_node_android">本机 Android</string>
-    <string name="guide_step1_pill">ALPN contextall · 42461 直连就绪</string>
+    <string name="guide_step1_tag">无需账号 · 纯局域网直连</string>
+    <string name="guide_step1_title">连上同一 Wi‑Fi 即可互传</string>
+    <string name="guide_step1_desc">无需注册账号，所有文字与文件均在本地局域网内端到端加密直传，不经过任何云端服务器；切换至移动数据时自动暂停广播，兼顾隐私与省电。</string>
+    <string name="guide_step1_node_desktop">桌面电脑</string>
+    <string name="guide_step1_node_android">本机手机</string>
+    <string name="guide_step1_pill">局域网加密直连已就绪</string>
 
-    <string name="guide_step2_tag">双向核验 · ECDSA P-256</string>
-    <string name="guide_step2_title">60 秒双端 6 位短码配对</string>
-    <string name="guide_step2_desc">每台设备由公钥 SPKI 派生唯一 ca1 身份标识。首次建立信任时，双端同步展示 6 位 Base32 短码，60 秒内双端核对一致并均点「接受」后才写入持久信任。</string>
-    <string name="guide_step2_demo_peer">与「Arch Workstation」核对短码</string>
-    <string name="guide_step2_demo_timer">60s 双端共同确认生效</string>
+    <string name="guide_step2_tag">双向确认 · 安全可靠</string>
+    <string name="guide_step2_title">核对 6 位配对码建立信任</string>
+    <string name="guide_step2_desc">首次连接新设备时，双方屏幕会同步显示相同的 6 位配对码。只需核对一致并在 60 秒内双端确认，即可建立长期安全连接。</string>
+    <string name="guide_step2_demo_peer">与「书房电脑」核对配对码</string>
+    <string name="guide_step2_demo_timer">双方确认一致后即刻生效</string>
 
-    <string name="guide_step3_tag">按设备授权 · 安全边界</string>
-    <string name="guide_step3_title">独立剪贴板与保存前询问开关</string>
-    <string name="guide_step3_desc">新配对设备默认关闭剪贴板同步、开启保存前询问。仅当双方均开启开关且在线时，才双向同步 ≤ 1 MiB 纯文本；图片与文件始终走独立文件通道（可点按下方卡片体验手感）。</string>
-    <string name="guide_step3_demo_clip_title">纯文本剪贴板同步</string>
-    <string name="guide_step3_demo_clip_sub">双向开启且在线时自动同步 ≤ 1 MiB 文本</string>
-    <string name="guide_step3_demo_ask_title">接收文件保存前询问</string>
-    <string name="guide_step3_demo_ask_sub">关闭后整文件校验通过直接写入 Downloads</string>
+    <string name="guide_step3_tag">按设备管理 · 边界清晰</string>
+    <string name="guide_step3_title">剪贴板与接收偏好自由掌控</string>
+    <string name="guide_step3_desc">你可以为每台已配对设备单独设置「剪贴板文本同步」与「接收文件前先询问」开关，新配对设备默认需经你确认后才接收文件（可点击下方开关体验）。</string>
+    <string name="guide_step3_demo_clip_title">剪贴板文本同步</string>
+    <string name="guide_step3_demo_clip_sub">双方均开启且在线时自动共享复制的文字</string>
+    <string name="guide_step3_demo_ask_title">接收文件前先询问</string>
+    <string name="guide_step3_demo_ask_sub">关闭后收到文件将直接存入系统「下载」目录</string>
 
-    <string name="guide_step4_tag">65,500 B 分段 · SHA-256</string>
-    <string name="guide_step4_title">大文件断点续传与场景演练</string>
-    <string name="guide_step4_desc">单文件最高 1 GB，按 65,500 B 分段校验直传；断线保留已完成位图，重连后仅补发缺失段。随时点击右上角「烧瓶」图标或在本机页重新打开本指引与演练台。</string>
-    <string name="guide_step4_demo_file">rootfs-arm64.img · 142.6 MB</string>
-    <string name="guide_step4_demo_meta">分段窗口 8 段 · 断线自动 FILE_RESUME 续传</string>
+    <string name="guide_step4_tag">高速稳定 · 完整性校验</string>
+    <string name="guide_step4_title">大文件无惧断线，自动断点续传</string>
+    <string name="guide_step4_desc">支持单个最高 1 GB 的文档、原图与高清视频传输。即使中途网络短暂中断，恢复连接后也会从断点继续传输并进行整文件校验。</string>
+    <string name="guide_step4_demo_file">旅行相册原片合集.zip · 142.6 MB</string>
+    <string name="guide_step4_demo_meta">分块自动校验 · 网络恢复后无缝续传</string>
 
     <!-- Manual IP + Port Connect & Pair -->
-    <string name="manual_connect_entry_title">手动输入 IP 与端口连接配对</string>
-    <string name="manual_connect_entry_subtitle">跨子网或组播受限时直连 IP:端口 并发起 6 位短码验证</string>
+    <string name="manual_connect_entry_title">通过 IP 地址手动连接</string>
+    <string name="manual_connect_entry_subtitle">跨网段或无法自动搜索到设备时，输入对方 IP 与端口直接连接</string>
     <string name="manual_connect_button_short">手动连接</string>
-    <string name="manual_sheet_title">手动连接并配对设备</string>
-    <string name="manual_sheet_subtitle">输入对端局域网 IP 地址（支持 IPv4 / IPv6 或主机名）与 QUIC 监听端口，握手后双端核对 6 位短码</string>
-    <string name="manual_ip_label">对端 IP 地址或主机名</string>
-    <string name="manual_ip_placeholder">例如 192.168.1.42 或 fd00::1（支持直接粘贴 IP:端口）</string>
-    <string name="manual_ip_error">请输入合法的 IPv4、IPv6 地址或局域网主机名</string>
-    <string name="manual_port_label">QUIC 监听端口 (1–65535)</string>
-    <string name="manual_port_error">端口范围需在 1–65535 之间</string>
-    <string name="manual_port_reset">恢复默认 42461</string>
-    <string name="manual_alias_label">备注显示名称（可选）</string>
-    <string name="manual_alias_placeholder">留空则默认使用对端广播名或 IP 标识</string>
-    <string name="manual_quick_prefix_label">常用网段快捷填入</string>
-    <string name="manual_submit_button">直连并核验配对</string>
-    <string name="device_endpoint_format">直连端点 %1$s</string>
+    <string name="manual_sheet_title">手动连接设备</string>
+    <string name="manual_sheet_subtitle">输入对方设备的局域网 IP 地址与端口号（支持直接粘贴 IP:端口），连接后核对 6 位配对码即可绑定</string>
+    <string name="manual_ip_label">对方 IP 地址或主机名</string>
+    <string name="manual_ip_placeholder">例如 192.168.1.42（支持直接粘贴 IP:端口）</string>
+    <string name="manual_ip_error">请输入有效的 IPv4、IPv6 地址或主机名</string>
+    <string name="manual_port_label">端口号</string>
+    <string name="manual_port_error">范围 1–65535</string>
+    <string name="manual_port_reset">默认</string>
+    <string name="manual_alias_label">备注名称（选填）</string>
+    <string name="manual_alias_placeholder">例如：书房台式机</string>
+    <string name="manual_quick_prefix_label">快捷填入</string>
+    <string name="manual_submit_button">连接并配对</string>
+    <string name="device_endpoint_format">直连地址 %1$s</string>
 
-    <string name="notice_manual_reconnected">已通过 %2$s 重新直连已信任设备「%1$s」</string>
-    <string name="notice_manual_unavailable">请先开启局域网连接并启动后台 LinkService 后再发起手动直连</string>
-    <string name="notice_manual_invalid">请输入合法的 IP 地址与端口（1–65535）</string>
+    <string name="notice_manual_reconnected">已通过 %2$s 重新连接「%1$s」</string>
+    <string name="notice_manual_unavailable">请先连接局域网并开启后台连接服务后再试</string>
+    <string name="notice_manual_invalid">请输入有效的 IP 地址与端口号（1–65535）</string>
+
+    <!-- LAN Discovery Scanner & Micro-interaction -->
+    <string name="scan_indicator_desc">附近设备扫描状态指示器</string>
+    <string name="scan_status_scanning_title">正在搜索附近的设备…</string>
+    <string name="scan_status_scanning_sub">正在同一局域网内寻找开启 ContextAll 的设备</string>
+    <string name="scan_status_found_title">附近发现 %1$d 台可配对设备</string>
+    <string name="scan_status_found_sub">点选下方设备即可核对 6 位配对码建立连接</string>
+    <string name="scan_status_empty_title">暂未发现新的未配对设备</string>
+    <string name="scan_status_empty_sub">点击右侧重新搜索，或通过 IP 地址手动连接</string>
+    <string name="scan_status_paused_title">设备搜索已暂停</string>
+    <string name="scan_status_paused_sub">连接 Wi‑Fi 并开启后台服务后即可搜索附近设备</string>
+    <string name="scan_action_rescan">搜索</string>
+    <string name="scan_action_scanning">搜索中</string>
+    <string name="device_newly_discovered_badge">新发现</string>
+
+    <!-- Connection Telemetry Visualization -->
+    <string name="section_telemetry_analytics">连接质量与流量统计</string>
+    <string name="telemetry_card_title">连接成功率与传输流量</string>
+    <string name="telemetry_card_subtitle">近期局域网连接稳定性与收发数据量概览</string>
+    <string name="telemetry_mode_combined">综合总览</string>
+    <string name="telemetry_mode_success">连接成功率</string>
+    <string name="telemetry_mode_throughput">传输流量</string>
+    <string name="telemetry_kpi_success_label">平均连接成功率</string>
+    <string name="telemetry_kpi_success_sub">成功 %1$d / %2$d 次连接</string>
+    <string name="telemetry_kpi_throughput_label">累计传输数据</string>
+    <string name="telemetry_kpi_throughput_sub">发送 %1$s · 接收 %2$s</string>
+    <string name="telemetry_legend_success">连接成功率</string>
+    <string name="telemetry_legend_upload">发送数据</string>
+    <string name="telemetry_legend_download">接收数据</string>
+    <string name="telemetry_tooltip_slot">时间段：%1$s</string>
+    <string name="telemetry_tooltip_rate">连接成功率 %1$s（%2$d/%3$d）</string>
+    <string name="telemetry_tooltip_volume">合计 %1$s · 发送 %2$s / 接收 %3$s</string>
+    <string name="telemetry_hint_interactive">点按或左右滑动图表可查看各时段明细 · 已校验 %1$d 个分块</string>
+
+    <!-- Transfers Upload Hub, Queue & Controls -->
+    <string name="transfers_upload_hub_title">发送文件与媒体</string>
+    <string name="transfers_upload_hub_sub">支持多选文档、相册照片视频或文本文件，多文件自动排队依次发送</string>
+    <string name="transfers_target_peer_label">发送给</string>
+    <string name="transfers_peer_slot_busy">发送中</string>
+    <string name="transfers_no_trusted_title">暂无已配对设备</string>
+    <string name="transfers_no_trusted_sub">请先前往「设备」页面与附近电脑或手机完成配对，即可在此直接发送文件与照片</string>
+    <string name="transfers_go_pair_button">前往设备页配对</string>
+    <string name="transfers_btn_pick_files">选择本地文件</string>
+    <string name="transfers_btn_pick_files_sub">文档、压缩包或安装包</string>
+    <string name="transfers_btn_pick_media">照片与视频</string>
+    <string name="transfers_btn_pick_media_sub">从相册挑选原图与视频</string>
+    <string name="transfers_btn_text_file">新建文本文件</string>
+    <string name="transfers_btn_clipboard_file">剪贴板存为文件</string>
+    <string name="transfers_btn_preset_payload">快速发送</string>
+
+    <string name="transfers_text_dialog_title">作为文本文件发送</string>
+    <string name="transfers_text_filename_label">文件名</string>
+    <string name="transfers_text_filename_placeholder">例如：会议纪要.txt 或 备忘录.md</string>
+    <string name="transfers_text_content_label">文本内容</string>
+    <string name="transfers_text_content_hint">输入或粘贴要发送的文字、链接或笔记内容…</string>
+    <string name="transfers_text_size_preview">文件大小：%1$s · 共 %2$d 个校验分块</string>
+    <string name="transfers_text_submit">立即发送</string>
+
+    <string name="transfers_kpi_uploaded">累计发送</string>
+    <string name="transfers_kpi_downloaded">累计接收</string>
+    <string name="transfers_kpi_segments">已完成分块</string>
+
+    <string name="transfers_filter_all">全部 (%1$d)</string>
+    <string name="transfers_filter_send">发送 (%1$d)</string>
+    <string name="transfers_filter_receive">接收 (%1$d)</string>
+    <string name="transfers_filter_done">已完成 (%1$d)</string>
+
+    <string name="transfers_queued_section">等待发送 (%1$d)</string>
+    <string name="transfers_clear_queued">清空队列</string>
+    <string name="transfers_queued_item_sub">发往 %1$s · %2$s · 当前任务完成后自动发送</string>
+    <string name="transfers_remove_queued_desc">移出等待队列</string>
+
+    <string name="transfers_pause_desc">暂停传输</string>
+    <string name="transfers_resume_desc">继续传输</string>
+    <string name="transfers_paused_status">已完成 %1$d / %2$d 分块 · 已暂停，点击继续可接着传输</string>
+    <string name="transfers_resend_button">重发</string>
+    <string name="transfers_completed_peer_send">已发送至 %1$s · %2$s</string>
+    <string name="transfers_completed_peer_recv">接收自 %1$s · 已保存至「下载」(%2$s)</string>
+    <string name="transfers_filtered_empty_title">当前筛选下暂无记录</string>
+    <string name="transfers_filtered_empty_sub">可切换上方筛选分类，或直接在上方选择文件发送</string>
+
+    <string name="notice_files_queued">已将 %1$d 个文件加入「%2$s」的等待发送队列</string>
+    <string name="notice_transfer_paused">已暂停「%1$s」，可随时继续传输</string>
+    <string name="notice_transfer_resumed">已继续传输「%1$s」</string>
+    <string name="notice_copied_diagnostics">已复制设备与版本信息到剪贴板</string>
+
+    <!-- Dedicated Connection Screen -->
+    <string name="header_connection_title">连接与网络</string>
+    <string name="header_connection_subtitle">实时查看局域网连接状态、在线设备与传输质量</string>
+    <string name="connection_compact_entry_sub">当前在线 %1$d 台 · 连接成功率 %2$s · 点击查看连接详情</string>
+    <string name="connection_compact_paused_sub">局域网连接已暂停 · 点击前往连接页管理网络与后台服务</string>
+    <string name="connection_protocol_section">传输加密与网络参数</string>
+    <string name="connection_quic_port_label">局域网直连通道</string>
+    <string name="connection_quic_port_value">QUIC (TLS 1.3) · 默认端口 UDP 42461</string>
+    <string name="connection_crypto_label">安全校验机制</string>
+    <string name="connection_crypto_value">ECDSA P-256 双向证书认证 · SHA-256 分块完整性校验</string>
+    <string name="connection_toggle_wifi_btn">切换网络状态</string>
+    <string name="connection_toggle_service_btn">暂停/恢复服务</string>
+    <string name="connection_peers_section">设备连接状态 (%1$d)</string>
+    <string name="connection_peer_discovery_mdns">局域网自动发现 · 端口 42461</string>
+    <string name="connection_action_disconnect">断开</string>
+    <string name="connection_action_reconnect">连接</string>
+    <string name="connection_action_pair">配对</string>
+
+    <!-- About Sub-page inside This Device -->
+    <string name="local_about_section">关于应用</string>
+    <string name="local_about_entry_title">关于 ContextAll</string>
+    <string name="local_about_entry_subtitle">版本 v%1$s · %2$s · 查看本机设备参数与版本信息</string>
+    <string name="about_back_desc">返回本机设置</string>
+    <string name="about_page_title">关于</string>
+    <string name="about_version_pill">版本 v%1$s (%2$d) · %3$s</string>
+    <string name="about_hero_tagline">轻快、私密的局域网跨设备剪贴板同步与文件互传工具</string>
+    <string name="about_copy_diagnostics_btn">复制本机与版本信息</string>
+
+    <string name="about_section_version">应用与版本信息</string>
+    <string name="about_item_version_label">当前版本</string>
+    <string name="about_item_package_label">应用包名</string>
+    <string name="about_item_protocol_label">通信协议</string>
+    <string name="about_item_protocol_value">QUIC 端到端加密 · 默认端口 42461</string>
+
+    <string name="about_section_machine">本机设备信息</string>
+    <string name="about_item_model_label">设备型号</string>
+    <string name="about_item_board_label">硬件平台</string>
+    <string name="about_item_android_label">Android 版本</string>
+    <string name="about_item_android_value">Android %1$s (API %2$d)%3$s</string>
+    <string name="about_item_cpu_label">处理器架构</string>
+    <string name="about_item_cpu_value">%1$s · %2$d 核处理器</string>
+    <string name="about_item_memory_label">运行内存 (RAM)</string>
+    <string name="about_item_memory_value">可用 %1$s / 总计 %2$s</string>
+    <string name="about_item_display_label">屏幕显示参数</string>
+    <string name="about_item_display_value">%1$d × %2$d px · %3$d dpi</string>
+    <string name="about_item_build_label">系统版本号</string>
+
+    <!-- Developer & Debug Edition Workbench -->
+    <string name="debug_badge_label">DEBUG</string>
+    <string name="action_open_debug_console">打开开发调试台</string>
+    <string name="local_dev_section">开发者选项 (Debug Build)</string>
+    <string name="local_dev_mode_switch_title">开发调试界面 (Debug UI)</string>
+    <string name="local_dev_mode_switch_on_sub">已开启 · 显示 DEBUG 标识、协议边界测试载荷与实时帧追踪台（关闭即可预览正式用户版界面）</string>
+    <string name="local_dev_mode_switch_off_sub">当前正在预览正式用户版界面 · 开启后恢复开发调试控件与协议追踪</string>
+    <string name="local_dev_open_console_title">开发调试工作台与协议帧追踪</string>
+    <string name="local_dev_open_console_sub">故障注入 · 边界载荷压测 · SessionHost 帧日志（已记录 %1$d 条）</string>
+    <string name="local_dev_runtime_diag_label">底层引擎与暂存管线 (SessionHost)</string>
+    <string name="local_dev_runtime_diag_value">In-Process SessionHost · connectedDevice · NoBackupFilesDir/transfers → MediaStore.Downloads</string>
+
+    <string name="debug_sheet_title">ContextAll 开发调试台</string>
+    <string name="debug_sheet_subtitle">专用于开发阶段的协议状态机验证、边界载荷压测与实时帧追踪</string>
+    <string name="debug_preview_release_btn">切换预览正式版</string>
+    <string name="debug_tab_faults">故障与场景注入</string>
+    <string name="debug_tab_payloads">边界载荷压测</string>
+    <string name="debug_tab_frames">协议帧追踪 (%1$d)</string>
+
+    <string name="debug_seed_section_label">预置测试数据集切换</string>
+    <string name="debug_seed_consumer">日常正式数据</string>
+    <string name="debug_seed_developer">极客压测数据 (Arch/Wayland)</string>
+
+    <string name="debug_action_jitter_title">注入网络抖动与吞吐峰值采样</string>
+    <string name="debug_action_jitter_sub">向连接统计曲线追加一组高并发分段吞吐与握手波动样本</string>
+
+    <string name="debug_payload_section_header">DEBUG · 协议边界测试载荷</string>
+    <string name="debug_transfers_inject_btn">DEBUG · 注入协议边界测试载荷（0 B / 大文件 / &gt;1 GB 超限）</string>
+    <string name="debug_payload_target_label">目标已配对设备</string>
+    <string name="debug_payload_small_sub">18.4 MB · 281 段 · 常规多段 SHA-256 吞吐验证</string>
+    <string name="debug_payload_large_sub">142.6 MB · 2,178 段 · 8 段窗口与 FILE_RESUME 续传验证</string>
+    <string name="debug_payload_zero_sub">0 B · 0 段 · 零字节空文件立即落盘边界验证</string>
+    <string name="debug_payload_oversize_sub">1.12 GB &gt; 1,000,000,000 B · 触发 too-large 拦截且不占槽位</string>
+
+    <string name="debug_invariants_title">SessionHost 实时状态不变量</string>
+    <string name="debug_invariant_window">分段窗口：8 × 65,500 B</string>
+    <string name="debug_invariant_dedupe">请求去重缓存：%1$d 条</string>
+    <string name="debug_invariant_downloads">已提交 Downloads：%1$d 项</string>
+    <string name="debug_invariant_slots">活跃发送槽 %1$d · 接收槽 %2$d</string>
+    <string name="debug_frames_header">实时协议命令与帧追踪日志</string>
+    <string name="debug_frames_copy">复制日志</string>
+    <string name="debug_frames_clear">清空</string>
+    <string name="debug_frames_empty">暂无帧记录，执行任意配对、剪贴板或文件操作即可捕获</string>
+
+    <string name="notice_debug_seed_dev">已切换为极客开发压测数据集 (Arch Workstation / Wayland)</string>
+    <string name="notice_debug_seed_consumer">已切换为日常正式版数据集</string>
+    <string name="notice_debug_logs_copied">已复制 %1$d 条协议调试日志到系统剪贴板</string>
+    <string name="notice_debug_logs_cleared">已清空协议帧追踪日志</string>
+    <string name="notice_debug_unlocked">已开启开发者调试模式</string>
+    <string name="notice_debug_preview_release">已切换至正式用户版视图（可在「本机 → 开发者选项」随时恢复）</string>
 </resources>

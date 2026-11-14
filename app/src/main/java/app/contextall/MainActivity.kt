@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,16 +22,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.SwapVert
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.Badge
@@ -72,13 +82,15 @@ import app.contextall.model.UiEventNotice
 import app.contextall.ui.components.ContextAllCollapsibleBrandBar
 import app.contextall.ui.components.ExpressiveFloatingNavDock
 import app.contextall.ui.components.FloatingDockItem
+import app.contextall.ui.screens.AboutDeviceSubScreen
+import app.contextall.ui.screens.ConnectionScreen
+import app.contextall.ui.screens.DeveloperDebugConsoleSheet
 import app.contextall.ui.screens.DevicesListScreen
 import app.contextall.ui.screens.EmptyDetailPlaceholder
 import app.contextall.ui.screens.ManualConnectBottomSheet
 import app.contextall.ui.screens.OnboardingGuideOverlay
 import app.contextall.ui.screens.PairingVerificationBottomSheet
 import app.contextall.ui.screens.PeerDetailScreen
-import app.contextall.ui.screens.ScenarioLabBottomSheet
 import app.contextall.ui.screens.ThisDeviceScreen
 import app.contextall.ui.screens.TransfersScreen
 import app.contextall.ui.theme.ContextAllTheme
@@ -114,7 +126,14 @@ fun ContextAllAppShell(
     val context = LocalContext.current
     var showScenarioLab by remember { mutableStateOf(false) }
     var showManualConnectSheet by remember { mutableStateOf(false) }
+    var showAboutSubPage by remember { mutableStateOf(false) }
     var pendingFileTargetPeerId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(state.currentTab) {
+        if (state.currentTab != TopTab.THIS_DEVICE) {
+            showAboutSubPage = false
+        }
+    }
 
     // Hoisted scroll state & direction tracker for collapsible Brand Top Bar
     val devicesListState = rememberLazyListState()
@@ -154,7 +173,7 @@ fun ContextAllAppShell(
         }
     }
 
-    // Zero-permission SAF system document picker
+    // Zero-permission SAF system single document picker (Peer Detail)
     val documentPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -163,6 +182,29 @@ fun ContextAllAppShell(
             viewModel.sendPickedDocument(deviceId = targetId, uri = uri)
         }
         pendingFileTargetPeerId = null
+    }
+
+    // Zero-permission SAF multi-document upload picker (Transfers Upload Hub)
+    var pendingMultiUploadPeerId by remember { mutableStateOf<String?>(null) }
+    val multiDocumentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        val targetId = pendingMultiUploadPeerId
+        if (uris.isNotEmpty() && targetId != null) {
+            viewModel.uploadPickedUris(deviceId = targetId, uris = uris)
+        }
+        pendingMultiUploadPeerId = null
+    }
+
+    // Zero-permission Android Photo Picker for images & videos (Transfers Upload Hub)
+    val mediaPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris ->
+        val targetId = pendingMultiUploadPeerId
+        if (uris.isNotEmpty() && targetId != null) {
+            viewModel.uploadPickedUris(deviceId = targetId, uris = uris)
+        }
+        pendingMultiUploadPeerId = null
     }
 
     // Runtime dangerous permissions (POST_NOTIFICATIONS & NEARBY_WIFI_DEVICES on Android 13+)
@@ -204,6 +246,8 @@ fun ContextAllAppShell(
                     context.getString(R.string.notice_pairing_timeout, notice.peerName)
                 UiEventNotice.PairingRejected ->
                     context.getString(R.string.notice_pairing_rejected)
+                UiEventNotice.PairingCancelled ->
+                    context.getString(R.string.notice_pairing_cancelled)
                 is UiEventNotice.Unpaired ->
                     context.getString(R.string.notice_unpaired, notice.peerName)
                 is UiEventNotice.SendBusy ->
@@ -219,6 +263,12 @@ fun ContextAllAppShell(
                     )
                 UiEventNotice.SendHeldOffline ->
                     context.getString(R.string.notice_send_held)
+                is UiEventNotice.FilesQueued ->
+                    context.getString(R.string.notice_files_queued, notice.count, notice.peerName)
+                is UiEventNotice.TransferPaused ->
+                    context.getString(R.string.notice_transfer_paused, notice.fileName)
+                is UiEventNotice.TransferResumed ->
+                    context.getString(R.string.notice_transfer_resumed, notice.fileName)
                 is UiEventNotice.InboundAutoAccepted ->
                     context.getString(
                         R.string.notice_inbound_auto_accepted,
@@ -261,20 +311,51 @@ fun ContextAllAppShell(
                     context.getString(R.string.notice_manual_unavailable)
                 UiEventNotice.ManualInvalidEndpoint ->
                     context.getString(R.string.notice_manual_invalid)
+                is UiEventNotice.DebugSeedSwitched ->
+                    context.getString(
+                        if (notice.isDeveloperProfile) R.string.notice_debug_seed_dev
+                        else R.string.notice_debug_seed_consumer
+                    )
+                is UiEventNotice.CopiedDebugLogs ->
+                    context.getString(R.string.notice_debug_logs_copied, notice.count)
+                UiEventNotice.DebugLogsCleared ->
+                    context.getString(R.string.notice_debug_logs_cleared)
+                UiEventNotice.DebugModeUnlocked ->
+                    context.getString(R.string.notice_debug_unlocked)
+                UiEventNotice.DebugPreviewingRelease ->
+                    context.getString(R.string.notice_debug_preview_release)
             }
             snackbarHostState.showSnackbar(msg)
         }
     }
 
-    val activeTransferCount = remember(state.transfers, state.filePrompts) {
-        state.transfers.count { !it.completed } + state.filePrompts.size
+    val activeTransferCount = remember(state.transfers, state.filePrompts, state.queuedUploads) {
+        state.transfers.count { !it.completed } + state.filePrompts.size + state.queuedUploads.size
+    }
+    val trustedPeers = remember(state.devices) {
+        state.devices.filter { it.trusted }
     }
     val selectedPeer = remember(state.devices, state.selectedDeviceId) {
         state.devices.firstOrNull { it.deviceId == state.selectedDeviceId && it.trusted }
     }
 
+    val isDebugUi = state.debugState.developerUiEnabled
+
     val headerActionButtons: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (isDebugUi) {
+                FilledTonalIconButton(
+                    onClick = { showScenarioLab = true },
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("top_action_scenario_lab")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.BugReport,
+                        contentDescription = stringResource(R.string.action_open_debug_console)
+                    )
+                }
+            }
             FilledTonalIconButton(
                 onClick = { viewModel.openOnboardingGuide() },
                 modifier = Modifier
@@ -297,17 +378,6 @@ fun ContextAllAppShell(
                     contentDescription = stringResource(R.string.action_toggle_appearance)
                 )
             }
-            FilledTonalIconButton(
-                onClick = { showScenarioLab = true },
-                modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .testTag("top_action_scenario_lab")
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Science,
-                    contentDescription = stringResource(R.string.action_open_scenario_lab)
-                )
-            }
         }
     }
 
@@ -318,6 +388,13 @@ fun ContextAllAppShell(
             selectedIcon = Icons.Rounded.Devices,
             unselectedIcon = Icons.Outlined.Devices,
             testTag = "nav_item_devices"
+        ),
+        FloatingDockItem(
+            key = TopTab.CONNECTION,
+            label = stringResource(R.string.nav_connection),
+            selectedIcon = Icons.Rounded.Hub,
+            unselectedIcon = Icons.Outlined.Hub,
+            testTag = "nav_item_connection"
         ),
         FloatingDockItem(
             key = TopTab.TRANSFERS,
@@ -383,6 +460,17 @@ fun ContextAllAppShell(
                                 label = { Text(stringResource(R.string.nav_devices)) }
                             )
                             NavigationRailItem(
+                                selected = state.currentTab == TopTab.CONNECTION,
+                                onClick = { viewModel.selectTab(TopTab.CONNECTION) },
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Hub,
+                                        contentDescription = stringResource(R.string.nav_connection)
+                                    )
+                                },
+                                label = { Text(stringResource(R.string.nav_connection)) }
+                            )
+                            NavigationRailItem(
                                 selected = state.currentTab == TopTab.TRANSFERS,
                                 onClick = { viewModel.selectTab(TopTab.TRANSFERS) },
                                 icon = {
@@ -403,7 +491,13 @@ fun ContextAllAppShell(
                             )
                             NavigationRailItem(
                                 selected = state.currentTab == TopTab.THIS_DEVICE,
-                                onClick = { viewModel.selectTab(TopTab.THIS_DEVICE) },
+                                onClick = {
+                                    if (state.currentTab == TopTab.THIS_DEVICE && showAboutSubPage) {
+                                        showAboutSubPage = false
+                                    } else {
+                                        viewModel.selectTab(TopTab.THIS_DEVICE)
+                                    }
+                                },
                                 icon = {
                                     Icon(
                                         imageVector = Icons.Rounded.Smartphone,
@@ -422,7 +516,9 @@ fun ContextAllAppShell(
                     ) {
                         ContextAllCollapsibleBrandBar(
                             visible = showBrandTopBar,
-                            centeredMaxWidth = !isTwoColumn
+                            centeredMaxWidth = !isTwoColumn,
+                            showDebugBadge = isDebugUi,
+                            onDebugBadgeClick = { showScenarioLab = true }
                         )
 
                         Box(
@@ -440,14 +536,12 @@ fun ContextAllAppShell(
                                                 devices = state.devices,
                                                 clipboardState = state.clipboardState,
                                                 selectedDeviceId = selectedPeer?.deviceId,
+                                                telemetry = state.telemetry,
+                                                isScanningLan = state.isScanningLan,
+                                                lastDiscoveredDeviceId = state.lastDiscoveredDeviceId,
                                                 headerActions = headerActionButtons,
-                                                onBannerClick = {
-                                                    if (!state.linkServiceRunning) {
-                                                        viewModel.toggleLinkService()
-                                                    } else {
-                                                        viewModel.toggleLanWifiState()
-                                                    }
-                                                },
+                                                onBannerClick = { viewModel.selectTab(TopTab.CONNECTION) },
+                                                onTriggerScan = { viewModel.triggerLanScan() },
                                                 onPushSystemClipboard = { viewModel.pushSystemClipboard() },
                                                 onPushCustomClipboard = { viewModel.pushCustomClipboardText(it) },
                                                 onSelectTrustedDevice = { viewModel.selectTrustedDevice(it.deviceId) },
@@ -470,10 +564,17 @@ fun ContextAllAppShell(
                                             peer = selectedPeer,
                                             peerActiveTransfers = peerActive,
                                             showBackButton = false,
+                                            debugMode = isDebugUi,
                                             onBack = {},
                                             onLaunchSystemFilePicker = {
                                                 pendingFileTargetPeerId = selectedPeer.deviceId
                                                 documentPickerLauncher.launch(arrayOf("*/*"))
+                                            },
+                                            onLaunchMediaPicker = {
+                                                pendingMultiUploadPeerId = selectedPeer.deviceId
+                                                mediaPickerLauncher.launch(
+                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                                )
                                             },
                                             onSendPresetPayload = { name, size ->
                                                 viewModel.sendFilePayload(selectedPeer.deviceId, name, size)
@@ -513,10 +614,17 @@ fun ContextAllAppShell(
                                     peer = selectedPeer,
                                     peerActiveTransfers = peerActive,
                                     showBackButton = true,
+                                    debugMode = isDebugUi,
                                     onBack = { viewModel.selectTrustedDevice(null) },
                                     onLaunchSystemFilePicker = {
                                         pendingFileTargetPeerId = selectedPeer.deviceId
                                         documentPickerLauncher.launch(arrayOf("*/*"))
+                                    },
+                                    onLaunchMediaPicker = {
+                                        pendingMultiUploadPeerId = selectedPeer.deviceId
+                                        mediaPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                        )
                                     },
                                     onSendPresetPayload = { name, size ->
                                         viewModel.sendFilePayload(selectedPeer.deviceId, name, size)
@@ -547,14 +655,12 @@ fun ContextAllAppShell(
                                         devices = state.devices,
                                         clipboardState = state.clipboardState,
                                         selectedDeviceId = null,
+                                        telemetry = state.telemetry,
+                                        isScanningLan = state.isScanningLan,
+                                        lastDiscoveredDeviceId = state.lastDiscoveredDeviceId,
                                         headerActions = headerActionButtons,
-                                        onBannerClick = {
-                                            if (!state.linkServiceRunning) {
-                                                viewModel.toggleLinkService()
-                                            } else {
-                                                viewModel.toggleLanWifiState()
-                                            }
-                                        },
+                                        onBannerClick = { viewModel.selectTab(TopTab.CONNECTION) },
+                                        onTriggerScan = { viewModel.triggerLanScan() },
                                         onPushSystemClipboard = { viewModel.pushSystemClipboard() },
                                         onPushCustomClipboard = { viewModel.pushCustomClipboardText(it) },
                                         onSelectTrustedDevice = { viewModel.selectTrustedDevice(it.deviceId) },
@@ -566,51 +672,142 @@ fun ContextAllAppShell(
                                 }
                             }
 
+                            TopTab.CONNECTION -> {
+                                ConnectionScreen(
+                                    wifiLanReady = state.wifiLanReady,
+                                    linkServiceRunning = state.linkServiceRunning,
+                                    devices = state.devices,
+                                    telemetry = state.telemetry,
+                                    headerActions = headerActionButtons,
+                                    onToggleLanWifi = { viewModel.toggleLanWifiState() },
+                                    onToggleLinkService = { viewModel.toggleLinkService() },
+                                    onOpenManualConnect = { showManualConnectSheet = true },
+                                    onTogglePeerConnection = { viewModel.labTogglePeerConnection(it) },
+                                    onPairPeer = { viewModel.startPairing(it.deviceId) }
+                                )
+                            }
+
                             TopTab.TRANSFERS -> {
                                 TransfersScreen(
+                                    trustedPeers = trustedPeers,
                                     filePrompts = state.filePrompts,
                                     transfers = state.transfers,
+                                    queuedUploads = state.queuedUploads,
+                                    telemetry = state.telemetry,
+                                    debugMode = isDebugUi,
                                     headerActions = headerActionButtons,
+                                    onPickLocalFiles = { targetId ->
+                                        pendingMultiUploadPeerId = targetId
+                                        multiDocumentPickerLauncher.launch(arrayOf("*/*"))
+                                    },
+                                    onPickMediaFiles = { targetId ->
+                                        pendingMultiUploadPeerId = targetId
+                                        mediaPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                                        )
+                                    },
+                                    onSendTextFile = { targetId, fileName, content ->
+                                        viewModel.uploadTextAsFile(targetId, fileName, content)
+                                    },
+                                    onSendPresetPayload = { targetId, fileName, bytes ->
+                                        viewModel.uploadPresetFromTransfers(targetId, fileName, bytes)
+                                    },
+                                    onNavigateToDevices = { viewModel.selectTab(TopTab.DEVICES) },
                                     onAcceptIncoming = { viewModel.acceptIncomingFile(it) },
                                     onDeclineIncoming = { viewModel.rejectIncomingFile(it) },
+                                    onTogglePauseTransfer = { viewModel.togglePauseTransfer(it) },
                                     onCancelTransfer = { viewModel.cancelTransfer(it) },
                                     onRetryBlockedCommit = { viewModel.retryBlockedCommit(it) },
+                                    onRemoveQueuedUpload = { viewModel.removeQueuedUpload(it) },
+                                    onClearQueuedUploads = { viewModel.clearQueuedUploads() },
+                                    onResendCompleted = { viewModel.resendCompletedTransfer(it) },
                                     onClearCompleted = { viewModel.clearCompletedTransfers() }
                                 )
                             }
 
                             TopTab.THIS_DEVICE -> {
-                                ThisDeviceScreen(
-                                    localDisplayName = state.localDisplayName,
-                                    localDeviceId = state.localDeviceId,
-                                    darkTheme = state.darkTheme,
-                                    dynamicColor = state.dynamicColor,
-                                    linkServiceRunning = state.linkServiceRunning,
-                                    permissionsGranted = state.runtimePermissionsGranted,
-                                    headerActions = headerActionButtons,
-                                    onSaveDisplayName = { viewModel.updateLocalDisplayName(it) },
-                                    onCopyDeviceId = {
-                                        viewModel.copyTextToSystemClipboard("ContextAll ID", state.localDeviceId)
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                context.getString(R.string.notice_copied_id)
+                                AnimatedContent(
+                                    targetState = showAboutSubPage,
+                                    transitionSpec = {
+                                        if (targetState) {
+                                            (slideInHorizontally(
+                                                initialOffsetX = { it / 4 },
+                                                animationSpec = tween(240)
+                                            ) + fadeIn(tween(220))).togetherWith(
+                                                slideOutHorizontally(
+                                                    targetOffsetX = { -it / 6 },
+                                                    animationSpec = tween(200)
+                                                ) + fadeOut(tween(160))
+                                            )
+                                        } else {
+                                            (slideInHorizontally(
+                                                initialOffsetX = { -it / 6 },
+                                                animationSpec = tween(240)
+                                            ) + fadeIn(tween(220))).togetherWith(
+                                                slideOutHorizontally(
+                                                    targetOffsetX = { it / 4 },
+                                                    animationSpec = tween(200)
+                                                ) + fadeOut(tween(160))
                                             )
                                         }
                                     },
-                                    onToggleDynamicColor = { viewModel.setDynamicColor(it) },
-                                    onToggleDarkTheme = { viewModel.setDarkTheme(it) },
-                                    onToggleLinkService = { viewModel.toggleLinkService() },
-                                    onRequestPermissions = {
-                                        if (requiredRuntimePermissions.isNotEmpty()) {
-                                            permissionsLauncher.launch(requiredRuntimePermissions)
-                                        } else {
-                                            viewModel.onPermissionsResult(true)
-                                        }
-                                    },
-                                    onOpenUserGuide = { viewModel.openOnboardingGuide() },
-                                    onOpenScenarioLab = { showScenarioLab = true },
-                                    onResetIdentity = { viewModel.resetIdentity() }
-                                )
+                                    label = "thisDeviceAboutTransition"
+                                ) { isAboutOpen ->
+                                    if (isAboutOpen) {
+                                        AboutDeviceSubScreen(
+                                            localDeviceId = state.localDeviceId,
+                                            debugMode = isDebugUi,
+                                            headerActions = headerActionButtons,
+                                            onBack = { showAboutSubPage = false },
+                                            onCopyDiagnostics = { report ->
+                                                viewModel.copyTextToSystemClipboard("ContextAll Diagnostics", report)
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        context.getString(R.string.notice_copied_diagnostics)
+                                                    )
+                                                }
+                                            },
+                                            onUnlockDebugMode = { viewModel.setDeveloperUiEnabled(true) }
+                                        )
+                                    } else {
+                                        ThisDeviceScreen(
+                                            localDisplayName = state.localDisplayName,
+                                            localDeviceId = state.localDeviceId,
+                                            darkTheme = state.darkTheme,
+                                            dynamicColor = state.dynamicColor,
+                                            linkServiceRunning = state.linkServiceRunning,
+                                            permissionsGranted = state.runtimePermissionsGranted,
+                                            debugMode = isDebugUi,
+                                            showDeveloperSection = BuildConfig.DEBUG || isDebugUi,
+                                            debugFrameCount = state.debugState.frameLogs.size,
+                                            headerActions = headerActionButtons,
+                                            onSaveDisplayName = { viewModel.updateLocalDisplayName(it) },
+                                            onCopyDeviceId = {
+                                                viewModel.copyTextToSystemClipboard("ContextAll ID", state.localDeviceId)
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        context.getString(R.string.notice_copied_id)
+                                                    )
+                                                }
+                                            },
+                                            onToggleDynamicColor = { viewModel.setDynamicColor(it) },
+                                            onToggleDarkTheme = { viewModel.setDarkTheme(it) },
+                                            onToggleLinkService = { viewModel.toggleLinkService() },
+                                            onRequestPermissions = {
+                                                if (requiredRuntimePermissions.isNotEmpty()) {
+                                                    permissionsLauncher.launch(requiredRuntimePermissions)
+                                                } else {
+                                                    viewModel.onPermissionsResult(true)
+                                                }
+                                            },
+                                            onOpenUserGuide = { viewModel.openOnboardingGuide() },
+                                            onToggleDebugMode = { viewModel.setDeveloperUiEnabled(it) },
+                                            onOpenScenarioLab = { showScenarioLab = true },
+                                            onResetIdentity = { viewModel.resetIdentity() },
+                                            onOpenAboutPage = { showAboutSubPage = true }
+                                        )
+                                    }
+                                }
                             }
                             }
                         }
@@ -624,6 +821,8 @@ fun ContextAllAppShell(
                         onSelect = { tab ->
                             if (tab == TopTab.DEVICES && state.currentTab == TopTab.DEVICES) {
                                 scope.launch { devicesListState.animateScrollToItem(0) }
+                            } else if (tab == TopTab.THIS_DEVICE && state.currentTab == TopTab.THIS_DEVICE && showAboutSubPage) {
+                                showAboutSubPage = false
                             } else {
                                 viewModel.selectTab(tab)
                             }
@@ -658,14 +857,34 @@ fun ContextAllAppShell(
     }
 
     if (showScenarioLab) {
-        ScenarioLabBottomSheet(
+        DeveloperDebugConsoleSheet(
+            debugState = state.debugState,
+            trustedPeers = trustedPeers,
+            activeTransfers = state.transfers,
+            pendingPromptCount = state.filePrompts.size,
             onDismiss = { showScenarioLab = false },
+            onPreviewReleaseUi = { viewModel.setDeveloperUiEnabled(false) },
+            onSwitchSeedProfile = { viewModel.switchSeedProfile(it) },
             onDiscoverPeer = { viewModel.labDiscoverPeer() },
             onInboundPairing = { viewModel.labInboundPairing() },
             onInboundFile = { viewModel.labInboundFile(moveBlocked = false) },
             onInboundBlockedFile = { viewModel.labInboundFile(moveBlocked = true) },
             onRemoteClipboard = { viewModel.labRemoteClipboard() },
-            onFlapConnection = { viewModel.labTogglePeerConnection() }
+            onFlapConnection = { viewModel.labTogglePeerConnection() },
+            onTelemetryBurst = { viewModel.labTelemetryBurst() },
+            onInjectBoundaryPayload = { devId, name, bytes ->
+                viewModel.sendFilePayload(devId, name, bytes)
+            },
+            onCopyFrameLogs = {
+                val count = state.debugState.frameLogs.size
+                viewModel.copyDebugFrameLogs()
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        context.getString(R.string.notice_debug_logs_copied, count)
+                    )
+                }
+            },
+            onClearFrameLogs = { viewModel.clearDebugFrameLogs() }
         )
     }
 
@@ -674,7 +893,9 @@ fun ContextAllAppShell(
         onDismiss = { viewModel.dismissOnboardingGuide() },
         onDismissAndOpenLab = {
             viewModel.dismissOnboardingGuide()
-            showScenarioLab = true
+            if (isDebugUi) {
+                showScenarioLab = true
+            }
         }
     )
 }

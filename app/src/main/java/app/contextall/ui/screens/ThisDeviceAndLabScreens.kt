@@ -1,5 +1,6 @@
 package app.contextall.ui.screens
 
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,22 +10,27 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentPasteGo
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.FolderZip
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyOff
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.MoveToInbox
@@ -34,6 +40,7 @@ import androidx.compose.material.icons.rounded.Password
 import androidx.compose.material.icons.rounded.Radar
 import androidx.compose.material.icons.rounded.Science
 import androidx.compose.material.icons.rounded.SyncProblem
+import androidx.compose.material.icons.rounded.Terminal
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +52,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +66,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.contextall.BuildConfig
 import app.contextall.R
 import app.contextall.core.DisplayNames
 import app.contextall.ui.components.ExpressiveGroupTile
@@ -75,6 +84,9 @@ fun ThisDeviceScreen(
     dynamicColor: Boolean,
     linkServiceRunning: Boolean,
     permissionsGranted: Boolean,
+    debugMode: Boolean = false,
+    showDeveloperSection: Boolean = BuildConfig.DEBUG,
+    debugFrameCount: Int = 0,
     headerActions: @Composable () -> Unit,
     onSaveDisplayName: (String) -> Unit,
     onCopyDeviceId: () -> Unit,
@@ -83,14 +95,23 @@ fun ThisDeviceScreen(
     onToggleLinkService: () -> Unit,
     onRequestPermissions: () -> Unit,
     onOpenUserGuide: () -> Unit,
+    onToggleDebugMode: (Boolean) -> Unit = {},
     onOpenScenarioLab: () -> Unit,
     onResetIdentity: () -> Unit,
+    onOpenAboutPage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
     var draftName by remember(localDisplayName) { mutableStateOf(localDisplayName) }
     val palette = LocalExpressivePalette.current
+    val machineBrief = remember {
+        val brand = Build.MANUFACTURER?.trim().orEmpty().replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase() else it.toString()
+        }
+        val model = Build.MODEL?.trim().orEmpty()
+        listOf(brand, model).filter { it.isNotEmpty() }.distinct().joinToString(" ").ifEmpty { "Android" }
+    }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
@@ -339,85 +360,194 @@ fun ThisDeviceScreen(
                 }
             }
 
-            // Help & Onboarding Guide + Scenario Lab Group
+            // Help & Onboarding Guide (Clean Consumer Section)
             item {
                 SectionHeader(text = stringResource(R.string.local_help_section))
                 Spacer(modifier = Modifier.height(10.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    ExpressiveGroupTile(
-                        index = 0,
-                        count = 2,
-                        onClick = onOpenUserGuide,
-                        modifier = Modifier.testTag("open_user_guide_tile")
+                ExpressiveGroupTile(
+                    index = 0,
+                    count = 1,
+                    onClick = onOpenUserGuide,
+                    modifier = Modifier.testTag("open_user_guide_tile")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ExpressiveIconBadge(
-                                icon = Icons.AutoMirrored.Rounded.HelpOutline,
-                                backgroundColor = palette.skyIconBg,
-                                iconTint = palette.skyIconFg
+                        ExpressiveIconBadge(
+                            icon = Icons.AutoMirrored.Rounded.HelpOutline,
+                            backgroundColor = palette.skyIconBg,
+                            iconTint = palette.skyIconFg
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.local_reopen_guide_title),
+                                style = MaterialTheme.typography.titleSmall
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.local_reopen_guide_title),
-                                    style = MaterialTheme.typography.titleSmall
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.local_reopen_guide_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Developer Options Section (Debug Build / Unlocked Developer Mode)
+            if (showDeveloperSection || debugMode) {
+                val devTileCount = if (debugMode) 3 else 2
+                item {
+                    SectionHeader(text = stringResource(R.string.local_dev_section))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        ExpressiveGroupTile(
+                            index = 0,
+                            count = devTileCount,
+                            onClick = { onToggleDebugMode(!debugMode) }
+                        ) {
+                            LocalSwitchRow(
+                                icon = Icons.Rounded.BugReport,
+                                badgeBg = palette.amberIconBg,
+                                badgeFg = palette.amberIconFg,
+                                title = stringResource(R.string.local_dev_mode_switch_title),
+                                subtitle = stringResource(
+                                    if (debugMode) R.string.local_dev_mode_switch_on_sub
+                                    else R.string.local_dev_mode_switch_off_sub
+                                ),
+                                checked = debugMode,
+                                onCheckedChange = onToggleDebugMode,
+                                testTag = "switch_debug_mode"
+                            )
+                        }
+
+                        ExpressiveGroupTile(
+                            index = 1,
+                            count = devTileCount,
+                            onClick = onOpenScenarioLab,
+                            modifier = Modifier.testTag("open_scenario_lab_tile")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 18.dp, vertical = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ExpressiveIconBadge(
+                                    icon = Icons.Rounded.Science,
+                                    backgroundColor = palette.violetIconBg,
+                                    iconTint = palette.violetIconFg
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = stringResource(R.string.local_reopen_guide_subtitle),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.local_dev_open_console_title),
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = stringResource(
+                                            R.string.local_dev_open_console_sub,
+                                            debugFrameCount
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        }
+
+                        if (debugMode) {
+                            ExpressiveGroupTile(index = 2, count = devTileCount) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 18.dp, vertical = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    ExpressiveIconBadge(
+                                        icon = Icons.Rounded.Terminal,
+                                        backgroundColor = palette.mintIconBg,
+                                        iconTint = palette.mintIconFg
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = stringResource(R.string.local_dev_runtime_diag_label),
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = stringResource(R.string.local_dev_runtime_diag_value),
+                                            fontFamily = JetBrainsMonoFamily,
+                                            fontSize = 11.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
+                }
+            }
 
-                    ExpressiveGroupTile(
-                        index = 1,
-                        count = 2,
-                        onClick = onOpenScenarioLab,
-                        modifier = Modifier.testTag("open_scenario_lab_tile")
+            // About Sub-page Entry Tile
+            item {
+                SectionHeader(text = stringResource(R.string.local_about_section))
+                Spacer(modifier = Modifier.height(10.dp))
+                ExpressiveGroupTile(
+                    index = 0,
+                    count = 1,
+                    onClick = onOpenAboutPage,
+                    modifier = Modifier.testTag("open_about_subpage_tile")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            ExpressiveIconBadge(
-                                icon = Icons.Rounded.Science,
-                                backgroundColor = palette.violetIconBg,
-                                iconTint = palette.violetIconFg
+                        ExpressiveIconBadge(
+                            icon = Icons.Rounded.Info,
+                            backgroundColor = palette.mintIconBg,
+                            iconTint = palette.mintIconFg
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.local_about_entry_title),
+                                style = MaterialTheme.typography.titleSmall
                             )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.local_open_lab_title),
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = stringResource(R.string.local_open_lab_subtitle),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(
+                                    R.string.local_about_entry_subtitle,
+                                    BuildConfig.VERSION_NAME,
+                                    machineBrief
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -590,16 +720,20 @@ fun ScenarioLabBottomSheet(
     onFlapConnection: () -> Unit
 ) {
     val palette = LocalExpressivePalette.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+                .padding(bottom = 20.dp)
                 .testTag("scenario_lab_sheet")
         ) {
             Text(

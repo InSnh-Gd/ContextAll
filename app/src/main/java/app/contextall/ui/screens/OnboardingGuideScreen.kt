@@ -232,42 +232,24 @@ fun OnboardingGuideOverlay(
 
                         val isLastPage = pagerState.currentPage == totalSteps - 1
                         if (isLastPage) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = onDismiss,
-                                    shape = CircleShape,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(54.dp)
-                                        .testTag("onboarding_finish_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = stringResource(R.string.guide_finish_button),
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                }
-                                FilledTonalButton(
-                                    onClick = onDismissAndOpenLab,
-                                    shape = CircleShape,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(48.dp)
-                                        .testTag("onboarding_try_lab_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Science,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(text = stringResource(R.string.guide_try_lab_button))
-                                }
+                            Button(
+                                onClick = onDismiss,
+                                shape = CircleShape,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(54.dp)
+                                    .testTag("onboarding_finish_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.guide_finish_button),
+                                    style = MaterialTheme.typography.titleSmall
+                                )
                             }
                         } else {
                             Row(

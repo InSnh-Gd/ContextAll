@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,12 +23,18 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoveToInbox
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.ScheduleSend
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -36,7 +43,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -49,29 +59,99 @@ import app.contextall.R
 import app.contextall.core.ProtocolLimits
 import app.contextall.core.formatByteSize
 import app.contextall.model.FilePromptSnapshot
+import app.contextall.model.PeerDeviceSnapshot
+import app.contextall.model.QueuedUploadSnapshot
+import app.contextall.model.SessionTelemetrySnapshot
 import app.contextall.model.TransferDirection
 import app.contextall.model.TransferSnapshot
 import app.contextall.ui.components.ExpressiveGapProgressBar
 import app.contextall.ui.components.ExpressiveGroupTile
 import app.contextall.ui.components.ExpressiveIconBadge
 import app.contextall.ui.components.ExpressiveScreenHeader
+import app.contextall.ui.components.TransferTelemetrySummaryStrip
+import app.contextall.ui.components.TransferUploadHubCard
 import app.contextall.ui.theme.JetBrainsMonoFamily
 import app.contextall.ui.theme.LocalExpressivePalette
 
+private enum class TransferListFilter {
+    ALL,
+    SEND,
+    RECEIVE,
+    COMPLETED
+}
+
 @Composable
 fun TransfersScreen(
+    trustedPeers: List<PeerDeviceSnapshot>,
     filePrompts: List<FilePromptSnapshot>,
     transfers: List<TransferSnapshot>,
+    queuedUploads: List<QueuedUploadSnapshot>,
+    telemetry: SessionTelemetrySnapshot,
+    debugMode: Boolean = false,
     headerActions: @Composable () -> Unit,
+    onPickLocalFiles: (targetDeviceId: String) -> Unit,
+    onPickMediaFiles: (targetDeviceId: String) -> Unit,
+    onSendTextFile: (targetDeviceId: String, fileName: String, content: String) -> Unit,
+    onSendPresetPayload: (targetDeviceId: String, fileName: String, totalBytes: Long) -> Unit,
+    onNavigateToDevices: () -> Unit,
     onAcceptIncoming: (String) -> Unit,
     onDeclineIncoming: (String) -> Unit,
+    onTogglePauseTransfer: (String) -> Unit,
     onCancelTransfer: (String) -> Unit,
     onRetryBlockedCommit: (String) -> Unit,
+    onRemoveQueuedUpload: (String) -> Unit,
+    onClearQueuedUploads: () -> Unit,
+    onResendCompleted: (String) -> Unit,
     onClearCompleted: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val active = remember(transfers) { transfers.filterNot { it.completed } }
-    val completed = remember(transfers) { transfers.filter { it.completed } }
+    var selectedFilter by remember { mutableStateOf(TransferListFilter.ALL) }
+
+    val allSendCount = remember(transfers, queuedUploads) {
+        transfers.count { it.direction == TransferDirection.SEND } + queuedUploads.size
+    }
+    val allReceiveCount = remember(transfers, filePrompts) {
+        transfers.count { it.direction == TransferDirection.RECEIVE } + filePrompts.size
+    }
+    val allCompletedCount = remember(transfers) {
+        transfers.count { it.completed }
+    }
+    val totalItemCount = remember(transfers, filePrompts, queuedUploads) {
+        transfers.size + filePrompts.size + queuedUploads.size
+    }
+
+    val visiblePrompts = remember(filePrompts, selectedFilter) {
+        when (selectedFilter) {
+            TransferListFilter.ALL, TransferListFilter.RECEIVE -> filePrompts
+            TransferListFilter.SEND, TransferListFilter.COMPLETED -> emptyList()
+        }
+    }
+
+    val visibleActive = remember(transfers, selectedFilter) {
+        val activeOnly = transfers.filterNot { it.completed }
+        when (selectedFilter) {
+            TransferListFilter.ALL -> activeOnly
+            TransferListFilter.SEND -> activeOnly.filter { it.direction == TransferDirection.SEND }
+            TransferListFilter.RECEIVE -> activeOnly.filter { it.direction == TransferDirection.RECEIVE }
+            TransferListFilter.COMPLETED -> emptyList()
+        }
+    }
+
+    val visibleQueued = remember(queuedUploads, selectedFilter) {
+        when (selectedFilter) {
+            TransferListFilter.ALL, TransferListFilter.SEND -> queuedUploads
+            TransferListFilter.RECEIVE, TransferListFilter.COMPLETED -> emptyList()
+        }
+    }
+
+    val visibleCompleted = remember(transfers, selectedFilter) {
+        val completedOnly = transfers.filter { it.completed }
+        when (selectedFilter) {
+            TransferListFilter.ALL, TransferListFilter.COMPLETED -> completedOnly
+            TransferListFilter.SEND -> completedOnly.filter { it.direction == TransferDirection.SEND }
+            TransferListFilter.RECEIVE -> completedOnly.filter { it.direction == TransferDirection.RECEIVE }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
@@ -79,8 +159,8 @@ fun TransfersScreen(
                 .fillMaxWidth()
                 .widthIn(max = 640.dp)
                 .testTag("transfers_list"),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 116.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 128.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             item {
                 ExpressiveScreenHeader(
@@ -90,16 +170,10 @@ fun TransfersScreen(
                 )
             }
 
-            if (filePrompts.isEmpty() && active.isEmpty() && completed.isEmpty()) {
-                item {
-                    EmptyTransfersStateCard()
-                }
-            }
-
-            if (filePrompts.isNotEmpty()) {
+            if (visiblePrompts.isNotEmpty()) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        filePrompts.forEach { prompt ->
+                        visiblePrompts.forEach { prompt ->
                             IncomingFilePromptCard(
                                 prompt = prompt,
                                 onAccept = { onAcceptIncoming(prompt.transferId) },
@@ -110,21 +184,89 @@ fun TransfersScreen(
                 }
             }
 
-            if (active.isNotEmpty()) {
+            item {
+                TransferTelemetrySummaryStrip(telemetry = telemetry)
+            }
+
+            item {
+                TransferUploadHubCard(
+                    trustedPeers = trustedPeers,
+                    activeTransfers = transfers.filterNot { it.completed },
+                    debugMode = debugMode,
+                    onPickLocalFiles = onPickLocalFiles,
+                    onPickMediaFiles = onPickMediaFiles,
+                    onSendTextFile = onSendTextFile,
+                    onSendPresetPayload = onSendPresetPayload,
+                    onNavigateToDevices = onNavigateToDevices
+                )
+            }
+
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item {
+                        TransferFilterChip(
+                            label = stringResource(R.string.transfers_filter_all, totalItemCount),
+                            selected = selectedFilter == TransferListFilter.ALL,
+                            onClick = { selectedFilter = TransferListFilter.ALL },
+                            testTag = "transfers_filter_all"
+                        )
+                    }
+                    item {
+                        TransferFilterChip(
+                            label = stringResource(R.string.transfers_filter_send, allSendCount),
+                            selected = selectedFilter == TransferListFilter.SEND,
+                            onClick = { selectedFilter = TransferListFilter.SEND },
+                            testTag = "transfers_filter_send"
+                        )
+                    }
+                    item {
+                        TransferFilterChip(
+                            label = stringResource(R.string.transfers_filter_receive, allReceiveCount),
+                            selected = selectedFilter == TransferListFilter.RECEIVE,
+                            onClick = { selectedFilter = TransferListFilter.RECEIVE },
+                            testTag = "transfers_filter_receive"
+                        )
+                    }
+                    item {
+                        TransferFilterChip(
+                            label = stringResource(R.string.transfers_filter_done, allCompletedCount),
+                            selected = selectedFilter == TransferListFilter.COMPLETED,
+                            onClick = { selectedFilter = TransferListFilter.COMPLETED },
+                            testTag = "transfers_filter_done"
+                        )
+                    }
+                }
+            }
+
+            if (visiblePrompts.isEmpty() &&
+                visibleActive.isEmpty() &&
+                visibleQueued.isEmpty() &&
+                visibleCompleted.isEmpty()
+            ) {
+                item {
+                    EmptyTransfersStateCard(isFiltered = totalItemCount > 0)
+                }
+            }
+
+            if (visibleActive.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        text = stringResource(R.string.transfers_active_section, active.size)
+                        text = stringResource(R.string.transfers_active_section, visibleActive.size)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        active.forEachIndexed { index, item ->
+                        visibleActive.forEachIndexed { index, item ->
                             ExpressiveGroupTile(
                                 index = index,
-                                count = active.size,
+                                count = visibleActive.size,
                                 modifier = Modifier.testTag("transfer_card_${item.transferId}")
                             ) {
                                 ActiveTransferTileContent(
                                     item = item,
+                                    onTogglePause = { onTogglePauseTransfer(item.transferId) },
                                     onCancel = { onCancelTransfer(item.transferId) },
                                     onRetryBlocked = { onRetryBlockedCommit(item.transferId) }
                                 )
@@ -134,7 +276,7 @@ fun TransfersScreen(
                 }
             }
 
-            if (completed.isNotEmpty()) {
+            if (visibleQueued.isNotEmpty()) {
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -142,7 +284,42 @@ fun TransfersScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         SectionHeader(
-                            text = stringResource(R.string.transfers_completed_section, completed.size)
+                            text = stringResource(R.string.transfers_queued_section, visibleQueued.size)
+                        )
+                        TextButton(
+                            onClick = onClearQueuedUploads,
+                            modifier = Modifier.testTag("clear_queued_uploads_button")
+                        ) {
+                            Text(stringResource(R.string.transfers_clear_queued))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        visibleQueued.forEachIndexed { index, queued ->
+                            ExpressiveGroupTile(
+                                index = index,
+                                count = visibleQueued.size,
+                                modifier = Modifier.testTag("queued_upload_${queued.queueId}")
+                            ) {
+                                QueuedUploadRowContent(
+                                    item = queued,
+                                    onRemove = { onRemoveQueuedUpload(queued.queueId) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (visibleCompleted.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        SectionHeader(
+                            text = stringResource(R.string.transfers_completed_section, visibleCompleted.size)
                         )
                         TextButton(
                             onClick = onClearCompleted,
@@ -153,12 +330,17 @@ fun TransfersScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        completed.forEachIndexed { index, item ->
+                        visibleCompleted.forEachIndexed { index, item ->
                             ExpressiveGroupTile(
                                 index = index,
-                                count = completed.size
+                                count = visibleCompleted.size
                             ) {
-                                CompletedTransferRow(item = item)
+                                CompletedTransferRow(
+                                    item = item,
+                                    canResend = item.direction == TransferDirection.SEND &&
+                                        trustedPeers.any { it.deviceId == item.deviceId },
+                                    onResend = { onResendCompleted(item.transferId) }
+                                )
                             }
                         }
                     }
@@ -169,7 +351,34 @@ fun TransfersScreen(
 }
 
 @Composable
-private fun EmptyTransfersStateCard() {
+private fun TransferFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium
+            )
+        },
+        shape = CircleShape,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ),
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .testTag(testTag)
+    )
+}
+
+@Composable
+private fun EmptyTransfersStateCard(isFiltered: Boolean) {
     val palette = LocalExpressivePalette.current
     Surface(
         shape = RoundedCornerShape(28.dp),
@@ -177,23 +386,29 @@ private fun EmptyTransfersStateCard() {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(32.dp),
+            modifier = Modifier.padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             ExpressiveIconBadge(
                 icon = Icons.Rounded.SwapVert,
                 backgroundColor = palette.skyIconBg,
                 iconTint = palette.skyIconFg,
-                size = 56.dp
+                size = 54.dp
             )
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = stringResource(R.string.empty_transfers_title),
+                text = stringResource(
+                    if (isFiltered) R.string.transfers_filtered_empty_title
+                    else R.string.empty_transfers_title
+                ),
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = stringResource(R.string.empty_transfers_subtitle),
+                text = stringResource(
+                    if (isFiltered) R.string.transfers_filtered_empty_sub
+                    else R.string.empty_transfers_subtitle
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -304,6 +519,7 @@ private fun IncomingFilePromptCard(
 @Composable
 private fun ActiveTransferTileContent(
     item: TransferSnapshot,
+    onTogglePause: () -> Unit,
     onCancel: () -> Unit,
     onRetryBlocked: () -> Unit
 ) {
@@ -315,7 +531,7 @@ private fun ActiveTransferTileContent(
             MaterialTheme.colorScheme.onErrorContainer,
             Icons.Rounded.ErrorOutline
         )
-        item.waitingReconnect -> Triple(
+        item.pausedByOperator || item.waitingReconnect -> Triple(
             palette.amberIconBg,
             palette.amberIconFg,
             if (item.direction == TransferDirection.SEND) Icons.Rounded.Upload else Icons.Rounded.Download
@@ -357,6 +573,25 @@ private fun ActiveTransferTileContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            if (!item.moveBlocked) {
+                FilledTonalIconButton(
+                    onClick = onTogglePause,
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .testTag("pause_resume_transfer_${item.transferId}")
+                ) {
+                    Icon(
+                        imageVector = if (item.pausedByOperator) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                        contentDescription = stringResource(
+                            if (item.pausedByOperator) R.string.transfers_resume_desc
+                            else R.string.transfers_pause_desc
+                        ),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
             FilledTonalIconButton(
                 onClick = onCancel,
                 modifier = Modifier
@@ -375,7 +610,7 @@ private fun ActiveTransferTileContent(
             progress = item.progressFraction,
             activeColor = when {
                 item.moveBlocked -> MaterialTheme.colorScheme.error
-                item.waitingReconnect -> palette.amberIconFg
+                item.pausedByOperator || item.waitingReconnect -> palette.amberIconFg
                 else -> MaterialTheme.colorScheme.primary
             }
         )
@@ -389,6 +624,7 @@ private fun ActiveTransferTileContent(
                 text = stringResource(
                     when {
                         item.moveBlocked -> R.string.transfers_move_blocked
+                        item.pausedByOperator -> R.string.transfers_paused_status
                         item.waitingReconnect -> R.string.transfers_waiting_reconnect
                         else -> R.string.transfers_segment_progress
                     },
@@ -432,7 +668,63 @@ private fun ActiveTransferTileContent(
 }
 
 @Composable
-private fun CompletedTransferRow(item: TransferSnapshot) {
+private fun QueuedUploadRowContent(
+    item: QueuedUploadSnapshot,
+    onRemove: () -> Unit
+) {
+    val palette = LocalExpressivePalette.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ExpressiveIconBadge(
+            icon = Icons.Rounded.ScheduleSend,
+            backgroundColor = palette.violetIconBg,
+            iconTint = palette.violetIconFg
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.fileName,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = stringResource(
+                    R.string.transfers_queued_item_sub,
+                    item.peerDisplayName,
+                    formatByteSize(item.totalSize),
+                    item.segmentCount
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        FilledTonalIconButton(
+            onClick = onRemove,
+            modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .testTag("remove_queued_${item.queueId}")
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = stringResource(R.string.transfers_remove_queued_desc),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompletedTransferRow(
+    item: TransferSnapshot,
+    canResend: Boolean,
+    onResend: () -> Unit
+) {
     val palette = LocalExpressivePalette.current
     Row(
         modifier = Modifier
@@ -449,18 +741,51 @@ private fun CompletedTransferRow(item: TransferSnapshot) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.savedFileName,
-                style = MaterialTheme.typography.titleSmall
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = if (item.direction == TransferDirection.SEND) {
-                    stringResource(R.string.transfers_completed_send_sub, item.segmentCount)
+                    stringResource(
+                        R.string.transfers_completed_peer_send,
+                        item.peerDisplayName,
+                        formatByteSize(item.totalSize),
+                        item.segmentCount
+                    )
                 } else {
-                    stringResource(R.string.transfers_completed_recv_sub, formatByteSize(item.totalSize))
+                    stringResource(
+                        R.string.transfers_completed_peer_recv,
+                        item.peerDisplayName,
+                        formatByteSize(item.totalSize)
+                    )
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        if (canResend) {
+            Spacer(modifier = Modifier.width(8.dp))
+            FilledTonalButton(
+                onClick = onResend,
+                shape = CircleShape,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .testTag("resend_completed_${item.transferId}")
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Replay,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.transfers_resend_button),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
         }
     }
 }

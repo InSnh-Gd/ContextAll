@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Archive
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.NoteAdd
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.UploadFile
@@ -43,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,9 +79,11 @@ fun PeerDetailScreen(
     peer: PeerDeviceSnapshot,
     peerActiveTransfers: List<TransferSnapshot>,
     showBackButton: Boolean,
+    debugMode: Boolean = false,
     onBack: () -> Unit,
     onLaunchSystemFilePicker: () -> Unit,
-    onSendPresetPayload: (fileName: String, sizeBytes: Long) -> Unit,
+    onLaunchMediaPicker: () -> Unit = {},
+    onSendPresetPayload: (fileName: String, sizeBytes: Long) -> Unit = { _, _ -> },
     onTogglePeerConnection: () -> Unit,
     onCopyPeerId: () -> Unit,
     onClipboardToggle: (Boolean) -> Unit,
@@ -384,12 +391,17 @@ fun PeerDetailScreen(
     if (showSendSheet) {
         SendFileOptionsSheet(
             peerName = peer.displayName,
+            debugMode = debugMode,
             onDismiss = { showSendSheet = false },
             onPickSystemDocument = {
                 showSendSheet = false
                 onLaunchSystemFilePicker()
             },
-            onSendPreset = { name, bytes ->
+            onPickMedia = {
+                showSendSheet = false
+                onLaunchMediaPicker()
+            },
+            onSelectDebugPayload = { name, bytes ->
                 showSendSheet = false
                 onSendPresetPayload(name, bytes)
             }
@@ -429,21 +441,27 @@ fun PeerDetailScreen(
 @Composable
 private fun SendFileOptionsSheet(
     peerName: String,
+    debugMode: Boolean,
     onDismiss: () -> Unit,
     onPickSystemDocument: () -> Unit,
-    onSendPreset: (String, Long) -> Unit
+    onPickMedia: () -> Unit,
+    onSelectDebugPayload: (fileName: String, sizeBytes: Long) -> Unit
 ) {
     val palette = LocalExpressivePalette.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp)
+                .padding(bottom = 20.dp)
                 .testTag("send_file_sheet")
         ) {
             Text(
@@ -463,7 +481,7 @@ private fun SendFileOptionsSheet(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 ExpressiveGroupTile(
                     index = 0,
-                    count = 5,
+                    count = 2,
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     onClick = onPickSystemDocument,
                     modifier = Modifier.testTag("pick_system_document_tile")
@@ -484,68 +502,119 @@ private fun SendFileOptionsSheet(
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = stringResource(R.string.send_sheet_pick_system_sub),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.82f)
                             )
                         }
                     }
                 }
 
-                SendPresetRow(
+                ExpressiveGroupTile(
                     index = 1,
-                    count = 5,
-                    icon = Icons.Rounded.Archive,
-                    badgeBg = palette.skyIconBg,
-                    badgeFg = palette.skyIconFg,
-                    label = stringResource(R.string.send_sheet_preset_small),
-                    testTag = "send_preset_small",
-                    onClick = { onSendPreset("diagnostics.tar.gz", 18_400_000L) }
+                    count = 2,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    onClick = onPickMedia,
+                    modifier = Modifier.testTag("pick_media_tile")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ExpressiveIconBadge(
+                            icon = Icons.Rounded.PhotoLibrary,
+                            backgroundColor = palette.skyIconBg,
+                            iconTint = palette.skyIconFg
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = stringResource(R.string.send_sheet_pick_media),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.send_sheet_pick_media_sub),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (debugMode) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    text = stringResource(R.string.debug_payload_section_header),
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 11.5.sp,
+                    color = palette.amberIconFg,
+                    modifier = Modifier.padding(horizontal = 6.dp)
                 )
-                SendPresetRow(
-                    index = 2,
-                    count = 5,
-                    icon = Icons.Rounded.Storage,
-                    badgeBg = palette.violetIconBg,
-                    badgeFg = palette.violetIconFg,
-                    label = stringResource(R.string.send_sheet_preset_large),
-                    testTag = "send_preset_large",
-                    onClick = { onSendPreset("rootfs-arm64.img", 142_600_000L) }
-                )
-                SendPresetRow(
-                    index = 3,
-                    count = 5,
-                    icon = Icons.Rounded.NoteAdd,
-                    badgeBg = palette.mintIconBg,
-                    badgeFg = palette.mintIconFg,
-                    label = stringResource(R.string.send_sheet_preset_zero),
-                    testTag = "send_preset_zero",
-                    onClick = { onSendPreset(".ready", 0L) }
-                )
-                SendPresetRow(
-                    index = 4,
-                    count = 5,
-                    icon = Icons.Rounded.WarningAmber,
-                    badgeBg = MaterialTheme.colorScheme.errorContainer,
-                    badgeFg = MaterialTheme.colorScheme.onErrorContainer,
-                    label = stringResource(R.string.send_sheet_preset_oversize),
-                    testTag = "send_preset_oversize",
-                    onClick = { onSendPreset("dataset-raw.bin", 1_120_000_000L) }
-                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    DebugSendPayloadTile(
+                        index = 0,
+                        count = 4,
+                        icon = Icons.Rounded.Archive,
+                        badgeBg = palette.skyIconBg,
+                        badgeFg = palette.skyIconFg,
+                        title = stringResource(R.string.send_sheet_preset_small),
+                        subtitle = stringResource(R.string.debug_payload_small_sub),
+                        testTag = "send_preset_small_tile",
+                        onClick = { onSelectDebugPayload("diagnostics.tar.gz", 18_400_000L) }
+                    )
+                    DebugSendPayloadTile(
+                        index = 1,
+                        count = 4,
+                        icon = Icons.Rounded.Storage,
+                        badgeBg = palette.violetIconBg,
+                        badgeFg = palette.violetIconFg,
+                        title = stringResource(R.string.send_sheet_preset_large),
+                        subtitle = stringResource(R.string.debug_payload_large_sub),
+                        testTag = "send_preset_large_tile",
+                        onClick = { onSelectDebugPayload("rootfs-arm64.img", 142_600_000L) }
+                    )
+                    DebugSendPayloadTile(
+                        index = 2,
+                        count = 4,
+                        icon = Icons.Rounded.NoteAdd,
+                        badgeBg = palette.mintIconBg,
+                        badgeFg = palette.mintIconFg,
+                        title = stringResource(R.string.send_sheet_preset_zero),
+                        subtitle = stringResource(R.string.debug_payload_zero_sub),
+                        testTag = "send_preset_zero_tile",
+                        onClick = { onSelectDebugPayload(".ready", 0L) }
+                    )
+                    DebugSendPayloadTile(
+                        index = 3,
+                        count = 4,
+                        icon = Icons.Rounded.WarningAmber,
+                        badgeBg = MaterialTheme.colorScheme.errorContainer,
+                        badgeFg = MaterialTheme.colorScheme.onErrorContainer,
+                        title = stringResource(R.string.send_sheet_preset_oversize),
+                        subtitle = stringResource(R.string.debug_payload_oversize_sub),
+                        testTag = "send_preset_oversize_tile",
+                        onClick = { onSelectDebugPayload("dataset-raw.bin", 1_120_000_000L) }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SendPresetRow(
+private fun DebugSendPayloadTile(
     index: Int,
     count: Int,
     icon: ImageVector,
     badgeBg: Color,
     badgeFg: Color,
-    label: String,
+    title: String,
+    subtitle: String,
     testTag: String,
     onClick: () -> Unit
 ) {
@@ -557,12 +626,20 @@ private fun SendPresetRow(
         modifier = Modifier.testTag(testTag)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ExpressiveIconBadge(icon = icon, backgroundColor = badgeBg, iconTint = badgeFg, size = 40.dp)
-            Spacer(modifier = Modifier.width(14.dp))
-            Text(text = label, style = MaterialTheme.typography.titleSmall)
+            ExpressiveIconBadge(icon = icon, backgroundColor = badgeBg, iconTint = badgeFg, size = 38.dp)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = subtitle,
+                    fontFamily = JetBrainsMonoFamily,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

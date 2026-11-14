@@ -2,6 +2,7 @@ package app.contextall.model
 
 enum class TopTab {
     DEVICES,
+    CONNECTION,
     TRANSFERS,
     THIS_DEVICE
 }
@@ -78,7 +79,8 @@ data class PairingPromptSnapshot(
     val code: String,
     val remainingMilliseconds: Long,
     val localAccepted: Boolean = false,
-    val remoteAccepted: Boolean = false
+    val remoteAccepted: Boolean = false,
+    val initiatedLocally: Boolean = true
 ) {
     val remainingSeconds: Int
         get() = ((remainingMilliseconds + 999L) / 1000L).toInt().coerceIn(0, 60)
@@ -115,6 +117,7 @@ data class TransferSnapshot(
     val completedSegments: Int,
     val segmentCount: Int,
     val waitingReconnect: Boolean = false,
+    val pausedByOperator: Boolean = false,
     val moveBlocked: Boolean = false,
     val completed: Boolean = false
 ) {
@@ -124,6 +127,65 @@ data class TransferSnapshot(
             segmentCount <= 0 -> 1f
             else -> (completedSegments.toFloat() / segmentCount.toFloat()).coerceIn(0f, 1f)
         }
+}
+
+data class OutgoingFileSpec(
+    val fileName: String,
+    val totalBytes: Long
+)
+
+data class QueuedUploadSnapshot(
+    val queueId: String,
+    val deviceId: String,
+    val peerDisplayName: String,
+    val fileName: String,
+    val totalSize: Long,
+    val segmentCount: Int
+)
+
+data class TelemetryBucketSnapshot(
+    val label: String,
+    val connectionAttempts: Int,
+    val connectionSucceeded: Int,
+    val uploadBytes: Long,
+    val downloadBytes: Long
+) {
+    val connectionSuccessRate: Float
+        get() = if (connectionAttempts <= 0) {
+            100f
+        } else {
+            ((connectionSucceeded.toFloat() / connectionAttempts.toFloat()) * 100f).coerceIn(0f, 100f)
+        }
+
+    val totalBytes: Long
+        get() = uploadBytes + downloadBytes
+}
+
+data class SessionTelemetrySnapshot(
+    val buckets: List<TelemetryBucketSnapshot> = emptyList(),
+    val verifiedSegmentsCount: Int = 0
+) {
+    val totalAttempts: Int
+        get() = buckets.sumOf { it.connectionAttempts }
+
+    val totalSucceeded: Int
+        get() = buckets.sumOf { it.connectionSucceeded }
+
+    val overallSuccessRate: Float
+        get() = if (totalAttempts <= 0) {
+            100f
+        } else {
+            ((totalSucceeded.toFloat() / totalAttempts.toFloat()) * 100f).coerceIn(0f, 100f)
+        }
+
+    val totalUploadBytes: Long
+        get() = buckets.sumOf { it.uploadBytes }
+
+    val totalDownloadBytes: Long
+        get() = buckets.sumOf { it.downloadBytes }
+
+    val totalThroughputBytes: Long
+        get() = totalUploadBytes + totalDownloadBytes
 }
 
 data class ClipboardSyncState(
@@ -153,6 +215,29 @@ data class CommandResult(
     val error: String? = null
 )
 
+enum class SeedDataProfile {
+    CONSUMER,
+    DEVELOPER_LAB
+}
+
+data class DebugFrameLogEntry(
+    val seq: Int,
+    val timestampText: String,
+    val category: String,
+    val frameCode: Int,
+    val frameName: String,
+    val summary: String,
+    val ok: Boolean = true
+)
+
+data class EngineDebugState(
+    val developerUiEnabled: Boolean = true,
+    val seedProfile: SeedDataProfile = SeedDataProfile.CONSUMER,
+    val dedupedRequestCount: Int = 0,
+    val committedDownloadCount: Int = 1,
+    val frameLogs: List<DebugFrameLogEntry> = emptyList()
+)
+
 /**
  * Immutable UI snapshot matching ContextAll.Protocol.SnapshotPayload.
  */
@@ -161,6 +246,8 @@ data class SessionSnapshotUi(
     val localDeviceId: String,
     val wifiLanReady: Boolean = true,
     val linkServiceRunning: Boolean = true,
+    val isScanningLan: Boolean = false,
+    val lastDiscoveredDeviceId: String? = null,
     val runtimePermissionsGranted: Boolean = false,
     val darkTheme: Boolean = false,
     val dynamicColor: Boolean = true,
@@ -170,18 +257,25 @@ data class SessionSnapshotUi(
     val pairing: PairingPromptSnapshot? = null,
     val filePrompts: List<FilePromptSnapshot> = emptyList(),
     val transfers: List<TransferSnapshot> = emptyList(),
-    val clipboardState: ClipboardSyncState = ClipboardSyncState()
+    val queuedUploads: List<QueuedUploadSnapshot> = emptyList(),
+    val telemetry: SessionTelemetrySnapshot = SessionTelemetrySnapshot(),
+    val clipboardState: ClipboardSyncState = ClipboardSyncState(),
+    val debugState: EngineDebugState = EngineDebugState()
 )
 
 sealed interface UiEventNotice {
     data class Paired(val peerName: String) : UiEventNotice
     data class PairingTimeout(val peerName: String) : UiEventNotice
     data object PairingRejected : UiEventNotice
+    data object PairingCancelled : UiEventNotice
     data class Unpaired(val peerName: String) : UiEventNotice
     data class SendBusy(val peerName: String) : UiEventNotice
     data object SendTooLarge : UiEventNotice
     data class SendStarted(val peerName: String, val fileName: String, val segments: Int) : UiEventNotice
     data object SendHeldOffline : UiEventNotice
+    data class FilesQueued(val count: Int, val peerName: String) : UiEventNotice
+    data class TransferPaused(val fileName: String) : UiEventNotice
+    data class TransferResumed(val fileName: String) : UiEventNotice
     data class InboundAutoAccepted(val peerName: String, val fileName: String) : UiEventNotice
     data class InboundTimeout(val peerName: String) : UiEventNotice
     data class TransferCompleted(val fileName: String) : UiEventNotice
@@ -197,4 +291,9 @@ sealed interface UiEventNotice {
     data class ManualEndpointReconnected(val peerName: String, val endpoint: String) : UiEventNotice
     data object ManualConnectUnavailable : UiEventNotice
     data object ManualInvalidEndpoint : UiEventNotice
+    data class DebugSeedSwitched(val isDeveloperProfile: Boolean) : UiEventNotice
+    data class CopiedDebugLogs(val count: Int) : UiEventNotice
+    data object DebugLogsCleared : UiEventNotice
+    data object DebugModeUnlocked : UiEventNotice
+    data object DebugPreviewingRelease : UiEventNotice
 }
