@@ -303,7 +303,7 @@ public sealed class ClipboardNode
             return;
         }
 
-        var hash = Convert.ToHexString(SHA256.HashData(assembly.Buffer)).ToLowerInvariant();
+        var hash = Convert.ToHexString(PlatformCrypto.Sha256(assembly.Buffer)).ToLowerInvariant();
         assemblies.Remove(streamId);
         if (!mutual || hash != assembly.Hash)
         {
@@ -338,7 +338,7 @@ public sealed class ClipboardNode
 
         var bytes = Encoding.UTF8.GetBytes(text);
         var streamId = nextStream++;
-        var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        var hash = Convert.ToHexString(PlatformCrypto.Sha256(bytes)).ToLowerInvariant();
         var header = new DeltaPayload(
             DeviceId,
             sequence,

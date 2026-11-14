@@ -411,7 +411,7 @@ public sealed class TransferBook
             return;
         }
 
-        var expected = SHA256.HashData(data.Span);
+        var expected = PlatformCrypto.Sha256(data.Span);
         if (!expected.AsSpan().SequenceEqual(hash))
         {
             outcomes.Add((peerId, "checksum-failed"));
@@ -576,14 +576,14 @@ public sealed class TransferBook
         var count = content.Length == 0 ? 0 : (content.Length + SegmentSize - 1) / SegmentSize;
         var slot = new TransferSlot
         {
-            TransferId = Convert.ToHexString(SHA256.HashData(Guid.NewGuid().ToByteArray()))[..32].ToLowerInvariant(),
+            TransferId = Convert.ToHexString(PlatformCrypto.Sha256(Guid.NewGuid().ToByteArray()))[..32].ToLowerInvariant(),
             PeerId = peerId,
             Direction = "send",
             FileName = fileName,
             TotalSize = content.Length,
             SegmentSize = SegmentSize,
             SegmentCount = count,
-            RootSha256 = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(),
+            RootSha256 = Convert.ToHexString(PlatformCrypto.Sha256(content)).ToLowerInvariant(),
             StreamId = nextStream++,
             Accepted = true,
             Bits = new byte[(count + 7) / 8],

@@ -1,12 +1,10 @@
-using System.Security.Cryptography;
-
 namespace ContextAll.Core;
 
 public static class DeviceIds
 {
     public static byte[] Digest(ReadOnlySpan<byte> spki)
     {
-        var hash = SHA256.HashData(spki);
+        var hash = PlatformCrypto.Sha256(spki);
         return hash.AsSpan(0, 16).ToArray();
     }
 
@@ -34,6 +32,6 @@ public static class DeviceIds
         var joined = new byte[first.Length + second.Length];
         first.CopyTo(joined);
         second.CopyTo(joined.AsSpan(first.Length));
-        return Base32.EncodeBits(SHA256.HashData(joined), 30);
+        return Base32.EncodeBits(PlatformCrypto.Sha256(joined), 30);
     }
 }
