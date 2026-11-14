@@ -10,7 +10,7 @@
       "src/ContextAll.Host/ContextAll.Host.csproj",
       "src/ContextAll.App/ContextAll.App.csproj",
       "src/ContextAll.App.Desktop/ContextAll.App.Desktop.csproj",
-      "src/ContextAll.App.Android/ContextAll.App.Android.csproj"
+      "src/ContextAll.Native/ContextAll.Native.csproj"
     ]
   }
 }

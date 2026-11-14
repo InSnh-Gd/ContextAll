@@ -9,7 +9,6 @@
     <Project Path="src/ContextAll.App/ContextAll.App.csproj" />
     <Project Path="src/ContextAll.App.Desktop/ContextAll.App.Desktop.csproj" />
     <Project Path="src/ContextAll.App.Windows/ContextAll.App.Windows.csproj" />
-    <Project Path="src/ContextAll.App.Android/ContextAll.App.Android.csproj" />
     <Project Path="src/ContextAll.Native/ContextAll.Native.csproj" />
   </Folder>
   <Folder Name="/tests/">
