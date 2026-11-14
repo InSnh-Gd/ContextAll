@@ -236,7 +236,7 @@ public sealed class TransferStore
                 }
 
                 open.Position = 0;
-                var openHash = Convert.ToHexString(SHA256.HashData(open)).ToLowerInvariant();
+                var openHash = Convert.ToHexString(PlatformCrypto.Sha256(open)).ToLowerInvariant();
                 if (openHash != slot.RootSha256)
                 {
                     return false;
@@ -248,9 +248,8 @@ public sealed class TransferStore
             }
             else
             {
-                using var sha = SHA256.Create();
                 using var stream = File.OpenRead(part);
-                var hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+                var hash = Convert.ToHexString(PlatformCrypto.Sha256(stream)).ToLowerInvariant();
                 if (hash != slot.RootSha256)
                 {
                     return false;

@@ -1,6 +1,6 @@
 using System.Buffers;
-using System.Security.Cryptography;
 using System.Text.Json.Serialization.Metadata;
+using ContextAll.Core;
 using ContextAll.Protocol;
 
 namespace ContextAll.Session;
@@ -23,7 +23,7 @@ public static class FrameMessages
 
     public static Frame Segment(uint streamId, long index, ReadOnlySpan<byte> data)
     {
-        var hash = SHA256.HashData(data);
+        var hash = PlatformCrypto.Sha256(data);
         var length = 36 + data.Length;
         var payload = ArrayPool<byte>.Shared.Rent(length);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(payload, (uint)index);
