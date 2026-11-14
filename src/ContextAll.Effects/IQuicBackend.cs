@@ -19,6 +19,30 @@ public interface IQuicBackend
         CancellationToken cancellationToken = default);
 }
 
+public sealed record PortableCredential(
+    byte[]? PfxBytes,
+    string? CertificatePemPath = null,
+    string? PrivateKeyPemPath = null);
+
+public interface IPortableQuicBackend : IQuicBackend
+{
+    Task<IQuicListener> ListenMutualPortableAsync(
+        IPAddress address,
+        PortableCredential credential,
+        int port = QuicLink.Port,
+        CancellationToken cancellationToken = default);
+
+    Task<(IQuicConnection Connection, byte[] PeerDer)> ConnectMutualPortableAsync(
+        IPEndPoint remote,
+        PortableCredential credential,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IPortableQuicConnection : IQuicConnection
+{
+    byte[]? PeerCertificateDer { get; }
+}
+
 public interface IQuicListener : IAsyncDisposable
 {
     IPEndPoint LocalEndPoint { get; }
