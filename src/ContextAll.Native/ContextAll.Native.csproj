@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAotUsingRuntimePack>true</PublishAotUsingRuntimePack>
+    <NativeLib>Shared</NativeLib>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux-bionic'))">
+    <PublishAot>true</PublishAot>
+    <SelfContained>true</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux-bionic'))">
+    <LinkerArg Include="-Wl,-soname,libcontextall_native.so" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ContextAll.Core\ContextAll.Core.csproj" />
+    <ProjectReference Include="..\ContextAll.Effects\ContextAll.Effects.csproj" />
+    <ProjectReference Include="..\ContextAll.Protocol\ContextAll.Protocol.csproj" />
+    <ProjectReference Include="..\ContextAll.Session\ContextAll.Session.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\ContextAll.App.Android\Transport\AndroidMsQuicBackend.cs" Link="Transport\AndroidMsQuicBackend.cs" />
+  </ItemGroup>
+
+</Project>
