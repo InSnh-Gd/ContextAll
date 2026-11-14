@@ -53,20 +53,19 @@ public static class ManifestInspector
     ];
 
     public static string SourceManifestPath =>
-        Path.Combine(NetworkSandbox.FindRepoRoot(), "src/ContextAll.App.Android/AndroidManifest.xml");
+        Path.Combine(NetworkSandbox.FindRepoRoot(), "app/src/main/AndroidManifest.xml");
 
     public static string? FindLatestMergedManifestPath()
     {
         var repoRoot = NetworkSandbox.FindRepoRoot();
-        var objDir = Path.Combine(repoRoot, "src/ContextAll.App.Android/obj");
-        if (!Directory.Exists(objDir))
+        var intermediatesDir = Path.Combine(repoRoot, "app/build/intermediates");
+        if (!Directory.Exists(intermediatesDir))
         {
             return null;
         }
 
-        var candidates = Directory.GetFiles(objDir, "AndroidManifest.xml", SearchOption.AllDirectories)
-            .Where(f => f.Contains("android/AndroidManifest.xml", StringComparison.OrdinalIgnoreCase) ||
-                        f.Contains("manifest/AndroidManifest.xml", StringComparison.OrdinalIgnoreCase))
+        var candidates = Directory.GetFiles(intermediatesDir, "AndroidManifest.xml", SearchOption.AllDirectories)
+            .Where(f => f.Contains("merged_manifest", StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .ToArray();
 
