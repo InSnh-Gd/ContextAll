@@ -14,7 +14,10 @@ AppImage 的 `AppRun` 在没有参数时启动 `contextall-shell`，参数是 `s
 
 ## Android
 
-`MainActivity` 在页面上放 `ListView`，不用 `PopupMenu`。`AndroidManifest.xml` 声明 `connectedDevice`。`LinkService` 的前台服务类型是 `connectedDevice`。界面通过 `AndroidSession.Run` 进入 `Effects`。
+Android 外壳由 Kotlin Jetpack Compose 应用（`app/`）与 NativeAOT 会话引擎（`ContextAll.Native` / `libcontextall_native.so`）协同实现：
+
+- `ContextAllViewModel` 协调界面状态（`已发现` / `已配对` / `传输` / `本机`）；在生产配置下由 `NativeSessionController` 通过 `NativeSessionJni` 启动进程内 `.NET SessionHost` 与 `AndroidMsQuicBackend`，并由 `NativeCryptoHelper` 管理 P-256 `device.crt`、`device.key`、`device.spki` 及 PKCS#12 凭证；`InProcessSessionEngine` 保留用于 `DEVELOPER_LAB` 演示与测试。
+- `LinkForegroundService`（`app/`）及 `ContextAll.App.Android` 中的 `LinkService` 与 `AndroidManifest.xml` 声明 `connectedDevice` 前台服务类型；`MainActivity`（C# 基线适配器）保留 `ListView` 且不使用 `PopupMenu`，`AndroidSession.Run` 保持对 `Effects` 的入口契约。
 
 ## Windows
 
