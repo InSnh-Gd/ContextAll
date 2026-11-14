@@ -2,20 +2,25 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-android36.0</TargetFramework>
+    <TargetFramework>net10.0-android36.1</TargetFramework>
     <SupportedOSPlatformVersion>31</SupportedOSPlatformVersion>
+    <RuntimeIdentifiers>android-arm64;android-arm;android-x64</RuntimeIdentifiers>
     <ApplicationId>app.contextall</ApplicationId>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ContextAll.Core\ContextAll.Core.csproj" />
     <ProjectReference Include="..\ContextAll.Effects\ContextAll.Effects.csproj" />
+    <ProjectReference Include="..\ContextAll.Protocol\ContextAll.Protocol.csproj" />
+    <ProjectReference Include="..\ContextAll.Session\ContextAll.Session.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" Version="12.1.4" />
+    <PackageReference Include="VpnHood.Net.Quic.MsQuic.AndroidNative" Version="9.0.16" />
   </ItemGroup>
 
 </Project>
