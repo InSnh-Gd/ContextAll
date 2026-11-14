@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Foreground connectedDevice service matching ContextAll.App.Android.LinkService.
+ * Foreground connectedDevice service for the ContextAll Android app.
  */
 class LinkService : Service() {
 
