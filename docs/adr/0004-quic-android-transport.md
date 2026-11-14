@@ -7,3 +7,11 @@ Android 端在应用进程内直接运行会话引擎 `SessionHost`，对端间�
 不为 Android 端提供 TCP、WebSocket、HTTP 或本地套接字等降级传输方案。ContextAll 的会话安全、对端证书互认、帧调度与流状态机建立在 QUIC 的单流与复用语义之上，决策返回的效果在桌面与 Android 端执行完全一致的 16 字节帧协议且不打开 Android 本地通道。若引入 TCP 等降级通道，不仅需要复制一套并行的连接管理、TLS 握手与拆包分帧逻辑，破坏与桌面守护进程间的协议等价性（protocol equivalence），还会成倍增加维护与测试负担。当运行环境报告 `IQuicBackend.IsSupported`（桌面端对应 `QuicListener.IsSupported`）为假时，`QuicLink.Listen` 直接抛出 `quic-unsupported`，绝不静默切换至非 QUIC 传输。
 
 这一决定使桌面守护进程与 Android 应用共享同一套 `ContextAll.Session` 引擎与线级帧协议，代价是 Android 端需维护一层面向 `libmsquic.so` 的 `AndroidMsQuicBackend` 原生回调封装。若未来上游 .NET Android 运行时修复托管 `System.Net.Quic` 对 OpenSSL 符号的耦合，可在不改动上层会话与协议的前提下将 Android 后端切回 `System.Net.Quic`。
+
+## 实现补充（NativeAOT 与零 OpenSSL 证书加载）
+
+Android Compose 外壳（`app/`）通过 `ContextAll.Native`（NativeAOT 编译为 `libcontextall_native.so`）驱动 `SessionHost` 与 `AndroidMsQuicBackend`。由于 `linux-bionic-*` NativeAOT 运行时无法加载系统 `libcrypto.so`，且 `libmsquic.so` 内置 OpenSSL 3 拒绝加载部分 PKCS#12 封装：
+
+- Kotlin 侧 `NativeCryptoHelper` 通过 Android `java.security` 生成并持久化 P-256 身份密钥与自签名证书（`device.key`、`device.crt` PEM 与 `device.spki` DER）。
+- `ContextAll.Core` 提供纯托管 FIPS 180-4 SHA-256（`PlatformCrypto` / `ManagedSha256`）与纯 ASN.1 DER 证书校验（`CertificateChecks`），在 Android NativeAOT 下不依赖系统 OpenSSL。
+- `AndroidMsQuicBackend` 实现 `IPortableQuicBackend`：在存在 `device.crt` 与 `device.key` 路径时优先以 `QUIC_CREDENTIAL_TYPE.CERTIFICATE_FILE` 直接交给 `libmsquic.so` 加载 PEM 证书与私钥（仅提供字节数组时回退至 `CERTIFICATE_PKCS12`），保持 UDP 42461 上与桌面端一致的 QUIC + mTLS 协议等价性。
