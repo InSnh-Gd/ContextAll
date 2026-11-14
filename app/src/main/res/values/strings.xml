@@ -184,7 +184,7 @@
     <string name="notice_unpaired">已取消与「%1$s」的配对</string>
     <string name="notice_send_busy">正在向「%1$s」发送文件，新任务可通过传输页排队发送</string>
     <string name="notice_send_too_large">单个文件暂不支持超过 1 GB</string>
-    <string name="notice_send_started">开始向「%1$s」发送 %2$s</string>
+    <string name="notice_send_started">开始向「%1$s」发送 %2$s（%3$d 段）</string>
     <string name="notice_send_held">对方暂不在线，将在恢复连接后自动开始发送</string>
     <string name="notice_inbound_auto_accepted">正在自动接收来自「%1$s」的 %2$s</string>
     <string name="notice_inbound_timeout">来自「%1$s」的文件接收请求已超时关闭</string>
