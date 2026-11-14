@@ -14,4 +14,4 @@ Android Compose 外壳（`app/`）通过 `ContextAll.Native`（NativeAOT 编译�
 
 - Kotlin 侧 `NativeCryptoHelper` 通过 Android `java.security` 生成并持久化 P-256 身份密钥与自签名证书（`device.key`、`device.crt` PEM 与 `device.spki` DER）。
 - `ContextAll.Core` 提供纯托管 FIPS 180-4 SHA-256（`PlatformCrypto` / `ManagedSha256`）与纯 ASN.1 DER 证书校验（`CertificateChecks`），在 Android NativeAOT 下不依赖系统 OpenSSL。
-- `AndroidMsQuicBackend` 实现 `IPortableQuicBackend`：在存在 `device.crt` 与 `device.key` 路径时优先以 `QUIC_CREDENTIAL_TYPE.CERTIFICATE_FILE` 直接交给 `libmsquic.so` 加载 PEM 证书与私钥（仅提供字节数组时回退至 `CERTIFICATE_PKCS12`），保持 UDP 42461 上与桌面端一致的 QUIC + mTLS 协议等价性。
+- `AndroidMsQuicBackend`（随旧 `.NET Android` 外壳移除后已收归 `ContextAll.Native`，参见 [ADR 0006](0006-kotlin-compose-android-shell.md)）实现 `IPortableQuicBackend`：在存在 `device.crt` 与 `device.key` 路径时优先以 `QUIC_CREDENTIAL_TYPE.CERTIFICATE_FILE` 直接交给 `libmsquic.so` 加载 PEM 证书与私钥（仅提供字节数组时回退至 `CERTIFICATE_PKCS12`），保持 UDP 42461 上与桌面端一致的 QUIC + mTLS 协议等价性。
