@@ -6,12 +6,13 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Channels;
+using ContextAll.Core;
 using ContextAll.Effects;
 using Microsoft.Quic;
 
 namespace ContextAll.App.Android.Transport;
 
-public sealed class AndroidMsQuicBackend : IQuicBackend
+public sealed class AndroidMsQuicBackend : IPortableQuicBackend
 {
     public static readonly AndroidMsQuicBackend Instance = new();
 
@@ -50,7 +51,18 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(CreateListener(address, certificate, port));
+        var credential = new PortableCredential(certificate.Export(X509ContentType.Pfx, "contextall"));
+        return Task.FromResult(CreateListener(address, credential, port));
+    }
+
+    public Task<IQuicListener> ListenMutualPortableAsync(
+        IPAddress address,
+        PortableCredential credential,
+        int port = QuicLink.Port,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(CreateListener(address, credential, port));
     }
 
     public async Task<(IQuicConnection Connection, X509Certificate2 Peer)> ConnectMutualAsync(
@@ -58,18 +70,44 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
         X509Certificate2 certificate,
         CancellationToken cancellationToken = default)
     {
+        var credential = new PortableCredential(certificate.Export(X509ContentType.Pfx, "contextall"));
+        var (connection, peerDer) = await ConnectMutualCoreAsync(remote, credential, cancellationToken).ConfigureAwait(false);
+        if (connection.PeerCertificate is not { } peer)
+        {
+            _ = peerDer;
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw new InvalidOperationException("peer-certificate");
+        }
+
+        return (connection, peer);
+    }
+
+    public async Task<(IQuicConnection Connection, byte[] PeerDer)> ConnectMutualPortableAsync(
+        IPEndPoint remote,
+        PortableCredential credential,
+        CancellationToken cancellationToken = default)
+    {
+        var (connection, peerDer) = await ConnectMutualCoreAsync(remote, credential, cancellationToken).ConfigureAwait(false);
+        return (connection, peerDer);
+    }
+
+    async Task<(MsQuicConnectionImpl Connection, byte[] PeerDer)> ConnectMutualCoreAsync(
+        IPEndPoint remote,
+        PortableCredential credential,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
-        var connection = CreateClientConnection(remote, certificate);
+        var connection = CreateClientConnection(remote, credential);
         try
         {
             await connection.ConnectAsync(remote, cancellationToken).ConfigureAwait(false);
-            if (connection.PeerCertificate is not { } peer)
+            if (connection.PeerCertificateDer is not { Length: > 0 } peerDer)
             {
                 await connection.DisposeAsync().ConfigureAwait(false);
                 throw new InvalidOperationException("peer-certificate");
             }
 
-            return (connection, peer);
+            return (connection, peerDer);
         }
         catch
         {
@@ -78,10 +116,10 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
         }
     }
 
-    unsafe IQuicListener CreateListener(IPAddress address, X509Certificate2 certificate, int port)
+    unsafe IQuicListener CreateListener(IPAddress address, PortableCredential credential, int port)
     {
         var api = GetApiOrThrow();
-        var config = OpenConfiguration(api, registration, certificate, isClient: false, peerBidiStreamCount: 1);
+        var config = OpenConfiguration(api, registration, credential, isClient: false, peerBidiStreamCount: 1);
         try
         {
             return new MsQuicListenerImpl(api, registration, config, new IPEndPoint(address, port));
@@ -93,10 +131,10 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
         }
     }
 
-    unsafe MsQuicConnectionImpl CreateClientConnection(IPEndPoint remote, X509Certificate2 certificate)
+    unsafe MsQuicConnectionImpl CreateClientConnection(IPEndPoint remote, PortableCredential credential)
     {
         var api = GetApiOrThrow();
-        var config = OpenConfiguration(api, registration, certificate, isClient: true, peerBidiStreamCount: 0);
+        var config = OpenConfiguration(api, registration, credential, isClient: true, peerBidiStreamCount: 0);
         try
         {
             return new MsQuicConnectionImpl(api, registration, config, ownsConfig: true, remote);
@@ -134,6 +172,7 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
                 var opened = MsQuic.Open();
                 if (opened == null)
                 {
+                    PlatformCrypto.LogDiagnostic("MsQuic.Open() returned null");
                     supported = false;
                     return;
                 }
@@ -150,6 +189,7 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
                     var status = opened->RegistrationOpen(&regConfig, &reg);
                     if (MsQuic.StatusFailed(status) || reg == null)
                     {
+                        PlatformCrypto.LogDiagnostic($"MsQuic RegistrationOpen failed: 0x{status:X8}");
                         MsQuic.Close(opened);
                         supported = false;
                         return;
@@ -159,9 +199,11 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
                 apiTable = opened;
                 registration = reg;
                 supported = true;
+                PlatformCrypto.LogDiagnostic("MsQuic initialized OK");
             }
-            catch
+            catch (Exception ex)
             {
+                PlatformCrypto.LogDiagnostic($"MsQuic init exception: {ex.GetType().Name} {ex.Message}");
                 supported = false;
             }
         }
@@ -170,7 +212,7 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
     static unsafe QUIC_HANDLE* OpenConfiguration(
         QUIC_API_TABLE* api,
         QUIC_HANDLE* reg,
-        X509Certificate2 certificate,
+        PortableCredential credential,
         bool isClient,
         ushort peerBidiStreamCount)
     {
@@ -206,36 +248,64 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
 
         try
         {
-            var pfx = certificate.Export(X509ContentType.Pfx, "contextall");
-            fixed (byte* pfxPtr = pfx)
-            fixed (byte* pwdPtr = PfxPasswordUtf8)
+            var flags = QUIC_CREDENTIAL_FLAGS.NO_CERTIFICATE_VALIDATION
+                | QUIC_CREDENTIAL_FLAGS.INDICATE_CERTIFICATE_RECEIVED
+                | QUIC_CREDENTIAL_FLAGS.USE_PORTABLE_CERTIFICATES;
+            flags |= isClient
+                ? QUIC_CREDENTIAL_FLAGS.CLIENT
+                : QUIC_CREDENTIAL_FLAGS.REQUIRE_CLIENT_AUTHENTICATION;
+
+            int credStatus;
+            if (!string.IsNullOrWhiteSpace(credential.CertificatePemPath)
+                && !string.IsNullOrWhiteSpace(credential.PrivateKeyPemPath))
             {
-                var pkcs12 = new QUIC_CERTIFICATE_PKCS12
+                var certBytes = Encoding.UTF8.GetBytes(credential.CertificatePemPath + "\0");
+                var keyBytes = Encoding.UTF8.GetBytes(credential.PrivateKeyPemPath + "\0");
+                fixed (byte* certPtr = certBytes)
+                fixed (byte* keyPtr = keyBytes)
                 {
-                    Asn1Blob = pfxPtr,
-                    Asn1BlobLength = (uint)pfx.Length,
-                    PrivateKeyPassword = (sbyte*)pwdPtr,
-                };
-
-                var flags = QUIC_CREDENTIAL_FLAGS.NO_CERTIFICATE_VALIDATION
-                    | QUIC_CREDENTIAL_FLAGS.INDICATE_CERTIFICATE_RECEIVED
-                    | QUIC_CREDENTIAL_FLAGS.USE_PORTABLE_CERTIFICATES;
-                flags |= isClient
-                    ? QUIC_CREDENTIAL_FLAGS.CLIENT
-                    : QUIC_CREDENTIAL_FLAGS.REQUIRE_CLIENT_AUTHENTICATION;
-
-                var cred = new QUIC_CREDENTIAL_CONFIG
-                {
-                    Type = QUIC_CREDENTIAL_TYPE.CERTIFICATE_PKCS12,
-                    Flags = flags,
-                };
-                cred.CertificatePkcs12 = &pkcs12;
-
-                var credStatus = api->ConfigurationLoadCredential(config, &cred);
-                if (MsQuic.StatusFailed(credStatus))
-                {
-                    throw new IOException($"MsQuic ConfigurationLoadCredential failed: 0x{credStatus:X8}");
+                    var certFile = new QUIC_CERTIFICATE_FILE
+                    {
+                        PrivateKeyFile = (sbyte*)keyPtr,
+                        CertificateFile = (sbyte*)certPtr,
+                    };
+                    var cred = new QUIC_CREDENTIAL_CONFIG
+                    {
+                        Type = QUIC_CREDENTIAL_TYPE.CERTIFICATE_FILE,
+                        Flags = flags,
+                    };
+                    cred.CertificateFile = &certFile;
+                    credStatus = api->ConfigurationLoadCredential(config, &cred);
                 }
+            }
+            else if (credential.PfxBytes is { Length: > 0 } pfx)
+            {
+                fixed (byte* pfxPtr = pfx)
+                fixed (byte* pwdPtr = PfxPasswordUtf8)
+                {
+                    var pkcs12 = new QUIC_CERTIFICATE_PKCS12
+                    {
+                        Asn1Blob = pfxPtr,
+                        Asn1BlobLength = (uint)pfx.Length,
+                        PrivateKeyPassword = (sbyte*)pwdPtr,
+                    };
+                    var cred = new QUIC_CREDENTIAL_CONFIG
+                    {
+                        Type = QUIC_CREDENTIAL_TYPE.CERTIFICATE_PKCS12,
+                        Flags = flags,
+                    };
+                    cred.CertificatePkcs12 = &pkcs12;
+                    credStatus = api->ConfigurationLoadCredential(config, &cred);
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException("missing-credential");
+            }
+
+            if (MsQuic.StatusFailed(credStatus))
+            {
+                throw new IOException($"MsQuic ConfigurationLoadCredential failed: 0x{credStatus:X8}");
             }
 
             return config;
@@ -347,7 +417,7 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
                     var startStatus = api->ListenerStart(handle, &alpnBuf, 1, &localAddr);
                     if (MsQuic.StatusFailed(startStatus))
                     {
-                        throw new SocketException((int)SocketError.AddressNotAvailable);
+                        throw new IOException($"MsQuic ListenerStart {listenEndPoint} failed: 0x{startStatus:X8}");
                     }
                 }
 
@@ -499,7 +569,7 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
         }
     }
 
-    sealed class MsQuicConnectionImpl : IQuicConnection
+    sealed class MsQuicConnectionImpl : IPortableQuicConnection
     {
         readonly unsafe QUIC_API_TABLE* api;
         readonly unsafe QUIC_HANDLE* config;
@@ -512,6 +582,7 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
         unsafe QUIC_HANDLE* handle;
         GCHandle selfHandle;
         IPEndPoint? remoteEndPoint;
+        byte[]? peerCertificateDer;
         X509Certificate2? peerCertificate;
         bool shutdownStarted;
         bool closed;
@@ -566,7 +637,12 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
 
         public EndPoint? RemoteEndPoint => remoteEndPoint;
 
-        public X509Certificate2? PeerCertificate => peerCertificate;
+        public byte[]? PeerCertificateDer => peerCertificateDer;
+
+        public X509Certificate2? PeerCertificate =>
+            peerCertificate ??= peerCertificateDer is { Length: > 0 } der
+                ? X509CertificateLoader.LoadCertificate(der)
+                : null;
 
         internal unsafe void ReleaseAbortedBeforeStart()
         {
@@ -713,7 +789,7 @@ public sealed class AndroidMsQuicBackend : IQuicBackend
                         if (certBuf != null && certBuf->Buffer != null && certBuf->Length > 0)
                         {
                             var der = new ReadOnlySpan<byte>(certBuf->Buffer, checked((int)certBuf->Length));
-                            peerCertificate = X509CertificateLoader.LoadCertificate(der);
+                            peerCertificateDer = der.ToArray();
                         }
                     }
                     catch
