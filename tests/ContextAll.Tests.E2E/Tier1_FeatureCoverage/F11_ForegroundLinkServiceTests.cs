@@ -8,15 +8,19 @@ namespace ContextAll.Tests.E2E.Tier1_FeatureCoverage;
 public sealed class F11_ForegroundLinkServiceTests
 {
     static string LinkServiceSourcePath =>
-        Path.Combine(NetworkSandbox.FindRepoRoot(), "src/ContextAll.App.Android/LinkService.cs");
+        Path.Combine(NetworkSandbox.FindRepoRoot(), "app/src/main/java/app/contextall/service/LinkService.kt");
 
     [Fact]
     public void LinkService_Must_Be_Foreground_ConnectedDevice()
     {
-        Assert.True(File.Exists(LinkServiceSourcePath), "LinkService.cs must exist on disk");
+        Assert.True(File.Exists(LinkServiceSourcePath), "LinkService.kt must exist on disk");
         var source = File.ReadAllText(LinkServiceSourcePath);
-        Assert.Contains("TypeConnectedDevice", source);
-        Assert.Contains("Exported = false", source);
+        Assert.Contains("FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE", source);
+
+        var manifest = ManifestInspector.InspectSourceManifest();
+        Assert.True(manifest.ServiceFound);
+        Assert.True(manifest.ServiceExportedFalse);
+        Assert.True(manifest.ServiceHasConnectedDeviceType);
     }
 
     [Fact]

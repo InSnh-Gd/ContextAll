@@ -9,30 +9,29 @@ public sealed class F01_MsQuicNativePackagingTests
     [Fact]
     public void Apk_Requires_Arm64V8a_LibMsQuic_Path()
     {
-        var csprojPath = Path.Combine(NetworkSandbox.FindRepoRoot(), "src/ContextAll.App.Android/ContextAll.App.Android.csproj");
-        Assert.True(File.Exists(csprojPath), "Android csproj must exist on disk");
+        var scriptPath = Path.Combine(NetworkSandbox.FindRepoRoot(), "scripts/build-android-native.sh");
+        Assert.True(File.Exists(scriptPath), "Android native build script must exist on disk");
 
-        var xml = File.ReadAllText(csprojPath);
-        Assert.Contains("android-arm64", xml);
-        Assert.Contains("VpnHood.Net.Quic.MsQuic.AndroidNative", xml);
-
-        var assetsPath = Path.Combine(NetworkSandbox.FindRepoRoot(), "src/ContextAll.App.Android/obj/project.assets.json");
-        if (File.Exists(assetsPath))
-        {
-            var assetsJson = File.ReadAllText(assetsPath);
-            Assert.Contains("VpnHood.Net.Quic.MsQuic.AndroidNative", assetsJson);
-        }
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("arm64-v8a", script);
+        Assert.Contains("VpnHood.Net.Quic.MsQuic.AndroidNative", script);
+        Assert.Contains("libmsquic.so", script);
+        Assert.Contains("libcontextall_native.so", script);
     }
 
     [Fact]
-    public void Apk_Requires_ArmeabiV7a_LibMsQuic_Path()
+    public void Apk_Requires_X86_64_And_Gradle_Jni_Hook()
     {
-        var csprojPath = Path.Combine(NetworkSandbox.FindRepoRoot(), "src/ContextAll.App.Android/ContextAll.App.Android.csproj");
-        Assert.True(File.Exists(csprojPath), "Android csproj must exist on disk");
+        var scriptPath = Path.Combine(NetworkSandbox.FindRepoRoot(), "scripts/build-android-native.sh");
+        var gradlePath = Path.Combine(NetworkSandbox.FindRepoRoot(), "app/build.gradle.kts");
+        Assert.True(File.Exists(scriptPath));
+        Assert.True(File.Exists(gradlePath));
 
-        var xml = File.ReadAllText(csprojPath);
-        Assert.Contains("android-arm", xml);
-        Assert.Contains("VpnHood.Net.Quic.MsQuic.AndroidNative", xml);
+        var script = File.ReadAllText(scriptPath);
+        var gradle = File.ReadAllText(gradlePath);
+        Assert.Contains("x86_64", script);
+        Assert.Contains("buildNativeAndroidLibs", gradle);
+        Assert.Contains("nativeJniLibs", gradle);
     }
 
     [Fact]
@@ -57,8 +56,8 @@ public sealed class F01_MsQuicNativePackagingTests
     public void PageAlignment_For_DirectMmap_Is_At_Least_4KiB_Or_16KiB()
     {
         // Android 15 (API 35+) requires 16KB ELF page alignment for native libraries
-        var csprojPath = Path.Combine(NetworkSandbox.FindRepoRoot(), "src/ContextAll.App.Android/ContextAll.App.Android.csproj");
-        var xml = File.ReadAllText(csprojPath);
-        Assert.True(xml.Contains("VpnHood.Net.Quic.MsQuic.AndroidNative"), "MsQuic native package must be referenced");
+        var scriptPath = Path.Combine(NetworkSandbox.FindRepoRoot(), "scripts/build-android-native.sh");
+        var script = File.ReadAllText(scriptPath);
+        Assert.True(script.Contains("VpnHood.Net.Quic.MsQuic.AndroidNative"), "MsQuic native package must be referenced");
     }
 }

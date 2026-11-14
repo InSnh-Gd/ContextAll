@@ -19,10 +19,10 @@ public sealed class F21_AndroidInstrumentedTests
     [Fact]
     public async Task Instrumented_Harness_Verifies_LinkService_Lifecycle()
     {
-        var linkServicePath = Path.Combine(NetworkSandbox.FindRepoRoot(), "src/ContextAll.App.Android/LinkService.cs");
-        Assert.True(File.Exists(linkServicePath), "LinkService.cs must exist on disk");
+        var linkServicePath = Path.Combine(NetworkSandbox.FindRepoRoot(), "app/src/main/java/app/contextall/service/LinkService.kt");
+        Assert.True(File.Exists(linkServicePath), "LinkService.kt must exist on disk");
         var code = File.ReadAllText(linkServicePath);
-        Assert.Contains("TypeConnectedDevice", code);
+        Assert.Contains("FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE", code);
 
         await using var harness = new InProcessServiceHarness();
         await harness.StartInProcessSessionAsync();
