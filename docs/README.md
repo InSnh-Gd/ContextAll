@@ -37,3 +37,4 @@ capability 的目录名就是文档文件名。
 - [ADR 0003](adr/0003-shared-effects.md)：共享效果放在一个模块里。
 - [ADR 0004](adr/0004-quic-android-transport.md)：Android 端采用 QUIC 且不设降级传输。
 - [ADR 0005](adr/0005-session-layer-split.md)：会话层与底层效果解耦独立。
+- [ADR 0006](adr/0006-kotlin-compose-android-shell.md)：Android 端采用 Kotlin Compose 外壳并移除旧 .NET UI。
