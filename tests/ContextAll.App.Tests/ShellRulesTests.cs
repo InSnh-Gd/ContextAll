@@ -46,11 +46,11 @@ public sealed class ShellRulesTests
         Assert.Contains("<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>", project, StringComparison.Ordinal);
         Assert.Contains("<PublishTrimmed>false</PublishTrimmed>", project, StringComparison.Ordinal);
         Assert.Contains("<PublishSingleFile>false</PublishSingleFile>", project, StringComparison.Ordinal);
-        var manifest = File.ReadAllText(Path.Combine(root, "src/ContextAll.App.Android/AndroidManifest.xml"));
+        var manifest = File.ReadAllText(Path.Combine(root, "app/src/main/AndroidManifest.xml"));
         Assert.Contains("connectedDevice", manifest, StringComparison.Ordinal);
-        var activity = File.ReadAllText(Path.Combine(root, "src/ContextAll.App.Android/MainActivity.cs"));
-        Assert.Contains("ListView", activity, StringComparison.Ordinal);
+        var activity = File.ReadAllText(Path.Combine(root, "app/src/main/java/app/contextall/MainActivity.kt"));
         Assert.DoesNotContain("PopupMenu", activity, StringComparison.Ordinal);
+        Assert.True(Directory.Exists(Path.Combine(root, "app/src/main/java/app/contextall/ui/screens")));
     }
 
     static string RepoRoot()
