@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using LanguageExt;
@@ -37,15 +38,96 @@ public static class CertificateChecks
         return key.ExportSubjectPublicKeyInfo();
     }
 
+    public static byte[]? LeafSpki(ReadOnlySpan<byte> certificateDer)
+    {
+        if (certificateDer.IsEmpty)
+        {
+            return null;
+        }
+
+        try
+        {
+            var certReader = new AsnReader(certificateDer.ToArray(), AsnEncodingRules.DER);
+            var certSeq = certReader.ReadSequence();
+            if (certReader.HasData)
+            {
+                return null;
+            }
+
+            var tbsSeq = certSeq.ReadSequence();
+            var versionTag = new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true);
+            if (tbsSeq.HasData && tbsSeq.PeekTag().HasSameClassAndValue(versionTag))
+            {
+                _ = tbsSeq.ReadEncodedValue();
+            }
+
+            _ = tbsSeq.ReadIntegerBytes();
+            _ = tbsSeq.ReadSequence();
+            _ = tbsSeq.ReadSequence();
+            _ = tbsSeq.ReadSequence();
+            _ = tbsSeq.ReadSequence();
+
+            var spkiBytes = tbsSeq.PeekEncodedValue().ToArray();
+            var spkiSeq = tbsSeq.ReadSequence();
+            var algSeq = spkiSeq.ReadSequence();
+            var algOid = algSeq.ReadObjectIdentifier();
+            var curveOid = algSeq.ReadObjectIdentifier();
+            if (algSeq.HasData)
+            {
+                return null;
+            }
+
+            var keyBits = spkiSeq.ReadBitString(out var unusedBitCount);
+            if (unusedBitCount != 0 || spkiSeq.HasData)
+            {
+                return null;
+            }
+
+            if (algOid != "1.2.840.10045.2.1" || curveOid != "1.2.840.10045.3.1.7")
+            {
+                return null;
+            }
+
+            if (keyBits.Length != 65 || keyBits[0] != 0x04)
+            {
+                return null;
+            }
+
+            _ = certSeq.ReadSequence();
+            _ = certSeq.ReadBitString(out _);
+            if (certSeq.HasData)
+            {
+                return null;
+            }
+
+            return spkiBytes;
+        }
+        catch (AsnContentException)
+        {
+            return null;
+        }
+    }
+
     public static Fin<byte[]> SpkiOfLeaf(X509Certificate2 certificate)
     {
         var bytes = LeafSpki(certificate);
         return bytes is null ? Fin.Fail<byte[]>("not-p256") : Fin.Succ(bytes);
     }
 
-    public static CertificateFate Evaluate(X509Certificate2 certificate, TrustEntry? entry)
+    public static Fin<byte[]> SpkiOfLeaf(ReadOnlySpan<byte> certificateDer)
     {
-        var bytes = LeafSpki(certificate);
+        var bytes = LeafSpki(certificateDer);
+        return bytes is null ? Fin.Fail<byte[]>("not-p256") : Fin.Succ(bytes);
+    }
+
+    public static CertificateFate Evaluate(X509Certificate2 certificate, TrustEntry? entry) =>
+        EvaluateSpki(LeafSpki(certificate), entry);
+
+    public static CertificateFate Evaluate(ReadOnlySpan<byte> certificateDer, TrustEntry? entry) =>
+        EvaluateSpki(LeafSpki(certificateDer), entry);
+
+    static CertificateFate EvaluateSpki(byte[]? bytes, TrustEntry? entry)
+    {
         if (bytes is null)
         {
             return CertificateFate.RejectBeforeId;
