@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ContextAll.App.Android.Transport;
+using ContextAll.Native.Transport;
 using ContextAll.Core;
 using ContextAll.Effects;
 using ContextAll.Protocol;

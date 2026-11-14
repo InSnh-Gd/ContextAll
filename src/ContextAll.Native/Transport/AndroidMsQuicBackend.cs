@@ -10,7 +10,7 @@ using ContextAll.Core;
 using ContextAll.Effects;
 using Microsoft.Quic;
 
-namespace ContextAll.App.Android.Transport;
+namespace ContextAll.Native.Transport;
 
 public sealed class AndroidMsQuicBackend : IPortableQuicBackend
 {

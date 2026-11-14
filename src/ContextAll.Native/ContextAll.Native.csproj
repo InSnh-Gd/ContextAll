@@ -25,8 +25,4 @@
     <ProjectReference Include="..\ContextAll.Session\ContextAll.Session.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Include="..\ContextAll.App.Android\Transport\AndroidMsQuicBackend.cs" Link="Transport\AndroidMsQuicBackend.cs" />
-  </ItemGroup>
-
 </Project>
