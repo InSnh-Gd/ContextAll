@@ -83,19 +83,27 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         IClipboardSource? clipboard = null,
         IDiscovery? discovery = null,
         ITransferSink? transferSink = null,
-        int quicPort = QuicLink.Port)
+        int quicPort = QuicLink.Port,
+        IdentityMaterial? preloadedIdentity = null)
     {
         this.clipboard = clipboard;
         this.discovery = discovery;
         this.transferSink = transferSink;
         this.quicPort = quicPort;
 
-        var idStart = IdentityStore.Start(paths.IdentityDirectory);
-        if (!idStart.Ok || idStart.Material is null)
+        if (preloadedIdentity is not null)
         {
-            throw new InvalidOperationException("identity");
+            this.identity = preloadedIdentity;
         }
-        this.identity = idStart.Material;
+        else
+        {
+            var idStart = IdentityStore.Start(paths.IdentityDirectory);
+            if (!idStart.Ok || idStart.Material is null)
+            {
+                throw new InvalidOperationException("identity");
+            }
+            this.identity = idStart.Material;
+        }
         this.settingsPath = paths.SettingsFile;
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         if (string.IsNullOrEmpty(home)) home = Path.GetTempPath();
@@ -712,6 +720,80 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         return true;
     }
 
+    public async Task<(bool Ok, string? DeviceId, string? Error)> ConnectEndpointAsync(
+        IPEndPoint remote,
+        string? alias = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(remote);
+
+        var sessionToken = run?.Token ?? stop.Token;
+        if (disposed || sessionToken.IsCancellationRequested)
+        {
+            return (false, null, "not-running");
+        }
+
+        var addressText = LocalNetwork.Text(remote.Address);
+        lock (Gate)
+        {
+            if (disposed)
+            {
+                return (false, null, "not-running");
+            }
+
+            if (!OnLinkUnlocked(addressText))
+            {
+                return (false, null, "off-link");
+            }
+        }
+
+        using var dial = CancellationTokenSource.CreateLinkedTokenSource(sessionToken, cancellationToken);
+        dial.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            var (connection, peerCert, peerDer) = await ConnectMutualInternalAsync(remote, dial.Token).ConfigureAwait(false);
+            var bytes = peerDer is not null
+                ? CertificateChecks.LeafSpki(peerDer)
+                : peerCert is not null ? CertificateChecks.LeafSpki(peerCert) : null;
+            if (bytes is null)
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+                return (false, null, "bad-certificate");
+            }
+
+            var id = DeviceIds.Text(bytes);
+            if (id == DeviceIds.Text(identity.Spki))
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+                return (false, null, "self");
+            }
+
+            var digest = DeviceIds.Digest(bytes);
+            lock (Gate)
+            {
+                if (disposed)
+                {
+                    _ = connection.DisposeAsync();
+                    return (false, null, "not-running");
+                }
+
+                seen.Add(id);
+                routes.AddDiscovery(id, digest, addressText, remote.Port, Environment.TickCount64, alias);
+                if (!trust.ContainsKey(id))
+                {
+                    pairingWanted.Add(id);
+                }
+            }
+
+            _ = Attach(connection, peerCert, initiated: true, sessionToken, dialedId: null, dialedAddress: addressText, peerDer: peerDer);
+            return (true, id, null);
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or QuicException or InvalidOperationException or SocketException or AuthenticationException)
+        {
+            return (false, null, "connect-failed");
+        }
+    }
+
     public void Dispose()
     {
         if (disposed)
@@ -761,37 +843,64 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     {
         try
         {
-            var certificate = CertificateFor(identity.Pem);
-            var spki = CertificateChecks.LeafSpki(certificate);
-            var matches = spki is not null && spki.AsSpan().SequenceEqual(identity.Spki);
-            if (!matches)
-            {
-                Console.Error.WriteLine("quic-skipped spki");
-                return;
-            }
-
             if (!QuicLink.Supported)
             {
                 Console.Error.WriteLine("quic-skipped quic-unsupported");
+                PlatformCrypto.LogDiagnostic("quic-skipped quic-unsupported");
                 return;
             }
 
+            Func<IPAddress, CancellationToken, Task<IQuicListener>> listenFactory;
+            if (QuicLink.Backend is IPortableQuicBackend portable && identity.Portable is { } credential)
+            {
+                if (identity.Spki.Length == 0)
+                {
+                    Console.Error.WriteLine("quic-skipped spki");
+                    PlatformCrypto.LogDiagnostic("quic-skipped spki");
+                    return;
+                }
+
+                listenFactory = (address, token) => portable.ListenMutualPortableAsync(address, credential, quicPort, token);
+            }
+            else
+            {
+                var certificate = CertificateFor(identity.Pem);
+                var spki = CertificateChecks.LeafSpki(certificate);
+                var matches = spki is not null && spki.AsSpan().SequenceEqual(identity.Spki);
+                if (!matches)
+                {
+                    Console.Error.WriteLine("quic-skipped spki");
+                    PlatformCrypto.LogDiagnostic("quic-skipped spki");
+                    return;
+                }
+
+                listenFactory = (address, token) => QuicLink.Backend.ListenMutualAsync(address, certificate, quicPort, token);
+            }
+
             listenerSet = new ListenerSet(
-                (address, token) => QuicLink.Backend.ListenMutualAsync(address, certificate, quicPort, token),
+                listenFactory,
                 (connection, token) => Attach(connection, null, initiated: false, token, null, null),
-                message => Console.Error.WriteLine(message),
+                message =>
+                {
+                    Console.Error.WriteLine(message);
+                    PlatformCrypto.LogDiagnostic(message);
+                },
                 cancellationToken);
             await RebuildListenersAsync().ConfigureAwait(false);
             if (listenerSet.Count == 0)
             {
-                Console.Error.WriteLine(QuicLink.Supported ? "quic-skipped no-beacon-address" : "quic-skipped quic-unsupported");
+                var emptyMsg = QuicLink.Supported ? "quic-skipped no-beacon-address" : "quic-skipped quic-unsupported";
+                Console.Error.WriteLine(emptyMsg);
+                PlatformCrypto.LogDiagnostic(emptyMsg);
             }
 
             await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is SocketException or InvalidOperationException or QuicException or IOException or CryptographicException or AuthenticationException or OperationCanceledException)
         {
-            Console.Error.WriteLine("quic-skipped " + ex.GetType().Name + " " + ex.Message);
+            var errMsg = "quic-skipped " + ex.GetType().Name + " " + ex.Message;
+            Console.Error.WriteLine(errMsg);
+            PlatformCrypto.LogDiagnostic(errMsg);
         }
     }
 
@@ -1184,17 +1293,28 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         bool initiated,
         CancellationToken cancellationToken,
         string? dialedId,
-        string? dialedAddress)
+        string? dialedAddress,
+        byte[]? peerDer = null)
     {
         var linked = false;
         try
         {
-            if (peer is null && !QuicLink.TryPeerCertificate(connection, out peer))
+            var der = peerDer ?? (connection as IPortableQuicConnection)?.PeerCertificateDer;
+            byte[]? bytes;
+            if (der is not null)
             {
-                return;
+                bytes = CertificateChecks.LeafSpki(der);
+            }
+            else
+            {
+                if (peer is null && !QuicLink.TryPeerCertificate(connection, out peer))
+                {
+                    return;
+                }
+
+                bytes = CertificateChecks.LeafSpki(peer);
             }
 
-            var bytes = CertificateChecks.LeafSpki(peer);
             if (bytes is null)
             {
                 return;
@@ -1211,7 +1331,21 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                 }
             }
 
-            if (CertificateChecks.Evaluate(peer, entry) != CertificateFate.Continue)
+            CertificateFate fate;
+            if (der is not null)
+            {
+                fate = CertificateChecks.Evaluate(der, entry);
+            }
+            else if (peer is not null)
+            {
+                fate = CertificateChecks.Evaluate(peer, entry);
+            }
+            else
+            {
+                return;
+            }
+
+            if (fate != CertificateFate.Continue)
             {
                 return;
             }
@@ -1561,9 +1695,8 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                     {
                         using var dial = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                         dial.CancelAfter(TimeSpan.FromSeconds(4));
-                        var certificate = CertificateFor(identity.Pem);
-                        var connected = await QuicLink.Backend.ConnectMutualAsync(new IPEndPoint(address, target.Port), certificate, dial.Token).ConfigureAwait(false);
-                        _ = Attach(connected.Connection, connected.Peer, initiated: true, cancellationToken, target.Id, target.Address);
+                        var (connection, peerCert, peerDer) = await ConnectMutualInternalAsync(new IPEndPoint(address, target.Port), dial.Token).ConfigureAwait(false);
+                        _ = Attach(connection, peerCert, initiated: true, cancellationToken, target.Id, target.Address, peerDer);
                     }
                     catch (Exception ex) when (ex is IOException or OperationCanceledException or QuicException or InvalidOperationException or SocketException or AuthenticationException)
                     {
@@ -1722,6 +1855,21 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
         var address = end.Address.IsIPv4MappedToIPv6 ? end.Address.MapToIPv4() : end.Address;
         return address.ToString();
+    }
+
+    async Task<(IQuicConnection Connection, X509Certificate2? PeerCert, byte[]? PeerDer)> ConnectMutualInternalAsync(
+        IPEndPoint remote,
+        CancellationToken cancellationToken)
+    {
+        if (QuicLink.Backend is IPortableQuicBackend portable && identity.Portable is { } credential)
+        {
+            var (connection, peerDer) = await portable.ConnectMutualPortableAsync(remote, credential, cancellationToken).ConfigureAwait(false);
+            return (connection, null, peerDer);
+        }
+
+        var certificate = CertificateFor(identity.Pem);
+        var connected = await QuicLink.Backend.ConnectMutualAsync(remote, certificate, cancellationToken).ConfigureAwait(false);
+        return (connected.Connection, connected.Peer, null);
     }
 
     static X509Certificate2 CertificateFor(string pem)

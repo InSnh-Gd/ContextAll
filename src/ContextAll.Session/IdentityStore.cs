@@ -1,9 +1,14 @@
 using System.Security.Cryptography;
 using ContextAll.Core;
+using ContextAll.Effects;
 
 namespace ContextAll.Session;
 
-public sealed record IdentityMaterial(string Pem, byte[] Spki, string DeviceId);
+public sealed record IdentityMaterial(
+    string Pem,
+    byte[] Spki,
+    string DeviceId,
+    PortableCredential? Portable = null);
 
 public sealed record IdentityStart(bool Ok, IdentityMaterial? Material)
 {
