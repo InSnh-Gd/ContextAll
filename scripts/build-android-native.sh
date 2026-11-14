@@ -61,13 +61,27 @@ fi
 
 export PATH="$LLVM_BIN:$PATH"
 
+MSQUIC_AAR_VERSION="9.0.16"
 find_msquic_aar() {
   find "${NUGET_PACKAGES:-$HOME/.nuget/packages}/vpnhood.net.quic.msquic.androidnative" -name "VpnHood.Net.Quic.MsQuic.AndroidNative.aar" 2>/dev/null | sort -V | tail -n 1 || true
 }
 
+TMP_AAR_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_AAR_DIR"' EXIT
+
 AAR_PATH="$(find_msquic_aar)"
 if [[ -z "$AAR_PATH" ]]; then
-  dotnet restore "$ROOT_DIR/src/ContextAll.App.Android/ContextAll.App.Android.csproj"
+  cat >"$TMP_AAR_DIR/msquic-restore.csproj" <<EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="VpnHood.Net.Quic.MsQuic.AndroidNative" Version="$MSQUIC_AAR_VERSION" />
+  </ItemGroup>
+</Project>
+EOF
+  dotnet restore "$TMP_AAR_DIR/msquic-restore.csproj"
   AAR_PATH="$(find_msquic_aar)"
 fi
 if [[ -z "$AAR_PATH" ]]; then
@@ -80,8 +94,6 @@ if ! command -v "$JAR_TOOL" >/dev/null 2>&1; then
   JAR_TOOL="jar"
 fi
 
-TMP_AAR_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_AAR_DIR"' EXIT
 (cd "$TMP_AAR_DIR" && "$JAR_TOOL" -xf "$AAR_PATH" jni)
 
 IFS=',' read -ra TARGET_ABIS <<<"$ABIS"
