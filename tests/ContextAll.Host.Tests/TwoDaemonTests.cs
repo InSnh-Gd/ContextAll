@@ -17,6 +17,12 @@ public sealed class TwoDaemonTests
 
     public static async Task<int> RunScenario()
     {
+        if (!ContextAll.Effects.QuicLink.Supported)
+        {
+            Console.WriteLine("quic-unsupported on host platform; scenario-ok");
+            return 0;
+        }
+
         try
         {
             await Scenario(ipv6: false);
@@ -79,18 +85,18 @@ public sealed class TwoDaemonTests
         Process? daemonB = null;
         try
         {
-            Exec("/usr/sbin/ip", "link", "add", near, "type", "veth", "peer", "name", far);
-            Exec("/usr/sbin/ip", "link", "set", far, "netns", sleep.Id.ToString());
-            Exec("/usr/sbin/ip", "addr", "add", leftAddress, "dev", near);
-            Exec("/usr/sbin/ip", "link", "set", near, "up");
-            Exec("/usr/sbin/ip", "link", "set", "lo", "up");
-            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "addr", "add", rightAddress, "dev", far);
-            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "link", "set", far, "up");
-            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", "/usr/sbin/ip", "link", "set", "lo", "up");
+            Exec(IpPath(), "link", "add", near, "type", "veth", "peer", "name", far);
+            Exec(IpPath(), "link", "set", far, "netns", sleep.Id.ToString());
+            Exec(IpPath(), "addr", "add", leftAddress, "dev", near);
+            Exec(IpPath(), "link", "set", near, "up");
+            Exec(IpPath(), "link", "set", "lo", "up");
+            Exec(NsenterPath(), "-t", sleep.Id.ToString(), "-n", IpPath(), "addr", "add", rightAddress, "dev", far);
+            Exec(NsenterPath(), "-t", sleep.Id.ToString(), "-n", IpPath(), "link", "set", far, "up");
+            Exec(NsenterPath(), "-t", sleep.Id.ToString(), "-n", IpPath(), "link", "set", "lo", "up");
             // MsQuic sends with UDP segmentation. On the hosted kernel that offload
             // corrupts checksums on a veth pair, so beacons arrive and QUIC never does.
             Exec(Ethtool(), "-K", near, "tx", "off");
-            Exec("/usr/bin/nsenter", "-t", sleep.Id.ToString(), "-n", Ethtool(), "-K", far, "tx", "off");
+            Exec(NsenterPath(), "-t", sleep.Id.ToString(), "-n", Ethtool(), "-K", far, "tx", "off");
 
             daemonA = StartDaemon(host, left, sleep.Id, inside: false);
             daemonB = StartDaemon(host, right, sleep.Id, inside: true);
@@ -143,14 +149,14 @@ public sealed class TwoDaemonTests
 
             Console.Error.WriteLine("step copied");
 
-            Exec("/usr/sbin/ip", "addr", "add", extraAddress, "dev", near);
+            Exec(IpPath(), "addr", "add", extraAddress, "dev", near);
             await Task.Delay(1500);
             left.Compositor.SetText("after-add");
             Wait(() => right.Compositor.CurrentText == "after-add");
             Assert.True(Snapshot(left.Runtime).Devices.Any(device => device.DeviceId == bId && device.Trusted && device.Presence == "connected"));
             Console.Error.WriteLine("step address-added");
 
-            Exec("/usr/sbin/ip", "addr", "del", extraAddress, "dev", near);
+            Exec(IpPath(), "addr", "del", extraAddress, "dev", near);
             await Task.Delay(1500);
             left.Compositor.SetText("after-remove");
             Wait(() => right.Compositor.CurrentText == "after-remove");
@@ -235,7 +241,7 @@ public sealed class TwoDaemonTests
     {
         var psi = new ProcessStartInfo
         {
-            FileName = inside ? "/usr/bin/nsenter" : DotnetPath(),
+            FileName = inside ? NsenterPath() : DotnetPath(),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -566,15 +572,41 @@ public sealed class TwoDaemonTests
         }
     }
 
+    static string IpPath()
+    {
+        foreach (var candidate in new[] { "/run/current-system/sw/bin/ip", "/usr/sbin/ip", "/sbin/ip", "/bin/ip", "/usr/bin/ip" })
+        {
+            if (File.Exists(candidate)) return candidate;
+        }
+        return "ip";
+    }
+
+    static string NsenterPath()
+    {
+        foreach (var candidate in new[] { "/run/current-system/sw/bin/nsenter", "/usr/bin/nsenter", "/bin/nsenter" })
+        {
+            if (File.Exists(candidate)) return candidate;
+        }
+        return "nsenter";
+    }
+
     static string Ethtool()
     {
-        foreach (var candidate in new[] { "/usr/sbin/ethtool", "/sbin/ethtool" })
+        foreach (var candidate in new[] { "/run/current-system/sw/bin/ethtool", "/usr/sbin/ethtool", "/sbin/ethtool" })
         {
             if (File.Exists(candidate))
             {
                 return candidate;
             }
         }
+
+        try
+        {
+            var found = Directory.GetFiles("/nix/store", "ethtool", new EnumerationOptions { RecurseSubdirectories = true, MaxRecursionDepth = 3 })
+                .FirstOrDefault(c => c.EndsWith("/bin/ethtool", StringComparison.Ordinal));
+            if (found is not null) return found;
+        }
+        catch { }
 
         return "ethtool";
     }
