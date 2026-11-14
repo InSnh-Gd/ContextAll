@@ -91,8 +91,10 @@ src/
   ContextAll.App           Linux Avalonia 视图
   ContextAll.App.Desktop   Linux 图形入口
   ContextAll.App.Windows   WinUI 3 程序
-  ContextAll.App.Android   Android 程序
-tests/                     xUnit 测试
+  ContextAll.Native        Android NativeAOT JNI 引擎与 libmsquic 后端
+app/                       Android Kotlin Jetpack Compose 应用与 Gradle 构建
+scripts/                   E2E、NativeAOT 构建与 git 钩子脚本
+tests/                     xUnit 单元测试与 E2E 规格测试
 packaging/                 AppImage 与 systemd 用户单元
 docs/                      行为文档与 ADR
 openspec/                  需求规格与变更记录

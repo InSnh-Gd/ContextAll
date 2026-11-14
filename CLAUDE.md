@@ -7,13 +7,15 @@ ContextAll shares a plain-text clipboard and sends files between trusted devices
 ## Commands
 
 ```sh
-dotnet test ContextAll.Tests.slnf -c Release        # full suite; same as CI and the pre-push hook
-dotnet test tests/ContextAll.Core.Tests -c Release --filter "FullyQualifiedName~DecisionTests"   # one class
-scripts/enable-hooks                                 # sets core.hooksPath to .githooks
-packaging/appimage/build.sh                          # builds artifacts/ContextAll.AppImage
+dotnet test ContextAll.Tests.slnf -c Release        # core .NET suite (incl. ContextAll.Native.Tests)
+./scripts/test-e2e.sh --all                         # E2E spec suite (matched by CI and pre-push hook)
+./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon  # Android Kotlin unit tests & lint
+./gradlew :app:assembleDebug --no-daemon            # builds NativeAOT .so via scripts/build-android-native.sh & APK
+scripts/enable-hooks                                # sets core.hooksPath to .githooks
+packaging/appimage/build.sh                         # builds artifacts/ContextAll.AppImage
 ```
 
-On Linux build only `ContextAll.Tests.slnf` (or `ContextAll.Linux.slnf`, which also needs the Android workload). Neither includes `ContextAll.App.Windows`; that project builds only on Windows from `ContextAll.slnx`.
+On Linux build `ContextAll.Tests.slnf` or `ContextAll.Linux.slnf`. Neither includes `ContextAll.App.Windows` (Windows only via `ContextAll.slnx`) or requires any `.NET Android` workload.
 
 `TwoDaemonTests` in `ContextAll.Host.Tests` re-executes the test assembly under `unshare -Urn` with a veth pair, so it needs unprivileged user namespaces, `ip`, `ethtool`, and `libmsquic.so.2`. See `.github/workflows/test.yml` for the setup. The test project has a custom `Program.Main` for that re-exec (`two-daemon` argument).
 
@@ -26,7 +28,8 @@ Functional core, imperative shell:
 - `ContextAll.Effects`: `SharedEffects.Run` awaits each effect delegate in order and stops at the first failure. Also owns `QuicLink` (ALPN `contextall`, port 42461, one bidirectional stream; no TCP fallback when QUIC is unsupported). Shared by the desktop daemon and Android (ADR 0003).
 - `ContextAll.Host`: NativeAOT daemon + CLI (System.CommandLine, Spectre.Console menu, YamlDotNet with static generator). `serve` listens on `$XDG_RUNTIME_DIR/contextall/daemon.sock`; other commands are clients of that socket. Wayland clipboard is spoken directly (`WaylandWire.cs`), not through a library.
 - `ContextAll.Ipc`: front-end client for the local channel (Unix socket on Linux, named pipe on Windows). Front ends only reference Ipc, never Core.
-- `ContextAll.App` / `.App.Desktop`: Avalonia 12 UI, `UseWayland()`. `.App.Windows`: unpackaged WinUI 3. `.App.Android`: calls `Effects` in-process via `AndroidSession.Run`, no local channel.
+- `ContextAll.App` / `.App.Desktop`: Avalonia 12 UI, `UseWayland()`. `.App.Windows`: unpackaged WinUI 3.
+- `ContextAll.Native` + `app/`: Android runs Kotlin Jetpack Compose (`app/`) bridging via `NativeSessionController` / `NativeSessionJni` to NativeAOT `libcontextall_native.so` (`SessionHost` + `AndroidMsQuicBackend` + `libmsquic.so`), with no local channel.
 
 Frame types 64+ are local commands/events (replies are type 96); receiving one over QUIC closes the session.
 
