@@ -24,7 +24,7 @@
 
 mDNS 只通告非链路本地地址。没有可通告地址时，接收方用数据报的源地址；链路本地的源地址因此保留接口 scope id。
 
-Android 端的 `AndroidDiscovery` 从 `ConnectivityManager` 枚举活动网络时，仅选取 Wi-Fi 与以太网网络，排除蜂窝移动网络与 VPN；UDP 42462 信标套接字通过 `Network.BindSocket` 显式绑定到选定网络，在蜂窝与 Wi-Fi 同时在线时仅在 Wi-Fi 上收发信标（测试：`AndroidInstrumentedTestSuite.AndroidDiscovery_Selects_Only_Wifi_And_Ethernet_Never_Cellular_Or_Vpn`、`F13_NetworkFilterTests`）。Android 不直接绑原始 5353 套接字，而是在持有 `WifiManager.MulticastLock` 期间通过系统 `NsdManager` 注册并浏览 `_contextall._udp` 服务（TXT `id=` 携带设备 id），解析出的候选端点直接写入 `SessionHost` 路由表（测试：`AndroidInstrumentedTestSuite.AndroidDiscovery_Registers_Nsd_With_MulticastLock_And_Populates_RouteTable`、`F14_AndroidNsdMulticastTests`）。当 `NsdManager` 不可用或注册失败时，`AndroidDiscovery` 软降级为仅信标模式，仍通过 UDP 42462 信标发现对端（测试：`AndroidInstrumentedTestSuite.AndroidDiscovery_Fails_Soft_When_Nsd_Unavailable_And_Discovers_Via_Beacon`、`F15_SoftFailureBeaconOnlyTests`）。
+Android 端由 `LanDiscoveryController` 与 `NativeSessionBridge` 协作处理网络筛选与局域网发现：从 `ConnectivityManager` 枚举活动网络时，仅选取 Wi-Fi 与以太网网络，排除蜂窝移动网络与 VPN（测试：`F13_NetworkFilterTests`）。Android 不直接绑原始 5353 套接字，而是在持有 `WifiManager.MulticastLock` 期间通过系统 `NsdManager` 注册并浏览 `_contextall._udp` 服务（TXT `id=` 携带设备 id），解析出的候选端点直接推送给进程内 `SessionHost` 路由表（测试：`F14_AndroidNsdMulticastTests`）。当 `NsdManager` 不可用或注册失败时，软降级为仅信标模式，仍通过 UDP 42462 信标发现对端（测试：`F15_SoftFailureBeaconOnlyTests`）。
 
 ## 路由
 

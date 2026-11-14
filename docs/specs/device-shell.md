@@ -14,13 +14,14 @@ AppImage 的 `AppRun` 在没有参数时启动 `contextall-shell`，参数是 `s
 
 ## Android
 
-Android 外壳由 Kotlin Jetpack Compose 应用（`app/`）与 NativeAOT 会话引擎（`ContextAll.Native` / `libcontextall_native.so`）协同实现：
+Android 外壳完全由 Kotlin Jetpack Compose 应用（`app/`）配合 NativeAOT 会话引擎（`ContextAll.Native` / `libcontextall_native.so`）实现，旧 `.NET for Android` 界面工程已移除（见 [ADR 0006](../adr/0006-kotlin-compose-android-shell.md)）：
 
-- `ContextAllViewModel` 协调界面状态（`已发现` / `已配对` / `传输` / `本机`）；在生产配置下由 `NativeSessionController` 通过 `NativeSessionJni` 启动进程内 `.NET SessionHost` 与 `AndroidMsQuicBackend`，并由 `NativeCryptoHelper` 管理 P-256 `device.crt`、`device.key`、`device.spki` 及 PKCS#12 凭证；`InProcessSessionEngine` 保留用于 `DEVELOPER_LAB` 演示与测试。
-- `LinkForegroundService`（`app/`）及 `ContextAll.App.Android` 中的 `LinkService` 与 `AndroidManifest.xml` 声明 `connectedDevice` 前台服务类型；`MainActivity`（C# 基线适配器）保留 `ListView` 且不使用 `PopupMenu`，`AndroidSession.Run` 保持对 `Effects` 的入口契约。
+- `MainActivity.kt`（Jetpack Compose）将设备列表、配对决策、传输面板与本机设置全部呈现在页面与底部工作表内，不使用浮动 `PopupMenu` 来选择设备。
+- `ContextAllViewModel` 协调界面状态（`已发现` / `已配对` / `传输` / `本机`）；在生产配置下由 `NativeSessionController` 通过 `NativeSessionJni` 启动进程内 `.NET SessionHost` 与 `AndroidMsQuicBackend`，并由 `NativeCryptoHelper` 管理 P-256 `device.crt`、`device.key`、`device.spki` 及 PKCS#12 凭证；`InProcessSessionEngine` 保留用于 `DEVELOPER_LAB` 演示与单测。
+- `LinkService`（`app/src/main/java/app/contextall/service/LinkService.kt`）与 `app/src/main/AndroidManifest.xml` 声明 `connectedDevice` 前台服务类型（`exported="false"`）。
 
 ## Windows
 
 `ContextAll.App.Windows` 是非打包的 WinUI 3 程序：`WindowsPackageType` 为 `None`，`WindowsAppSDKSelfContained` 为 `true`，`PublishTrimmed` 和 `PublishSingleFile` 为 `false`。它只引用 `ContextAll.Ipc`。`App.xaml` 不设置 `RequestedTheme`，外观跟随系统。窗口里是一个 `ListView`。
 
-`ContextAll.Linux.slnf` 不含这个项目。本机执行 `dotnet build ContextAll.Linux.slnf` 停在缺少 Android 工作负载（`NETSDK1147`），输出里没有 `ContextAll.App.Windows`。过滤器中的 Linux 桌面项目可以单独编过。
+`ContextAll.Linux.slnf` 不含 `ContextAll.App.Windows`，可在纯 Linux 环境下编译通过，不需要 Windows SDK 或 `.NET Android` 工作负载。
