@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.secrets)
 }
 
 android {
@@ -16,23 +15,26 @@ android {
         versionName = "0.1.0"
     }
 
-    signingConfigs {
-        create("debugConfig") {
-            storeFile = file("${rootDir}/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+    val localDebugKeystore = file("${rootDir}/debug.keystore")
+    if (localDebugKeystore.exists()) {
+        signingConfigs {
+            create("debugConfig") {
+                storeFile = localDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
         }
     }
 
     buildTypes {
         debug {
             versionNameSuffix = "-debug"
-            signingConfig = signingConfigs.getByName("debugConfig")
+            signingConfigs.findByName("debugConfig")?.let { signingConfig = it }
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debugConfig")
+            signingConfigs.findByName("debugConfig")?.let { signingConfig = it }
         }
     }
 
@@ -45,11 +47,38 @@ android {
         compose = true
         buildConfig = true
     }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.directories.add(layout.buildDirectory.dir("nativeJniLibs").get().asFile.absolutePath)
+        }
+    }
 }
 
-secrets {
-    propertiesFileName = ".env"
-    defaultPropertiesFileName = ".env.example"
+val skipNativeAot = providers.gradleProperty("skipNativeAot").map { it.toBoolean() }.getOrElse(false)
+val nativeAbis = providers.gradleProperty("nativeAbis").getOrElse("x86_64,arm64-v8a")
+
+if (!skipNativeAot) {
+    val buildNativeAndroidLibs = tasks.register<Exec>("buildNativeAndroidLibs") {
+        group = "build"
+        description = "Builds NativeAOT libcontextall_native.so and extracts libmsquic.so for Android ABIs"
+        workingDir = rootDir
+        commandLine("bash", "${rootDir}/scripts/build-android-native.sh", nativeAbis)
+        inputs.file(rootProject.file("scripts/build-android-native.sh"))
+        inputs.file(rootProject.file("src/ContextAll.Native/ContextAll.Native.csproj"))
+        inputs.dir(rootProject.file("src/ContextAll.Native"))
+        inputs.dir(rootProject.file("src/ContextAll.Session"))
+        inputs.dir(rootProject.file("src/ContextAll.Core"))
+        inputs.dir(rootProject.file("src/ContextAll.Effects"))
+        inputs.dir(rootProject.file("src/ContextAll.Protocol"))
+        outputs.dir(layout.buildDirectory.dir("nativeJniLibs"))
+    }
+
+    tasks.configureEach {
+        if (name == "mergeDebugJniLibFolders" || name == "mergeReleaseJniLibFolders") {
+            dependsOn(buildNativeAndroidLibs)
+        }
+    }
 }
 
 dependencies {
@@ -64,4 +93,5 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
+    testImplementation(libs.junit)
 }
