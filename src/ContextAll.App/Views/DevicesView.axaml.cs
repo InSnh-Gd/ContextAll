@@ -61,6 +61,7 @@ public partial class DevicesView : UserControl
         ResolveNamedParts();
         WireDialogs();
 
+        Md3eResourceLookup.TrackThemeChanges(this, RefreshAll);
         _vm.PropertyChanged += (_, _) => RefreshAll();
         RefreshAll();
     }
@@ -338,12 +339,12 @@ public partial class DevicesView : UserControl
             Padding = new Thickness(20),
             Child = heroBody,
         };
-        if (Application.Current?.TryFindResource("PrimaryContainer", out var pc) == true &&
+        if (this.TryFindResource("PrimaryContainer", ActualThemeVariant, out var pc) &&
             pc is Avalonia.Media.IBrush pcBrush)
         {
             heroCard.Background = pcBrush;
         }
-        if (Application.Current?.TryFindResource("OnPrimaryContainer", out var onPc) == true &&
+        if (this.TryFindResource("OnPrimaryContainer", ActualThemeVariant, out var onPc) &&
             onPc is Avalonia.Media.IBrush onPcBrush)
         {
             Avalonia.Controls.Documents.TextElement.SetForeground(heroCard, onPcBrush);

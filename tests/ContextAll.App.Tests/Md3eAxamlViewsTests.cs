@@ -56,6 +56,45 @@ public sealed class Md3eAxamlViewsTests
         });
 
     [Fact]
+    public void DevicesView_tracks_live_theme_variant_changes_on_detail_hero_card() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var app = Assert.IsType<App>(Application.Current);
+            app.ApplyAppearanceOverrides(AppearanceModeOverride.Light, AccentSourceOverride.BrandBlue);
+
+            var client = new FakeLocalDaemonClient();
+            var peer = new DeviceSnapshotPayload("DEV-T", "测试设备", true, "online", true, true, true, "10.0.0.1:42461");
+            client.EmitState(LocalShellState.Empty with
+            {
+                ConnectionStatus = LocalConnectionStatus.Connected,
+                Devices = [peer],
+            });
+
+            var vm = new DevicesViewModel(client);
+            vm.SelectDevice("DEV-T");
+            var view = new DevicesView(vm);
+            var window = new Window { Width = 1100, Height = 720, Content = view };
+            window.Measure(new Size(1100, 720));
+            window.Arrange(new Rect(0, 0, 1100, 720));
+
+            var heroBefore = view.GetLogicalDescendants()
+                .OfType<Border>()
+                .First(b => b.CornerRadius == new CornerRadius(24) && b.Background is ISolidColorBrush);
+            var lightHeroColor = Assert.IsAssignableFrom<ISolidColorBrush>(heroBefore.Background).Color;
+
+            app.ApplyAppearanceOverrides(AppearanceModeOverride.Dark, AccentSourceOverride.ForestTeal);
+
+            var heroAfter = view.GetLogicalDescendants()
+                .OfType<Border>()
+                .First(b => b.CornerRadius == new CornerRadius(24) && b.Background is ISolidColorBrush);
+            var darkHeroColor = Assert.IsAssignableFrom<ISolidColorBrush>(heroAfter.Background).Color;
+
+            Assert.NotEqual(lightHeroColor, darkHeroColor);
+
+            app.ApplyAppearanceOverrides(AppearanceModeOverride.FollowSystem, AccentSourceOverride.FollowSystem);
+        });
+
+    [Fact]
     public void DevicesView_g1_expressive_studio_validates_dual_sheet_empty_state_real_telemetry_and_broadcast_dialog() =>
         AvaloniaUiTestHost.RunOnUiThread(() =>
         {

@@ -68,6 +68,7 @@ public sealed class ContextAllLogo : Viewbox
         canvas.Children.Add(_arrowPath);
 
         Child = rootClipper;
+        EnsureGeometries();
     }
 
     private readonly PathShape _leftDevicePath;
@@ -89,11 +90,11 @@ public sealed class ContextAllLogo : Viewbox
             return;
         }
 
-        _leftDevicePath.Data = Geometry.Parse(LeftDevicePathData);
-        _rightDevicePath.Data = Geometry.Parse(RightDevicePathData);
-        _badgeCirclePath.Data = Geometry.Parse(BadgeCirclePathData);
-        _arrowPath.Data = Geometry.Parse(ArrowPathData);
-        _geometriesLoaded = true;
+        _leftDevicePath.Data = Md3eResourceLookup.TryParseGeometry(LeftDevicePathData);
+        _rightDevicePath.Data = Md3eResourceLookup.TryParseGeometry(RightDevicePathData);
+        _badgeCirclePath.Data = Md3eResourceLookup.TryParseGeometry(BadgeCirclePathData);
+        _arrowPath.Data = Md3eResourceLookup.TryParseGeometry(ArrowPathData);
+        _geometriesLoaded = _leftDevicePath.Data is not null;
     }
 
     public double LogoSize

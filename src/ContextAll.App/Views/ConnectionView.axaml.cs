@@ -37,6 +37,7 @@ public partial class ConnectionView : UserControl
         _guideDialog.PrimaryActionClicked += (_, _) => _vm.CloseGuide();
         _guideDialog.Canceled += (_, _) => _vm.CloseGuide();
 
+        Md3eResourceLookup.TrackThemeChanges(this, UpdateFeedbackTone);
         _vm.PropertyChanged += (_, _) => Refresh();
         Refresh();
     }
@@ -159,11 +160,11 @@ public partial class ConnectionView : UserControl
 
         var bgKey = _vm.DialIsError ? "ErrorContainer" : "SecondaryContainer";
         var fgKey = _vm.DialIsError ? "OnErrorContainer" : "OnSecondaryContainer";
-        if (Avalonia.Application.Current.TryFindResource(bgKey, out var bg) && bg is Avalonia.Media.IBrush bgBrush)
+        if (this.TryFindResource(bgKey, ActualThemeVariant, out var bg) && bg is Avalonia.Media.IBrush bgBrush)
         {
             _feedbackBanner.Background = bgBrush;
         }
-        if (Avalonia.Application.Current.TryFindResource(fgKey, out var fg) && fg is Avalonia.Media.IBrush fgBrush)
+        if (this.TryFindResource(fgKey, ActualThemeVariant, out var fg) && fg is Avalonia.Media.IBrush fgBrush)
         {
             _feedbackLabel.Foreground = fgBrush;
         }

@@ -191,7 +191,12 @@ public class MaterialSnackbarHost : TemplatedControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnDetachedFromVisualTree(e);
-        _timer?.Stop();
+        if (_timer is not null)
+        {
+            _timer.Stop();
+            _timer.Tick -= OnTimerTick;
+            _timer = null;
+        }
     }
 
     private void OnTimerTick(object? sender, EventArgs e) =>

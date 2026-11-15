@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
+using Avalonia.VisualTree;
 using ContextAll.App.Chrome;
 using ContextAll.App.Controls;
 
@@ -351,5 +352,24 @@ public sealed class Md3eControlsAndChromeTests
             host.AdvanceTime(TimeSpan.FromSeconds(5));
             Assert.False(host.IsOpen);
             Assert.Equal(0, host.PendingCount);
+        });
+
+    [Fact]
+    public void WideNavigationRail_has_zero_hard_1px_border_and_ContextAllLogo_initializes_geometries_eagerly() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var host = new Window { Width = 300, Height = 600 };
+            var rail = new WideNavigationRail();
+            host.Content = rail;
+            rail.Measure(new Size(224, 600));
+            rail.Arrange(new Rect(0, 0, 224, 600));
+            rail.ApplyTemplate();
+
+            Assert.Equal(new Thickness(0), rail.BorderThickness);
+
+            var logo = new ContextAllLogo();
+            var shapes = logo.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().ToArray();
+            Assert.Equal(4, shapes.Length);
+            Assert.All(shapes, p => Assert.NotNull(p.Data));
         });
 }

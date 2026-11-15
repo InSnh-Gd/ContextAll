@@ -21,8 +21,28 @@ public sealed class App : Application
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
-    public void ApplyAppearanceOverrides(AppearanceModeOverride? mode, AccentSourceOverride? accent) =>
-        _appearance?.SetOverrides(mode, accent);
+    public void ApplyAppearanceOverrides(AppearanceModeOverride? mode, AccentSourceOverride? accent)
+    {
+        _appearance ??= new LinuxAppearanceCoordinator(
+            new DesktopLinuxAppearanceSource(),
+            variant => RequestedThemeVariant = variant,
+            Resources,
+            RunOnUiThread,
+            Styles.OfType<MaterialTheme>().FirstOrDefault());
+        _appearance.SetOverrides(mode, accent);
+    }
+
+    private static void RunOnUiThread(Action work)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            work();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(work);
+        }
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {
@@ -43,7 +63,7 @@ public sealed class App : Application
                 new DesktopLinuxAppearanceSource(),
                 variant => RequestedThemeVariant = variant,
                 Resources,
-                work => Dispatcher.UIThread.Post(work),
+                RunOnUiThread,
                 materialTheme);
             _appearance.SetOverrides(initialPrefs.AppearanceModeOverride, initialPrefs.AccentSourceOverride);
 
