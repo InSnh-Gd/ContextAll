@@ -3,6 +3,7 @@ using ContextAll.App.Motion;
 
 namespace ContextAll.App.Tests;
 
+[Collection("AvaloniaUI")]
 public sealed class Md3eMotionAndGeometryTests
 {
     [Fact]

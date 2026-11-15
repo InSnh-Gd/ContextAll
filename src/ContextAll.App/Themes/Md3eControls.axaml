@@ -1,0 +1,662 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:ContextAll.App.Controls">
+
+  <ControlTheme x:Key="{x:Type c:ExpressiveGroupTile}" TargetType="c:ExpressiveGroupTile">
+    <Setter Property="Background" Value="{DynamicResource SurfaceContainerLow}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OutlineVariant}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Padding" Value="16,14" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <CornerRadiusTransition Property="CornerRadius" Duration="0:0:0.22" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Root"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}"
+                ClipToBounds="True">
+          <Panel>
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+            <c:MaterialRipple Name="PART_Ripple" IsHitTestVisible="False" />
+          </Panel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:interactive">
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="^:interactive:pointerover">
+      <Setter Property="Background" Value="{DynamicResource SurfaceContainerHigh}" />
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary}" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:ExpressiveButtonGroup}" TargetType="c:ExpressiveButtonGroup">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent">
+          <StackPanel Name="PART_ItemsPanel"
+                      Orientation="Horizontal"
+                      Spacing="{TemplateBinding Spacing}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:LinearWavyProgressIndicator}" TargetType="c:LinearWavyProgressIndicator">
+    <Setter Property="IndicatorBrush" Value="{DynamicResource Primary}" />
+    <Setter Property="TrackBrush" Value="{DynamicResource SecondaryContainer}" />
+    <Setter Property="MinHeight" Value="16" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent" MinHeight="16" />
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:ContainedLoadingIndicator}" TargetType="c:ContainedLoadingIndicator">
+    <Setter Property="ContainerBrush" Value="{DynamicResource PrimaryContainer}" />
+    <Setter Property="IndicatorBrush" Value="{DynamicResource Primary}" />
+    <Setter Property="Width" Value="48" />
+    <Setter Property="Height" Value="48" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent"
+                Width="{TemplateBinding Width}"
+                Height="{TemplateBinding Height}" />
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:ExpressiveSwitch}" TargetType="c:ExpressiveSwitch">
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Width" Value="52" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Track"
+                Width="52"
+                Height="32"
+                CornerRadius="16"
+                BorderThickness="2"
+                Background="{DynamicResource SurfaceContainerHighest}"
+                BorderBrush="{DynamicResource Outline}">
+          <Border Name="PART_Thumb"
+                  Width="20"
+                  Height="20"
+                  CornerRadius="10"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Center"
+                  Margin="4,0"
+                  Background="{DynamicResource Outline}">
+            <Border.Transitions>
+              <Transitions>
+                <DoubleTransition Property="Width" Duration="0:0:0.18" />
+                <DoubleTransition Property="Height" Duration="0:0:0.18" />
+                <ThicknessTransition Property="Margin" Duration="0:0:0.18" />
+              </Transitions>
+            </Border.Transitions>
+            <TextBlock Name="PART_Glyph"
+                       Text="{TemplateBinding ThumbGlyph}"
+                       FontSize="12"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource Surface}" />
+          </Border>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:checked /template/ Border#PART_Track">
+      <Setter Property="Background" Value="{DynamicResource Primary}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Primary}" />
+    </Style>
+    <Style Selector="^:checked /template/ Border#PART_Thumb">
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="Margin" Value="2,0" />
+      <Setter Property="Background" Value="{DynamicResource OnPrimary}" />
+    </Style>
+    <Style Selector="^:checked /template/ TextBlock#PART_Glyph">
+      <Setter Property="Foreground" Value="{DynamicResource Primary}" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:ExpressiveIconBadge}" TargetType="c:ExpressiveIconBadge">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Badge"
+                Width="{TemplateBinding ContainerSize}"
+                Height="{TemplateBinding ContainerSize}"
+                CornerRadius="16"
+                Background="{DynamicResource PrimaryContainer}">
+          <PathIcon Name="PART_Icon"
+                    Width="{TemplateBinding IconSize}"
+                    Height="{TemplateBinding IconSize}"
+                    Data="{TemplateBinding IconGeometry}"
+                    Foreground="{DynamicResource OnPrimaryContainer}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:tone-secondary /template/ Border#PART_Badge">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:tone-secondary /template/ PathIcon#PART_Icon">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+
+    <Style Selector="^:tone-tertiary /template/ Border#PART_Badge">
+      <Setter Property="Background" Value="{DynamicResource TertiaryContainer}" />
+    </Style>
+    <Style Selector="^:tone-tertiary /template/ PathIcon#PART_Icon">
+      <Setter Property="Foreground" Value="{DynamicResource OnTertiaryContainer}" />
+    </Style>
+
+    <Style Selector="^:tone-error /template/ Border#PART_Badge">
+      <Setter Property="Background" Value="{DynamicResource ErrorContainer}" />
+    </Style>
+    <Style Selector="^:tone-error /template/ PathIcon#PART_Icon">
+      <Setter Property="Foreground" Value="{DynamicResource OnErrorContainer}" />
+    </Style>
+
+    <Style Selector="^:tone-neutral /template/ Border#PART_Badge">
+      <Setter Property="Background" Value="{DynamicResource SurfaceContainerHighest}" />
+    </Style>
+    <Style Selector="^:tone-neutral /template/ PathIcon#PART_Icon">
+      <Setter Property="Foreground" Value="{DynamicResource OnSurfaceVariant}" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:IntegratedHeaderBar}" TargetType="c:IntegratedHeaderBar">
+    <Setter Property="Background" Value="{DynamicResource SurfaceContainerLow}" />
+    <Setter Property="Height" Value="{Binding RelativeSource={RelativeSource Self}, Path=HeaderHeight}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                Height="{TemplateBinding HeaderHeight}"
+                Padding="12,0">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <StackPanel Grid.Column="0"
+                        Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center">
+              <StackPanel Name="PART_LeftButtons"
+                          Orientation="Horizontal"
+                          Spacing="6"
+                          VerticalAlignment="Center" />
+              <StackPanel Orientation="Horizontal"
+                          Spacing="10"
+                          VerticalAlignment="Center">
+                <c:ContextAllLogo Name="PART_Logo" Width="22" Height="22" VerticalAlignment="Center" />
+                <TextBlock Text="{TemplateBinding TitleText}"
+                           Classes="TitleMedium"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource OnSurface}"
+                           VerticalAlignment="Center" />
+                <TextBlock Text="{TemplateBinding SubtitleText}"
+                           Classes="BodySmall"
+                           Foreground="{DynamicResource OnSurfaceVariant}"
+                           IsVisible="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=SubtitleText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </StackPanel>
+
+            <Border Name="PART_DragRegion"
+                    Grid.Column="1"
+                    Background="Transparent" />
+
+            <StackPanel Name="PART_RightButtons"
+                        Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Center" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:WideNavigationRail}" TargetType="c:WideNavigationRail">
+    <Setter Property="Background" Value="{DynamicResource SurfaceContainerLow}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OutlineVariant}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Width" Duration="0:0:0.22" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="12,14">
+          <Grid RowDefinitions="Auto,Auto,*,Auto">
+            <StackPanel Grid.Row="0" Spacing="10" HorizontalAlignment="Stretch">
+              <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+                <Button Name="PART_ToggleButton"
+                        Classes="Icon"
+                        Width="44"
+                        Height="44"
+                        CornerRadius="22"
+                        ToolTip.Tip="展开或收起导航栏">
+                  <PathIcon Width="20" Height="20"
+                            Data="{DynamicResource Material_IconMenu}"
+                            Foreground="{DynamicResource OnSurface}" />
+                </Button>
+                <TextBlock Name="PART_BrandText"
+                           Text="导航"
+                           Classes="TitleSmall"
+                           Foreground="{DynamicResource OnSurface}"
+                           VerticalAlignment="Center"
+                           IsVisible="False" />
+              </StackPanel>
+
+              <Button Name="PART_FabButton"
+                      Height="56"
+                      MinWidth="56"
+                      CornerRadius="16"
+                      Padding="16,0"
+                      HorizontalAlignment="Left"
+                      Background="{DynamicResource PrimaryContainer}"
+                      Foreground="{DynamicResource OnPrimaryContainer}">
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                  <PathIcon Width="22" Height="22"
+                            Data="{DynamicResource Material_IconSend}"
+                            Foreground="{DynamicResource OnPrimaryContainer}" />
+                  <TextBlock Name="PART_FabLabel"
+                             Text="{TemplateBinding FabText}"
+                             Classes="LabelLarge"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource OnPrimaryContainer}"
+                             VerticalAlignment="Center"
+                             IsVisible="False" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+
+            <StackPanel Grid.Row="2" Spacing="8" VerticalAlignment="Top" Margin="0,18,0,0">
+              <Button Name="PART_NavDevices"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Padding="4"
+                      CornerRadius="20"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Center">
+                <StackPanel Name="PART_NavDevicesStack"
+                            Orientation="Vertical"
+                            Spacing="4"
+                            HorizontalAlignment="Center">
+                  <Border Name="PART_NavDevicesPill"
+                          Width="56"
+                          Height="32"
+                          CornerRadius="16"
+                          Background="Transparent">
+                    <PathIcon Name="PART_NavDevicesIcon"
+                              Width="20" Height="20"
+                              Data="{DynamicResource Material_IconDevices}"
+                              Foreground="{DynamicResource OnSurfaceVariant}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Name="PART_NavDevicesLabel"
+                             Text="设备"
+                             Classes="LabelMedium"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+
+              <Button Name="PART_NavTransfers"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Padding="4"
+                      CornerRadius="20"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Center">
+                <StackPanel Name="PART_NavTransfersStack"
+                            Orientation="Vertical"
+                            Spacing="4"
+                            HorizontalAlignment="Center">
+                  <Border Name="PART_NavTransfersPill"
+                          Width="56"
+                          Height="32"
+                          CornerRadius="16"
+                          Background="Transparent">
+                    <PathIcon Name="PART_NavTransfersIcon"
+                              Width="20" Height="20"
+                              Data="{DynamicResource Material_IconSwapHoriz}"
+                              Foreground="{DynamicResource OnSurfaceVariant}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Name="PART_NavTransfersLabel"
+                             Text="传输"
+                             Classes="LabelMedium"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+
+              <Button Name="PART_NavThisDevice"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      Padding="4"
+                      CornerRadius="20"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Center">
+                <StackPanel Name="PART_NavThisDeviceStack"
+                            Orientation="Vertical"
+                            Spacing="4"
+                            HorizontalAlignment="Center">
+                  <Border Name="PART_NavThisDevicePill"
+                          Width="56"
+                          Height="32"
+                          CornerRadius="16"
+                          Background="Transparent">
+                    <PathIcon Name="PART_NavThisDeviceIcon"
+                              Width="20" Height="20"
+                              Data="{DynamicResource Material_IconDesktop}"
+                              Foreground="{DynamicResource OnSurfaceVariant}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                  </Border>
+                  <TextBlock Name="PART_NavThisDeviceLabel"
+                             Text="本机"
+                             Classes="LabelMedium"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+
+            <Border Name="PART_DaemonPill"
+                    Grid.Row="3"
+                    CornerRadius="16"
+                    Padding="10,6"
+                    Background="{DynamicResource SurfaceContainerHigh}"
+                    HorizontalAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Ellipse Name="PART_DaemonDot"
+                         Width="8" Height="8"
+                         Fill="{DynamicResource OnSurfaceVariant}"
+                         VerticalAlignment="Center" />
+                <TextBlock Name="PART_DaemonText"
+                           Text="{TemplateBinding DaemonStatusLabel}"
+                           Classes="LabelSmall"
+                           Foreground="{DynamicResource OnSurfaceVariant}"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:expanded /template/ TextBlock#PART_BrandText">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:expanded /template/ TextBlock#PART_FabLabel">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:expanded /template/ StackPanel#PART_NavDevicesStack, ^:expanded /template/ StackPanel#PART_NavTransfersStack, ^:expanded /template/ StackPanel#PART_NavThisDeviceStack">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="12" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="^:daemon-connected /template/ Border#PART_DaemonPill">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:daemon-connected /template/ Ellipse#PART_DaemonDot">
+      <Setter Property="Fill" Value="{DynamicResource Primary}" />
+    </Style>
+    <Style Selector="^:daemon-connected /template/ TextBlock#PART_DaemonText">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+
+    <Style Selector="^:devices /template/ Border#PART_NavDevicesPill">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:devices /template/ PathIcon#PART_NavDevicesIcon">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:devices /template/ TextBlock#PART_NavDevicesLabel">
+      <Setter Property="Foreground" Value="{DynamicResource OnSurface}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="^:transfers /template/ Border#PART_NavTransfersPill">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:transfers /template/ PathIcon#PART_NavTransfersIcon">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:transfers /template/ TextBlock#PART_NavTransfersLabel">
+      <Setter Property="Foreground" Value="{DynamicResource OnSurface}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="^:thisdevice /template/ Border#PART_NavThisDevicePill">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:thisdevice /template/ PathIcon#PART_NavThisDeviceIcon">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:thisdevice /template/ TextBlock#PART_NavThisDeviceLabel">
+      <Setter Property="Foreground" Value="{DynamicResource OnSurface}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:HorizontalFloatingToolbar}" TargetType="c:HorizontalFloatingToolbar">
+    <Setter Property="Background" Value="{DynamicResource SurfaceContainerHigh}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OutlineVariant}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="28" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+            <Button Name="PART_NavDevices"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    CornerRadius="20">
+              <Border Name="PART_PillDevices" CornerRadius="20" Padding="16,10" Background="Transparent">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <PathIcon Name="PART_IconDevices" Width="18" Height="18"
+                            Data="{DynamicResource Material_IconDevices}"
+                            Foreground="{DynamicResource OnSurfaceVariant}" />
+                  <TextBlock Name="PART_LabelDevices" Text="设备" Classes="LabelLarge"
+                             Foreground="{DynamicResource OnSurfaceVariant}" />
+                </StackPanel>
+              </Border>
+            </Button>
+
+            <Button Name="PART_NavTransfers"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    CornerRadius="20">
+              <Border Name="PART_PillTransfers" CornerRadius="20" Padding="16,10" Background="Transparent">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <PathIcon Name="PART_IconTransfers" Width="18" Height="18"
+                            Data="{DynamicResource Material_IconSwapHoriz}"
+                            Foreground="{DynamicResource OnSurfaceVariant}" />
+                  <TextBlock Name="PART_LabelTransfers" Text="传输" Classes="LabelLarge"
+                             Foreground="{DynamicResource OnSurfaceVariant}" />
+                </StackPanel>
+              </Border>
+            </Button>
+
+            <Button Name="PART_NavThisDevice"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="0"
+                    CornerRadius="20">
+              <Border Name="PART_PillThisDevice" CornerRadius="20" Padding="16,10" Background="Transparent">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <PathIcon Name="PART_IconThisDevice" Width="18" Height="18"
+                            Data="{DynamicResource Material_IconDesktop}"
+                            Foreground="{DynamicResource OnSurfaceVariant}" />
+                  <TextBlock Name="PART_LabelThisDevice" Text="本机" Classes="LabelLarge"
+                             Foreground="{DynamicResource OnSurfaceVariant}" />
+                </StackPanel>
+              </Border>
+            </Button>
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+
+    <Style Selector="^:devices /template/ Border#PART_PillDevices">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:devices /template/ PathIcon#PART_IconDevices">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:devices /template/ TextBlock#PART_LabelDevices">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+
+    <Style Selector="^:transfers /template/ Border#PART_PillTransfers">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:transfers /template/ PathIcon#PART_IconTransfers">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:transfers /template/ TextBlock#PART_LabelTransfers">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+
+    <Style Selector="^:thisdevice /template/ Border#PART_PillThisDevice">
+      <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    </Style>
+    <Style Selector="^:thisdevice /template/ PathIcon#PART_IconThisDevice">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:thisdevice /template/ TextBlock#PART_LabelThisDevice">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:MaterialDialog}" TargetType="c:MaterialDialog">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel IsVisible="{TemplateBinding IsOpen}">
+          <Border Name="PART_Scrim"
+                  Background="{DynamicResource Scrim32}"
+                  HorizontalAlignment="Stretch"
+                  VerticalAlignment="Stretch" />
+          <Border CornerRadius="{TemplateBinding DialogCornerRadius}"
+                  Background="{DynamicResource SurfaceContainerHigh}"
+                  BorderBrush="{DynamicResource OutlineVariant}"
+                  BorderThickness="1"
+                  Padding="24"
+                  MinWidth="320"
+                  MaxWidth="480"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+            <StackPanel Spacing="16">
+              <TextBlock Text="{TemplateBinding Title}"
+                         Classes="HeadlineSmall"
+                         Foreground="{DynamicResource OnSurface}"
+                         TextWrapping="Wrap" />
+              <TextBlock Text="{TemplateBinding Message}"
+                         Classes="BodyMedium"
+                         Foreground="{DynamicResource OnSurfaceVariant}"
+                         TextWrapping="Wrap"
+                         IsVisible="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <ContentPresenter Content="{TemplateBinding BodyContent}" />
+              <StackPanel Orientation="Horizontal"
+                          Spacing="8"
+                          HorizontalAlignment="Right"
+                          Margin="0,8,0,0">
+                <Button Name="PART_CancelButton"
+                        Classes="Text"
+                        Content="{TemplateBinding CancelActionText}"
+                        IsVisible="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=CancelActionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <Button Name="PART_PrimaryButton"
+                        Classes="Filled"
+                        Content="{TemplateBinding PrimaryActionText}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:MaterialSnackbarHost}" TargetType="c:MaterialSnackbarHost">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border CornerRadius="12"
+                Background="{DynamicResource InverseSurface}"
+                Padding="16,10"
+                MinWidth="288"
+                MaxWidth="560"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                IsVisible="{TemplateBinding IsOpen}">
+          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+            <TextBlock Grid.Column="0"
+                       Text="{TemplateBinding CurrentMessage}"
+                       Classes="BodyMedium"
+                       Foreground="{DynamicResource InverseOnSurface}"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
+            <Button Name="PART_ActionButton"
+                    Grid.Column="1"
+                    Classes="Text"
+                    Content="{TemplateBinding ActionText}"
+                    Foreground="{DynamicResource InversePrimary}"
+                    IsVisible="{TemplateBinding HasAction}"
+                    VerticalAlignment="Center" />
+            <Button Name="PART_DismissButton"
+                    Grid.Column="2"
+                    Classes="Icon"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    ToolTip.Tip="关闭提示">
+              <PathIcon Width="16" Height="16"
+                        Data="{DynamicResource Material_IconClose}"
+                        Foreground="{DynamicResource InverseOnSurface}" />
+            </Button>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+</ResourceDictionary>

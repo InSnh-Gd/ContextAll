@@ -1,15 +1,28 @@
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Threading;
 using Xunit;
+
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace ContextAll.App.Tests;
 
 [CollectionDefinition("AvaloniaUI", DisableParallelization = true)]
-public sealed class AvaloniaUiTestCollection;
+public sealed class AvaloniaUiTestCollection : ICollectionFixture<AvaloniaUiFixture>;
+
+public sealed class AvaloniaUiFixture : IDisposable
+{
+    public AvaloniaUiFixture() => AvaloniaUiTestHost.EnsureInitialized();
+
+    public void Dispose()
+    {
+    }
+}
 
 public static partial class AvaloniaUiTestHost
 {
     private static readonly object Gate = new();
+    private static readonly CancellationTokenSource ShutdownCts = new();
     private static bool _initialized;
 
     [LibraryImport("libdl.so.2", StringMarshalling = StringMarshalling.Utf8)]
@@ -31,13 +44,80 @@ public static partial class AvaloniaUiTestHost
 
             if (Application.Current is null)
             {
-                AppBuilder.Configure<App>()
-                    .UsePlatformDetect()
-                    .SetupWithoutStarting();
+                Exception? initError = null;
+                using var ready = new ManualResetEventSlim(false);
+                var uiThread = new Thread(() =>
+                {
+                    try
+                    {
+                        AppBuilder.Configure<App>()
+                            .UsePlatformDetect()
+                            .SetupWithoutStarting();
+                    }
+                    catch (Exception ex)
+                    {
+                        initError = ex;
+                    }
+                    finally
+                    {
+                        ready.Set();
+                    }
+
+                    if (initError is null)
+                    {
+                        Dispatcher.UIThread.MainLoop(ShutdownCts.Token);
+                    }
+                })
+                {
+                    IsBackground = true,
+                    Name = "AvaloniaUiTestThread",
+                };
+
+                uiThread.Start();
+                ready.Wait();
+                if (initError is not null)
+                {
+                    throw new InvalidOperationException("Failed to initialize Avalonia UI test thread.", initError);
+                }
             }
 
             _initialized = true;
         }
+    }
+
+    public static void RunOnUiThread(Action action)
+    {
+        EnsureInitialized();
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Invoke(action);
+    }
+
+    public static T RunOnUiThread<T>(Func<T> func)
+    {
+        EnsureInitialized();
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return func();
+        }
+
+        return Dispatcher.UIThread.Invoke(func);
+    }
+
+    public static async Task RunOnUiThreadAsync(Func<Task> func)
+    {
+        EnsureInitialized();
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            await func();
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(func);
     }
 
     private static void PreloadNixSharedLibs()

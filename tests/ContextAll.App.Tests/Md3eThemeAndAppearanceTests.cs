@@ -7,6 +7,7 @@ using ContextAll.App.Theming;
 
 namespace ContextAll.App.Tests;
 
+[Collection("AvaloniaUI")]
 public sealed class Md3eThemeAndAppearanceTests
 {
     [Fact]

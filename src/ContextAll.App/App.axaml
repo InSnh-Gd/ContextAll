@@ -6,6 +6,7 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://ContextAll.App/Styles/Md3eTokens.axaml" />
+        <ResourceInclude Source="avares://ContextAll.App/Themes/Md3eControls.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>
