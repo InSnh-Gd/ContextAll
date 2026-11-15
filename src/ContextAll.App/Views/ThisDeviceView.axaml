@@ -1,0 +1,212 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ContextAll.App.ViewModels"
+             xmlns:controls="using:ContextAll.App.Controls"
+             x:Class="ContextAll.App.Views.ThisDeviceView"
+             x:DataType="vm:ThisDeviceViewModel">
+
+  <ScrollViewer Padding="4,0,4,16"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+    <StackPanel Spacing="14">
+      <StackPanel Spacing="4">
+        <TextBlock Text="本机与偏好设置"
+                   Classes="HeadlineSmall" />
+        <TextBlock Text="修改本机展示名称、保存路径、外观色彩及后台守护集成"
+                   Classes="BodyMedium"
+                   Foreground="{DynamicResource OnSurfaceVariant}"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+
+      <Border x:Name="StatusBanner"
+              CornerRadius="16"
+              Padding="14,10"
+              IsVisible="False">
+        <TextBlock x:Name="StatusText"
+                   Classes="BodyMedium"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <!-- PrimaryContainer Identity Hero Card -->
+      <Border CornerRadius="28"
+              Padding="20"
+              Background="{DynamicResource PrimaryContainer}">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="12">
+            <controls:ExpressiveIconBadge ContainerSize="44"
+                                          IconSize="22"
+                                          Tone="Primary"
+                                          PathData="M4 6h16v10H4V6zm-2 12h20v2H2v-2z" />
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="本机身份信息"
+                         Classes="TitleMedium"
+                         Foreground="{DynamicResource OnPrimaryContainer}" />
+              <TextBlock x:Name="DeviceIdLabel"
+                         Classes="BodySmall MonoTabular"
+                         Foreground="{DynamicResource OnPrimaryContainer}" />
+            </StackPanel>
+          </StackPanel>
+
+          <TextBlock Text="本机名称"
+                     Classes="LabelMedium"
+                     Foreground="{DynamicResource OnPrimaryContainer}" />
+
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBox x:Name="NameInput"
+                     Grid.Column="0"
+                     Classes="Outlined"
+                     PlaceholderText="输入本机展示名称"
+                     TextChanged="OnNameInputTextChanged" />
+            <Button Grid.Column="1"
+                    Content="保存名称"
+                    Classes="Filled"
+                    CornerRadius="18"
+                    Padding="16,10"
+                    Click="OnSaveNameClicked" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- Storage Path Card -->
+      <controls:ExpressiveGroupTile Position="First" IsInteractive="False">
+        <StackPanel Spacing="10">
+          <TextBlock Text="文件接收保存目录"
+                     Classes="TitleMedium" />
+          <TextBlock x:Name="DownloadDirLabel"
+                     Classes="BodyMedium MonoTabular"
+                     Foreground="{DynamicResource OnSurfaceVariant}"
+                     TextWrapping="Wrap" />
+          <Button Content="选择下载文件夹…"
+                  Classes="FilledTonal"
+                  HorizontalAlignment="Left"
+                  CornerRadius="18"
+                  Padding="16,8"
+                  Click="OnChooseFolderClicked" />
+        </StackPanel>
+      </controls:ExpressiveGroupTile>
+
+      <!-- MD3E Theme & Accent Overrides -->
+      <controls:ExpressiveGroupTile Position="Middle" IsInteractive="False">
+        <StackPanel Spacing="12">
+          <TextBlock Text="MD3E 外观与强调色彩（保存于 shell.json）"
+                     Classes="TitleMedium" />
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="明暗外观模式"
+                       Classes="LabelMedium"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="ModeFollowButton"
+                      Content="跟随系统"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Click="OnModeFollowClicked" />
+              <Button x:Name="ModeLightButton"
+                      Content="浅色"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Click="OnModeLightClicked" />
+              <Button x:Name="ModeDarkButton"
+                      Content="深色"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Click="OnModeDarkClicked" />
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Spacing="6">
+            <TextBlock Text="动态色彩来源"
+                       Classes="LabelMedium"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+            <WrapPanel Orientation="Horizontal">
+              <Button x:Name="AccentFollowButton"
+                      Content="跟随系统"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Margin="0,0,8,8"
+                      Click="OnAccentFollowClicked" />
+              <Button x:Name="AccentBlueButton"
+                      Content="品牌蓝"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Margin="0,0,8,8"
+                      Click="OnAccentBlueClicked" />
+              <Button x:Name="AccentTealButton"
+                      Content="森林青"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Margin="0,0,8,8"
+                      Click="OnAccentTealClicked" />
+              <Button x:Name="AccentSunsetButton"
+                      Content="日落陶红"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Margin="0,0,8,8"
+                      Click="OnAccentSunsetClicked" />
+              <Button x:Name="AccentVioletButton"
+                      Content="紫罗兰"
+                      CornerRadius="16"
+                      Padding="14,7"
+                      Margin="0,0,8,8"
+                      Click="OnAccentVioletClicked" />
+            </WrapPanel>
+          </StackPanel>
+        </StackPanel>
+      </controls:ExpressiveGroupTile>
+
+      <!-- Linux Shell & Window Behavior -->
+      <controls:ExpressiveGroupTile Position="Middle" IsInteractive="False">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Linux 外壳与窗口行为（保存于 shell.json）"
+                     Classes="TitleMedium" />
+
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="关闭窗口时最小化到系统托盘"
+                         Classes="TitleSmall" />
+              <TextBlock Text="仅当桌面存在 StatusNotifierWatcher 宿主时生效"
+                         Classes="BodySmall"
+                         Foreground="{DynamicResource OnSurfaceVariant}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <controls:ExpressiveSwitch x:Name="TraySwitch"
+                                       Grid.Column="1"
+                                       VerticalAlignment="Center" />
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <StackPanel Grid.Column="0" Spacing="2">
+              <TextBlock Text="使用桌面原生标题栏（SSD）"
+                         Classes="TitleSmall" />
+              <TextBlock Text="开启后由窗口管理器绘制标题栏并保留原生按钮"
+                         Classes="BodySmall"
+                         Foreground="{DynamicResource OnSurfaceVariant}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <controls:ExpressiveSwitch x:Name="NativeTitleBarSwitch"
+                                       Grid.Column="1"
+                                       VerticalAlignment="Center" />
+          </Grid>
+        </StackPanel>
+      </controls:ExpressiveGroupTile>
+
+      <!-- Autostart / AppImage integration -->
+      <controls:ExpressiveGroupTile Position="Last" IsInteractive="False">
+        <StackPanel Spacing="10">
+          <TextBlock Text="后台服务与开机自启"
+                     Classes="TitleMedium" />
+          <TextBlock Text="通过用户级 systemd 管理后台守护进程，关闭图形窗口不会中断文件与剪贴板监听。"
+                     Classes="BodySmall"
+                     Foreground="{DynamicResource OnSurfaceVariant}"
+                     TextWrapping="Wrap" />
+          <Button x:Name="AutostartButton"
+                  Classes="FilledTonal"
+                  HorizontalAlignment="Left"
+                  CornerRadius="20"
+                  Padding="16,10"
+                  Click="OnAutostartClicked" />
+        </StackPanel>
+      </controls:ExpressiveGroupTile>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

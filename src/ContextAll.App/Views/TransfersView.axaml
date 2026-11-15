@@ -1,0 +1,140 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:ContextAll.App.ViewModels"
+             xmlns:controls="using:ContextAll.App.Controls"
+             x:Class="ContextAll.App.Views.TransfersView"
+             x:DataType="vm:TransfersViewModel"
+             DragDrop.AllowDrop="True">
+
+  <ScrollViewer Padding="4,0,4,16"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+    <Grid x:Name="WorkbenchGrid">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="400" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- Left workbench sheet (400dp on >=840dp, stacked top on <840dp) -->
+      <Border x:Name="WorkbenchPane"
+              Grid.Row="0"
+              Grid.Column="0"
+              Margin="0,0,12,0"
+              CornerRadius="28"
+              Padding="20"
+              Background="{DynamicResource SurfaceContainerLow}">
+        <StackPanel Spacing="14">
+          <StackPanel Spacing="4">
+            <TextBlock Text="文件传输与队列"
+                       Classes="HeadlineSmall" />
+            <TextBlock Text="按对端顺序发送多个文件，查看接收询问与会话历史"
+                       Classes="BodyMedium"
+                       Foreground="{DynamicResource OnSurfaceVariant}"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Button x:Name="ChooseFilesButton"
+                  Content="选择多个文件发送…"
+                  Classes="Filled"
+                  HorizontalAlignment="Left"
+                  CornerRadius="20"
+                  Padding="18,10"
+                  Click="OnChooseFilesClicked" />
+
+          <Border x:Name="DropZone"
+                  CornerRadius="24"
+                  Padding="16"
+                  BorderThickness="1"
+                  BorderBrush="{DynamicResource Outline}"
+                  Background="{DynamicResource SurfaceContainer}"
+                  DragDrop.AllowDrop="True">
+            <StackPanel Spacing="10">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <controls:ExpressiveIconBadge ContainerSize="40"
+                                              IconSize="20"
+                                              Tone="Secondary"
+                                              PathData="M7 10l5-5 5 5H7zm10 4l-5 5-5-5h10z" />
+                <StackPanel VerticalAlignment="Center" Spacing="2">
+                  <TextBlock Text="发送目标设备与拖放区域"
+                             Classes="TitleSmall" />
+                  <TextBlock Text="选择已配对设备，并将普通文件直接拖放到此处"
+                             Classes="BodySmall"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </StackPanel>
+
+              <WrapPanel x:Name="PeerChipsPanel"
+                         Orientation="Horizontal" />
+
+              <TextBlock Text="支持多文件有序队列发送；文件夹会自动跳过并给出提示。"
+                         Classes="BodySmall"
+                         Foreground="{DynamicResource OnSurfaceVariant}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <Border x:Name="NoticeBanner"
+                  CornerRadius="16"
+                  Padding="14,10"
+                  IsVisible="False">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBlock x:Name="NoticeLabel"
+                         Grid.Column="0"
+                         Classes="BodyMedium"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Center" />
+              <Button Grid.Column="1"
+                      Content="关闭"
+                      Classes="Text"
+                      Padding="10,4"
+                      Click="OnDismissNoticeClicked" />
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
+
+      <!-- Right live queue & history sheet -->
+      <Border x:Name="QueuePane"
+              Grid.Row="0"
+              Grid.Column="1"
+              CornerRadius="28"
+              Padding="20"
+              Background="{DynamicResource SurfaceContainerLow}">
+        <StackPanel Spacing="14">
+          <StackPanel Spacing="8">
+            <TextBlock Text="待确认接收文件"
+                       Classes="TitleSmall"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+            <StackPanel x:Name="PromptsPanel" Spacing="8" />
+          </StackPanel>
+
+          <StackPanel Spacing="8">
+            <TextBlock Text="进行中的传输"
+                       Classes="TitleSmall"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+            <StackPanel x:Name="ActivePanel" Spacing="8" />
+          </StackPanel>
+
+          <StackPanel Spacing="8">
+            <TextBlock Text="按对端排队的待发送文件"
+                       Classes="TitleSmall"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+            <StackPanel x:Name="QueuePanel" Spacing="6" />
+          </StackPanel>
+
+          <StackPanel Spacing="8">
+            <TextBlock Text="本次会话传输历史"
+                       Classes="TitleSmall"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+            <StackPanel x:Name="HistoryPanel" Spacing="6" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

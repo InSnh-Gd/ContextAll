@@ -149,6 +149,101 @@ public sealed class Md3eAxamlViewsTests
             Assert.True(guideSeen);
         });
 
+    [Fact]
+    public Task TransfersView_g2_split_workbench_switches_wide_split_and_narrow_stack_and_renders_wavy_progress() =>
+        AvaloniaUiTestHost.RunOnUiThreadAsync(async () =>
+        {
+            var client = new FakeLocalDaemonClient();
+            var peer = new DeviceSnapshotPayload("DEV-1", "主力笔记本", true, "online", true, true, true, "192.168.1.20:42461");
+            var prompt = new FilePromptSnapshotPayload("t-in-1", "DEV-1", "photo.png", 4096, 30_000);
+            var active = new TransferSnapshotPayload("t-act-1", "DEV-1", "send", "movie.mp4", 4, 10, false, 10_000);
+            var history = new LocalTransferHistoryEntry("t-old-1", "DEV-1", "主力笔记本", "receive", "doc.pdf", 2048, "done", DateTimeOffset.UtcNow, "/tmp");
+
+            var vm = new TransfersViewModel(client);
+            var view = new TransfersView(vm);
+
+            // Wide (>= 840) enables g2-split-workbench dual-sheet split; narrow (< 840) stacks vertically
+            view.Measure(new Size(1160, 760));
+            view.Arrange(new Rect(0, 0, 1160, 760));
+            Assert.True(view.IsSplitLayout);
+
+            view.Measure(new Size(520, 720));
+            view.Arrange(new Rect(0, 0, 520, 720));
+            Assert.False(view.IsSplitLayout);
+
+            view.Measure(new Size(1160, 760));
+            view.Arrange(new Rect(0, 0, 1160, 760));
+
+            client.EmitState(LocalShellState.Empty with
+            {
+                ConnectionStatus = LocalConnectionStatus.Connected,
+                Devices = [peer],
+                FilePrompts = [prompt],
+                ActiveTransfers = [active],
+                History = [history],
+            });
+
+            Assert.Equal(1, view.RenderedActiveTransferCount);
+            Assert.Equal(1, view.RenderedHistoryCount);
+
+            var wavy = Assert.Single(view.GetLogicalDescendants().OfType<LinearWavyProgressIndicator>());
+            Assert.Equal(10, wavy.Maximum);
+            Assert.Equal(4, wavy.Value);
+
+            var renderedTexts = view.GetLogicalDescendants()
+                .OfType<TextBlock>()
+                .Select(t => t.Text ?? string.Empty)
+                .ToArray();
+            Assert.Contains(renderedTexts, t => t.Contains("photo.png", StringComparison.Ordinal));
+            Assert.Contains(renderedTexts, t => t.Contains("movie.mp4", StringComparison.Ordinal));
+            Assert.Contains(renderedTexts, t => t.Contains("doc.pdf", StringComparison.Ordinal));
+
+            Assert.True(await vm.AcceptFileAsync("t-in-1"));
+            Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.AcceptFile && c.Payload.TransferId == "t-in-1");
+        });
+
+    [Fact]
+    public void ThisDeviceView_axaml_exposes_appearance_and_accent_overrides_with_zero_reset_controls() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var client = new FakeLocalDaemonClient();
+            client.EmitState(LocalShellState.Empty with
+            {
+                ConnectionStatus = LocalConnectionStatus.Connected,
+                LocalDeviceId = "DEV-LOCAL-01",
+                LocalDisplayName = "办公台式机",
+                ResolvedDownloadDirectory = "/home/user/Downloads",
+            });
+
+            var daemon = new FakeDaemonController();
+            var saved = new List<ShellPreferences>();
+            var vm = new ThisDeviceViewModel(client, daemon, new ShellPreferences(), saved.Add);
+            var view = new ThisDeviceView(vm);
+
+            view.Measure(new Size(960, 760));
+            view.Arrange(new Rect(0, 0, 960, 760));
+
+            Assert.Equal(AppearanceModeOverride.FollowSystem, view.SelectedAppearanceMode);
+            Assert.Equal(AccentSourceOverride.FollowSystem, view.SelectedAccentSource);
+
+            view.SelectAppearanceMode(AppearanceModeOverride.Dark);
+            view.SelectAccentSource(AccentSourceOverride.ForestTeal);
+
+            Assert.Equal(AppearanceModeOverride.Dark, view.SelectedAppearanceMode);
+            Assert.Equal(AccentSourceOverride.ForestTeal, view.SelectedAccentSource);
+            Assert.True(saved.Count >= 2);
+            Assert.Equal(AppearanceModeOverride.Dark, saved[^1].AppearanceModeOverride);
+            Assert.Equal(AccentSourceOverride.ForestTeal, saved[^1].AccentSourceOverride);
+
+            var allTexts = view.GetLogicalDescendants()
+                .OfType<TextBlock>()
+                .Select(t => t.Text ?? string.Empty)
+                .Concat(view.GetLogicalDescendants().OfType<Button>().Select(b => b.Content?.ToString() ?? string.Empty))
+                .ToArray();
+            Assert.DoesNotContain(allTexts, t => t.Contains("重置", StringComparison.Ordinal));
+            Assert.Contains(allTexts, t => t.Contains("DEV-LOCAL-01", StringComparison.Ordinal));
+        });
+
     private sealed class FakeDaemonController : IDaemonController
     {
         public bool IsRunningFromAppImage => false;
