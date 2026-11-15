@@ -8,8 +8,9 @@ namespace ContextAll.App.Controls;
 /// <summary>
 /// MD3E compact bottom floating toolbar replacing fixed navigation bars on narrow windows (&lt; 840dp).
 /// </summary>
-[PseudoClasses(":devices", ":transfers", ":thisdevice")]
+[PseudoClasses(":devices", ":connection", ":transfers", ":thisdevice")]
 [TemplatePart("PART_NavDevices", typeof(Button))]
+[TemplatePart("PART_NavConnection", typeof(Button))]
 [TemplatePart("PART_NavTransfers", typeof(Button))]
 [TemplatePart("PART_NavThisDevice", typeof(Button))]
 public class HorizontalFloatingToolbar : TemplatedControl
@@ -20,6 +21,7 @@ public class HorizontalFloatingToolbar : TemplatedControl
             ShellSection.Devices);
 
     private Button? _navDevices;
+    private Button? _navConnection;
     private Button? _navTransfers;
     private Button? _navThisDevice;
 
@@ -51,6 +53,10 @@ public class HorizontalFloatingToolbar : TemplatedControl
         {
             _navDevices.Click -= OnDevicesClicked;
         }
+        if (_navConnection is not null)
+        {
+            _navConnection.Click -= OnConnectionClicked;
+        }
         if (_navTransfers is not null)
         {
             _navTransfers.Click -= OnTransfersClicked;
@@ -61,12 +67,17 @@ public class HorizontalFloatingToolbar : TemplatedControl
         }
 
         _navDevices = e.NameScope.Find<Button>("PART_NavDevices");
+        _navConnection = e.NameScope.Find<Button>("PART_NavConnection");
         _navTransfers = e.NameScope.Find<Button>("PART_NavTransfers");
         _navThisDevice = e.NameScope.Find<Button>("PART_NavThisDevice");
 
         if (_navDevices is not null)
         {
             _navDevices.Click += OnDevicesClicked;
+        }
+        if (_navConnection is not null)
+        {
+            _navConnection.Click += OnConnectionClicked;
         }
         if (_navTransfers is not null)
         {
@@ -90,6 +101,9 @@ public class HorizontalFloatingToolbar : TemplatedControl
     private void OnDevicesClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         TriggerSection(ShellSection.Devices);
 
+    private void OnConnectionClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        TriggerSection(ShellSection.Connection);
+
     private void OnTransfersClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         TriggerSection(ShellSection.Transfers);
 
@@ -99,6 +113,7 @@ public class HorizontalFloatingToolbar : TemplatedControl
     private void UpdatePseudoClasses()
     {
         PseudoClasses.Set(":devices", SelectedSection == ShellSection.Devices);
+        PseudoClasses.Set(":connection", SelectedSection == ShellSection.Connection);
         PseudoClasses.Set(":transfers", SelectedSection == ShellSection.Transfers);
         PseudoClasses.Set(":thisdevice", SelectedSection == ShellSection.ThisDevice);
     }

@@ -372,4 +372,103 @@ public sealed class Md3eControlsAndChromeTests
             Assert.Equal(4, shapes.Length);
             Assert.All(shapes, p => Assert.NotNull(p.Data));
         });
+
+    [Fact]
+    public void WideNavigationRail_aligns_all_icons_on_single_48dp_vertical_axis_in_collapsed_and_expanded_states_and_resolves_all_four_section_icons() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var rail = new WideNavigationRail
+            {
+                DaemonStatusLabel = "已连接",
+                FabText = "发送文件",
+            };
+            var host = new Window
+            {
+                Width = 300,
+                Height = 720,
+                Content = rail,
+            };
+
+            host.Measure(new Size(300, 720));
+            host.Arrange(new Rect(0, 0, 300, 720));
+            rail.Measure(new Size(WideNavigationRail.CompactWidth, 720));
+            rail.Arrange(new Rect(0, 0, WideNavigationRail.CompactWidth, 720));
+
+            var iconNames = new[]
+            {
+                "PART_ToggleIcon",
+                "PART_FabIcon",
+                "PART_NavDevicesIcon",
+                "PART_NavConnectionIcon",
+                "PART_NavTransfersIcon",
+                "PART_NavThisDeviceIcon",
+            };
+
+            var iconsByName = rail.GetVisualDescendants()
+                .OfType<PathIcon>()
+                .Where(p => !string.IsNullOrEmpty(p.Name))
+                .ToDictionary(p => p.Name!, StringComparer.Ordinal);
+
+            foreach (var name in iconNames)
+            {
+                Assert.True(iconsByName.TryGetValue(name, out var icon), $"Missing icon {name}");
+                Assert.NotNull(icon!.Data);
+                var center = icon.TranslatePoint(new Point(icon.Bounds.Width / 2.0, icon.Bounds.Height / 2.0), rail);
+                Assert.NotNull(center);
+                Assert.InRange(center.Value.X, 47.0, 49.0);
+            }
+
+            rail.Transitions = null;
+            rail.IsExpanded = true;
+            host.UpdateLayout();
+            rail.Measure(new Size(WideNavigationRail.ExpandedWidth, 720));
+            rail.Arrange(new Rect(0, 0, WideNavigationRail.ExpandedWidth, 720));
+
+            foreach (var name in iconNames)
+            {
+                var icon = iconsByName[name];
+                var center = icon.TranslatePoint(new Point(icon.Bounds.Width / 2.0, icon.Bounds.Height / 2.0), rail);
+                Assert.NotNull(center);
+                Assert.InRange(center.Value.X, 47.0, 49.0);
+            }
+
+            var labelNames = new[]
+            {
+                "PART_BrandText",
+                "PART_FabLabel",
+                "PART_NavDevicesLabel",
+                "PART_NavConnectionLabel",
+                "PART_NavTransfersLabel",
+                "PART_NavThisDeviceLabel",
+            };
+
+            var labelsByName = rail.GetVisualDescendants()
+                .OfType<TextBlock>()
+                .Where(t => !string.IsNullOrEmpty(t.Name))
+                .ToDictionary(t => t.Name!, StringComparer.Ordinal);
+
+            foreach (var name in labelNames)
+            {
+                Assert.True(labelsByName.TryGetValue(name, out var label), $"Missing label {name}");
+                Assert.True(label!.IsVisible, $"Expected {name} visible when expanded");
+                var origin = label.TranslatePoint(new Point(0, 0), rail);
+                Assert.NotNull(origin);
+                Assert.True(
+                    origin.Value.X is >= 87.0 and <= 89.0,
+                    $"Expected expanded label '{name}' X in [87, 89], got {origin.Value.X:F2} (rail.Width={rail.Width:F1}, rail.Bounds.Width={rail.Bounds.Width:F1})");
+            }
+
+            ShellSection? railPicked = null;
+            rail.SectionSelected += s => railPicked = s;
+            rail.TriggerSection(ShellSection.Connection);
+            Assert.Equal(ShellSection.Connection, rail.SelectedSection);
+            Assert.Equal(ShellSection.Connection, railPicked);
+
+            var toolbar = new HorizontalFloatingToolbar();
+            ShellSection? toolbarPicked = null;
+            toolbar.SectionSelected += s => toolbarPicked = s;
+            toolbar.TriggerSection(ShellSection.Connection);
+            Assert.Equal(ShellSection.Connection, toolbar.SelectedSection);
+            Assert.Equal(ShellSection.Connection, toolbarPicked);
+        });
 }

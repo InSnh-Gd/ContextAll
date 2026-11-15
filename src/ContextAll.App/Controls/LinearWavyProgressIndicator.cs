@@ -202,7 +202,7 @@ public class LinearWavyProgressIndicator : TemplatedControl
     {
         _driver ??= new MotionFrameDriver(this, dt =>
         {
-            _phaseRadians = (_phaseRadians + dt * 4.5) % (Math.PI * 2.0);
+            _phaseRadians = (_phaseRadians + dt * 2.4) % (Math.PI * 2.0);
             InvalidateVisual();
             return ShowGap && !ReducedMotion;
         });

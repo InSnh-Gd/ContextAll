@@ -1,16 +1,18 @@
+using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.VisualTree;
+using Avalonia.Threading;
 
 namespace ContextAll.App.Motion;
 
-/// <summary>Drives per-frame animations using TopLevel.RequestAnimationFrame while active animations remain running.</summary>
+/// <summary>Drives paced ~60fps frame callbacks using <see cref="DispatcherTimer"/> and real wall-clock elapsed time.</summary>
 public sealed class MotionFrameDriver
 {
     private readonly Visual _owner;
     private readonly Func<double, bool> _onTick;
+    private DispatcherTimer? _timer;
     private bool _running;
-    private TimeSpan? _lastTimestamp;
+    private long _lastTickTimestamp;
 
     public MotionFrameDriver(Visual owner, Func<double, bool> onTick)
     {
@@ -19,6 +21,9 @@ public sealed class MotionFrameDriver
     }
 
     public bool IsRunning => _running;
+
+    public static double ComputeDeltaSeconds(TimeSpan elapsed) =>
+        Math.Clamp(double.IsFinite(elapsed.TotalSeconds) ? elapsed.TotalSeconds : 0.0, 0.0, 0.05);
 
     public void Start()
     {
@@ -36,48 +41,37 @@ public sealed class MotionFrameDriver
         }
 
         _running = true;
-        _lastTimestamp = null;
-        ScheduleNext(topLevel);
+        _lastTickTimestamp = Stopwatch.GetTimestamp();
+        _timer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, OnTimerTick);
+        _timer.Start();
     }
 
     public void Stop()
     {
         _running = false;
-        _lastTimestamp = null;
+        _timer?.Stop();
     }
 
-    private void ScheduleNext(TopLevel topLevel)
+    private void OnTimerTick(object? sender, EventArgs e)
     {
-        topLevel.RequestAnimationFrame(timestamp =>
+        if (!_running || TopLevel.GetTopLevel(_owner) is null)
         {
-            if (!_running)
-            {
-                _lastTimestamp = null;
-                return;
-            }
+            Stop();
+            return;
+        }
 
-            var currentTopLevel = TopLevel.GetTopLevel(_owner);
-            if (currentTopLevel is null)
-            {
-                _running = false;
-                _lastTimestamp = null;
-                return;
-            }
+        var now = Stopwatch.GetTimestamp();
+        var dt = ComputeDeltaSeconds(Stopwatch.GetElapsedTime(_lastTickTimestamp, now));
+        _lastTickTimestamp = now;
 
-            var dt = _lastTimestamp is { } prev
-                ? Math.Clamp((timestamp - prev).TotalSeconds, 1.0 / 240.0, 0.05)
-                : 1.0 / 60.0;
-            _lastTimestamp = timestamp;
+        if (dt <= 0.0)
+        {
+            return;
+        }
 
-            var keepGoing = _onTick(dt);
-            if (!keepGoing)
-            {
-                _running = false;
-                _lastTimestamp = null;
-                return;
-            }
-
-            ScheduleNext(currentTopLevel);
-        });
+        if (!_onTick(dt))
+        {
+            Stop();
+        }
     }
 }

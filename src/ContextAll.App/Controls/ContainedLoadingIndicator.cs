@@ -13,6 +13,8 @@ namespace ContextAll.App.Controls;
 [PseudoClasses(":active")]
 public class ContainedLoadingIndicator : TemplatedControl
 {
+    public const double FullCycleDurationSeconds = 8.4;
+
     public static readonly StyledProperty<bool> IsActiveProperty =
         AvaloniaProperty.Register<ContainedLoadingIndicator, bool>(nameof(IsActive), true);
 
@@ -148,7 +150,7 @@ public class ContainedLoadingIndicator : TemplatedControl
         _driver ??= new MotionFrameDriver(this, dt =>
         {
             _elapsedSeconds += dt;
-            _morphProgress = (_elapsedSeconds / 3.8) % 1.0;
+            _morphProgress = (_elapsedSeconds / FullCycleDurationSeconds) % 1.0;
             InvalidateVisual();
             return IsActive && !ReducedMotion;
         });

@@ -8,10 +8,11 @@ namespace ContextAll.App.Controls;
 /// <summary>
 /// MD3E wide collapsible navigation rail (<c>96dp ↔ 224dp</c>) with synced Extended FAB and daemon pill.
 /// </summary>
-[PseudoClasses(":expanded", ":daemon-connected", ":devices", ":transfers", ":thisdevice")]
+[PseudoClasses(":expanded", ":daemon-connected", ":devices", ":connection", ":transfers", ":thisdevice")]
 [TemplatePart("PART_ToggleButton", typeof(Button))]
 [TemplatePart("PART_FabButton", typeof(Button))]
 [TemplatePart("PART_NavDevices", typeof(Button))]
+[TemplatePart("PART_NavConnection", typeof(Button))]
 [TemplatePart("PART_NavTransfers", typeof(Button))]
 [TemplatePart("PART_NavThisDevice", typeof(Button))]
 public class WideNavigationRail : TemplatedControl
@@ -37,6 +38,7 @@ public class WideNavigationRail : TemplatedControl
     private Button? _toggleButton;
     private Button? _fabButton;
     private Button? _navDevices;
+    private Button? _navConnection;
     private Button? _navTransfers;
     private Button? _navThisDevice;
 
@@ -105,6 +107,10 @@ public class WideNavigationRail : TemplatedControl
         {
             _navDevices.Click -= OnDevicesClicked;
         }
+        if (_navConnection is not null)
+        {
+            _navConnection.Click -= OnConnectionClicked;
+        }
         if (_navTransfers is not null)
         {
             _navTransfers.Click -= OnTransfersClicked;
@@ -117,6 +123,7 @@ public class WideNavigationRail : TemplatedControl
         _toggleButton = e.NameScope.Find<Button>("PART_ToggleButton");
         _fabButton = e.NameScope.Find<Button>("PART_FabButton");
         _navDevices = e.NameScope.Find<Button>("PART_NavDevices");
+        _navConnection = e.NameScope.Find<Button>("PART_NavConnection");
         _navTransfers = e.NameScope.Find<Button>("PART_NavTransfers");
         _navThisDevice = e.NameScope.Find<Button>("PART_NavThisDevice");
 
@@ -131,6 +138,10 @@ public class WideNavigationRail : TemplatedControl
         if (_navDevices is not null)
         {
             _navDevices.Click += OnDevicesClicked;
+        }
+        if (_navConnection is not null)
+        {
+            _navConnection.Click += OnConnectionClicked;
         }
         if (_navTransfers is not null)
         {
@@ -162,6 +173,9 @@ public class WideNavigationRail : TemplatedControl
     private void OnDevicesClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         TriggerSection(ShellSection.Devices);
 
+    private void OnConnectionClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        TriggerSection(ShellSection.Connection);
+
     private void OnTransfersClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         TriggerSection(ShellSection.Transfers);
 
@@ -174,6 +188,7 @@ public class WideNavigationRail : TemplatedControl
         PseudoClasses.Set(":expanded", IsExpanded);
         PseudoClasses.Set(":daemon-connected", IsDaemonConnected);
         PseudoClasses.Set(":devices", SelectedSection == ShellSection.Devices);
+        PseudoClasses.Set(":connection", SelectedSection == ShellSection.Connection);
         PseudoClasses.Set(":transfers", SelectedSection == ShellSection.Transfers);
         PseudoClasses.Set(":thisdevice", SelectedSection == ShellSection.ThisDevice);
     }

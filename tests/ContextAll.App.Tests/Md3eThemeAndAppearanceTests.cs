@@ -288,4 +288,128 @@ public sealed class Md3eThemeAndAppearanceTests
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
+
+    [Fact]
+    public void LinuxCursorEnvironment_resolves_cursor_theme_size_and_nixos_icon_paths_by_precedence()
+    {
+        var envOverride = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+            EnvXcursorTheme: "CustomCursor",
+            EnvXcursorSize: "32",
+            PortalCursorTheme: "Adwaita",
+            PortalCursorSize: 24,
+            HomeDirectory: "/home/alice",
+            UserName: "alice"));
+        Assert.Equal("CustomCursor", envOverride.Theme);
+        Assert.Equal(32, envOverride.Size);
+
+        var nixosPortal = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+            EnvXcursorTheme: null,
+            EnvXcursorSize: "",
+            EnvXcursorPath: "/run/current-system/sw/share/icons:/home/alice/.icons",
+            XdgDataDirs: "/etc/profiles/per-user/alice/share:/run/current-system/sw/share",
+            CurrentDesktop: "GNOME",
+            PortalCursorTheme: "Adwaita",
+            PortalCursorSize: 24,
+            HomeDirectory: "/home/alice",
+            UserName: "alice",
+            CandidateIconDirectories:
+            [
+                "/home/alice/.icons",
+                "/home/alice/.local/share/icons",
+                "/etc/profiles/per-user/alice/share/icons",
+                "/run/current-system/sw/share/icons",
+            ],
+            ExistingCursorThemes: ["Adwaita"]));
+        Assert.Equal("Adwaita", nixosPortal.Theme);
+        Assert.Equal(24, nixosPortal.Size);
+        var pathParts = nixosPortal.CursorPath.Split(':', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Contains("/run/current-system/sw/share/icons", pathParts);
+        Assert.Contains("/etc/profiles/per-user/alice/share/icons", pathParts);
+        Assert.Equal(pathParts.Length, pathParts.Distinct(StringComparer.Ordinal).Count());
+
+        var kdeResolved = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+            CurrentDesktop: "KDE",
+            KdeInputRcContent: "[Mouse]\ncursorTheme=breeze_cursors\ncursorSize=28\n",
+            Gtk3SettingsIniContent: "[Settings]\ngtk-cursor-theme-name=Bibata-Modern-Classic\ngtk-cursor-theme-size=24\n",
+            HomeDirectory: "/home/alice",
+            UserName: "alice"));
+        Assert.Equal("breeze_cursors", kdeResolved.Theme);
+        Assert.Equal(28, kdeResolved.Size);
+
+        var gtkFallback = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+            CurrentDesktop: "GNOME",
+            Gtk3SettingsIniContent: "[Settings]\ngtk-cursor-theme-name=Bibata-Modern-Classic\ngtk-cursor-theme-size=30\n",
+            HomeDirectory: "/home/alice",
+            UserName: "alice"));
+        Assert.Equal("Bibata-Modern-Classic", gtkFallback.Theme);
+        Assert.Equal(30, gtkFallback.Size);
+
+        var gsettingsFallback = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+            GsettingsCursorTheme: "'Adwaita'",
+            GsettingsCursorSize: "24",
+            HomeDirectory: "/home/alice",
+            UserName: "alice"));
+        Assert.Equal("Adwaita", gsettingsFallback.Theme);
+        Assert.Equal(24, gsettingsFallback.Size);
+
+        var discoveredFallback = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+            ExistingCursorThemes: ["hicolor", "breeze_cursors"],
+            HomeDirectory: "/home/alice",
+            UserName: "alice"));
+        Assert.Equal("breeze_cursors", discoveredFallback.Theme);
+        Assert.Equal(24, discoveredFallback.Size);
+
+        var finalDefault = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+            HomeDirectory: "/home/alice",
+            UserName: "alice"));
+        Assert.Equal("Adwaita", finalDefault.Theme);
+        Assert.Equal(24, finalDefault.Size);
+    }
+
+    [Fact]
+    public void LinuxCursorEnvironment_creates_default_theme_alias_and_prepends_to_xcursor_path()
+    {
+        var temp = Directory.CreateTempSubdirectory("contextall-cursor-");
+        try
+        {
+            var systemIcons = Path.Combine(temp.FullName, "system-icons");
+            var cursorsDir = Path.Combine(systemIcons, "Adwaita", "cursors");
+            Directory.CreateDirectory(cursorsDir);
+            File.WriteAllText(Path.Combine(cursorsDir, "left_ptr"), "cursor-data");
+
+            var runtimeBase = Path.Combine(temp.FullName, "runtime");
+            Directory.CreateDirectory(runtimeBase);
+
+            var aliasDir = LinuxCursorEnvironment.PrepareDefaultThemeAlias(
+                runtimeBase,
+                "Adwaita",
+                [systemIcons]);
+            Assert.NotNull(aliasDir);
+
+            var indexThemePath = Path.Combine(aliasDir!, "default", "index.theme");
+            Assert.True(File.Exists(indexThemePath));
+            var indexContent = File.ReadAllText(indexThemePath);
+            Assert.Contains("Inherits=Adwaita", indexContent, StringComparison.Ordinal);
+
+            Assert.True(File.Exists(Path.Combine(aliasDir!, "default", "cursors", "left_ptr")));
+
+            var resolved = LinuxCursorEnvironment.Resolve(new CursorProbeInputs(
+                EnvXcursorTheme: "Adwaita",
+                EnvXcursorSize: "24",
+                EnvXcursorPath: "/usr/share/icons",
+                CandidateIconDirectories: [systemIcons],
+                RuntimeAliasIconsDirectory: aliasDir));
+
+            var parts = resolved.CursorPath.Split(':', StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(aliasDir, parts[0]);
+            Assert.Contains(systemIcons, parts);
+        }
+        finally
+        {
+            if (Directory.Exists(temp.FullName))
+            {
+                Directory.Delete(temp.FullName, recursive: true);
+            }
+        }
+    }
 }

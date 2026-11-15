@@ -61,8 +61,8 @@ public static class PolygonMorphGeometry
         1 => Uniform(0.41 + 0.055 * Math.Cos(9.0 * theta)),
         // 2: SoftPentagon (rounded 5-gon)
         2 => Uniform(SuperPolygonRadius(theta, sides: 5, sharpness: 0.14) * 0.45),
-        // 3: Pill (expressive rounded horizontal capsule)
-        3 => (0.47 * (1.0 - 0.08 * Math.Pow(Math.Sin(theta), 2)), 0.31),
+        // 3: Cookie6Sided (6-lobe symmetric scalloped blossom, 15-degree phase for equal X/Y bounds)
+        3 => Uniform(0.40 + 0.055 * Math.Sin(6.0 * theta)),
         // 4: Sunny (8-ray rounded burst)
         4 => Uniform(0.38 + 0.085 * Math.Cos(8.0 * theta)),
         // 5: Cookie4Sided (4-lobe clover)

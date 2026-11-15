@@ -38,6 +38,12 @@ public sealed class Md3eTokensAndRippleTests
                          "Material_IconInfo",
                          "Material_IconWifi",
                          "Material_IconQrCode",
+                         "Material_IconDesktop",
+                         "Material_IconMenu",
+                         "Material_IconClose",
+                         "Material_IconMinimize",
+                         "Material_IconCropSquare",
+                         "Material_IconFilterNone",
                      })
             {
                 Assert.True(tokens.ContainsKey(iconKey), $"Missing domain icon resource: {iconKey}");

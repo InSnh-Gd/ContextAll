@@ -1,4 +1,5 @@
 using Avalonia;
+using ContextAll.App.Controls;
 using ContextAll.App.Motion;
 
 namespace ContextAll.App.Tests;
@@ -139,6 +140,30 @@ public sealed class Md3eMotionAndGeometryTests
         {
             Assert.Equal((p0[i].X + p1[i].X) * 0.5, pHalf[i].X, 1e-9);
             Assert.Equal((p0[i].Y + p1[i].Y) * 0.5, pHalf[i].Y, 1e-9);
+        }
+    }
+
+    [Fact]
+    public void MotionFrameDriver_does_not_inflate_submillisecond_frames_and_all_7_polygons_are_symmetric()
+    {
+        Assert.Equal(0.0, MotionFrameDriver.ComputeDeltaSeconds(TimeSpan.Zero));
+        var subMsDt = MotionFrameDriver.ComputeDeltaSeconds(TimeSpan.FromMicroseconds(100));
+        Assert.True(subMsDt < 0.001, $"Expected sub-ms elapsed to stay < 0.001s, got {subMsDt}");
+        Assert.Equal(0.05, MotionFrameDriver.ComputeDeltaSeconds(TimeSpan.FromMilliseconds(200)));
+        Assert.True(ContainedLoadingIndicator.FullCycleDurationSeconds >= 7.5);
+
+        for (var shapeIndex = 0; shapeIndex < PolygonMorphGeometry.ShapeCount; shapeIndex++)
+        {
+            var pts = PolygonMorphGeometry.SamplePolygon(shapeIndex, vertexCount: 72);
+            var minX = pts.Min(p => p.X);
+            var maxX = pts.Max(p => p.X);
+            var minY = pts.Min(p => p.Y);
+            var maxY = pts.Max(p => p.Y);
+            var width = maxX - minX;
+            var height = maxY - minY;
+            Assert.True(Math.Abs(width - height) < 0.08, $"Shape {shapeIndex} asymmetric: w={width:F3}, h={height:F3}");
+            Assert.True(Math.Abs((minX + maxX) * 0.5 - 0.5) < 0.04, $"Shape {shapeIndex} X off-center");
+            Assert.True(Math.Abs((minY + maxY) * 0.5 - 0.5) < 0.04, $"Shape {shapeIndex} Y off-center");
         }
     }
 }
