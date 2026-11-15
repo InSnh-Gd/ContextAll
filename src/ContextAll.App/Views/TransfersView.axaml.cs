@@ -226,9 +226,10 @@ public partial class TransfersView : UserControl
             var chip = new Button
             {
                 Content = peer.DisplayName,
-                CornerRadius = new CornerRadius(18),
+                CornerRadius = new CornerRadius(20),
                 Padding = new Thickness(14, 7),
                 Margin = new Thickness(0, 0, 8, 8),
+                VerticalAlignment = VerticalAlignment.Center,
             };
             chip.Classes.Add(selected ? "FilledTonal" : "Outlined");
             var id = peer.DeviceId;
@@ -265,16 +266,18 @@ public partial class TransfersView : UserControl
             var acceptBtn = new Button
             {
                 Content = "接收文件",
-                CornerRadius = new CornerRadius(18),
+                CornerRadius = new CornerRadius(20),
                 Padding = new Thickness(14, 6),
+                VerticalAlignment = VerticalAlignment.Center,
             };
             acceptBtn.Classes.Add("Filled");
 
             var rejectBtn = new Button
             {
                 Content = "拒绝",
-                CornerRadius = new CornerRadius(18),
+                CornerRadius = new CornerRadius(20),
                 Padding = new Thickness(12, 6),
+                VerticalAlignment = VerticalAlignment.Center,
             };
             rejectBtn.Classes.Add("Outlined");
 
@@ -353,8 +356,9 @@ public partial class TransfersView : UserControl
             var cancelBtn = new Button
             {
                 Content = "取消传输",
-                CornerRadius = new CornerRadius(16),
+                CornerRadius = new CornerRadius(20),
                 Padding = new Thickness(12, 6),
+                VerticalAlignment = VerticalAlignment.Center,
             };
             cancelBtn.Classes.Add("Outlined");
             var tid = active.TransferId;
@@ -464,8 +468,9 @@ public partial class TransfersView : UserControl
             var openBtn = new Button
             {
                 Content = "打开所在文件夹",
-                CornerRadius = new CornerRadius(16),
+                CornerRadius = new CornerRadius(20),
                 Padding = new Thickness(12, 6),
+                VerticalAlignment = VerticalAlignment.Center,
                 IsVisible = entry.Direction != "send" && !string.IsNullOrWhiteSpace(entry.SavedDirectory),
             };
             openBtn.Classes.Add("FilledTonal");

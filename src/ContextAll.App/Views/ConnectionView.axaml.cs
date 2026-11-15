@@ -119,8 +119,9 @@ public partial class ConnectionView : UserControl
                     var copyBtn = new Button
                     {
                         Content = "复制",
-                        CornerRadius = new Avalonia.CornerRadius(16),
+                        CornerRadius = new Avalonia.CornerRadius(20),
                         Padding = new Avalonia.Thickness(12, 6),
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
                     };
                     copyBtn.Classes.Add("FilledTonal");
                     var captured = endpoint;

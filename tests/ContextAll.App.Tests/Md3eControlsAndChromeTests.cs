@@ -471,4 +471,93 @@ public sealed class Md3eControlsAndChromeTests
             Assert.Equal(ShellSection.Connection, toolbar.SelectedSection);
             Assert.Equal(ShellSection.Connection, toolbarPicked);
         });
+
+    [Fact]
+    public void WideNavigationRail_nav_pills_are_never_clipped_by_outer_button_and_expand_into_single_unified_capsule() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var rail = new WideNavigationRail
+            {
+                DaemonStatusLabel = "未连接",
+                FabText = "发送文件",
+                Transitions = null,
+            };
+            var host = new Window
+            {
+                Width = 300,
+                Height = 720,
+                Content = rail,
+            };
+
+            host.Measure(new Size(300, 720));
+            host.Arrange(new Rect(0, 0, 300, 720));
+
+            var pills = new[]
+            {
+                "PART_NavDevicesPill",
+                "PART_NavConnectionPill",
+                "PART_NavTransfersPill",
+                "PART_NavThisDevicePill",
+            };
+            var buttons = new[]
+            {
+                "PART_NavDevices",
+                "PART_NavConnection",
+                "PART_NavTransfers",
+                "PART_NavThisDevice",
+            };
+
+            var bordersByName = rail.GetVisualDescendants()
+                .OfType<Border>()
+                .Where(b => !string.IsNullOrEmpty(b.Name))
+                .GroupBy(b => b.Name!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+            var buttonsByName = rail.GetVisualDescendants()
+                .OfType<Button>()
+                .Where(b => !string.IsNullOrEmpty(b.Name))
+                .GroupBy(b => b.Name!, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+            foreach (var btnName in buttons)
+            {
+                var btn = buttonsByName[btnName];
+                Assert.False(btn.ClipToBounds, $"Expected nav button {btnName} not to clip its pill indicator.");
+                foreach (var ancestorBorder in btn.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "PART_Root"))
+                {
+                    Assert.True(
+                        ancestorBorder.CornerRadius.TopLeft <= 0.0 && !ancestorBorder.ClipToBounds,
+                        $"Expected {btnName} PART_Root not to apply circular clipping around pill+label.");
+                }
+            }
+
+            foreach (var pillName in pills)
+            {
+                var pill = bordersByName[pillName];
+                Assert.InRange(pill.Bounds.Width, 55.0, 57.0);
+                Assert.InRange(pill.Bounds.Height, 31.0, 33.0);
+                Assert.Equal(new CornerRadius(16), pill.CornerRadius);
+            }
+
+            rail.IsExpanded = true;
+            host.UpdateLayout();
+            rail.Measure(new Size(WideNavigationRail.ExpandedWidth, 720));
+            rail.Arrange(new Rect(0, 0, WideNavigationRail.ExpandedWidth, 720));
+
+            foreach (var pillName in pills)
+            {
+                var pill = bordersByName[pillName];
+                Assert.True(pill.Bounds.Width >= 180.0, $"Expected expanded {pillName} to span full nav row (>= 180dp), got {pill.Bounds.Width:F1}");
+                Assert.InRange(pill.Bounds.Height, 46.0, 50.0);
+                Assert.Equal(new CornerRadius(24), pill.CornerRadius);
+            }
+
+            var toolbar = new HorizontalFloatingToolbar();
+            var dockHost = new Window { Width = 520, Height = 200, Content = toolbar };
+            dockHost.Measure(new Size(520, 200));
+            dockHost.Arrange(new Rect(0, 0, 520, 200));
+            foreach (var dockBtn in toolbar.GetVisualDescendants().OfType<Button>())
+            {
+                Assert.InRange(dockBtn.Bounds.Height, 38.0, 44.0);
+            }
+        });
 }

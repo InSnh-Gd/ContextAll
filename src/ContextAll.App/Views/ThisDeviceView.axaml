@@ -60,7 +60,8 @@
             <Button Grid.Column="1"
                     Content="保存名称"
                     Classes="Filled"
-                    CornerRadius="18"
+                    VerticalAlignment="Center"
+                    CornerRadius="20"
                     Padding="16,10"
                     Click="OnSaveNameClicked" />
           </Grid>
@@ -79,7 +80,7 @@
           <Button Content="选择下载文件夹…"
                   Classes="FilledTonal"
                   HorizontalAlignment="Left"
-                  CornerRadius="18"
+                  CornerRadius="20"
                   Padding="16,8"
                   Click="OnChooseFolderClicked" />
         </StackPanel>
@@ -98,17 +99,20 @@
             <StackPanel Orientation="Horizontal" Spacing="8">
               <Button x:Name="ModeFollowButton"
                       Content="跟随系统"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Click="OnModeFollowClicked" />
               <Button x:Name="ModeLightButton"
                       Content="浅色"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Click="OnModeLightClicked" />
               <Button x:Name="ModeDarkButton"
                       Content="深色"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Click="OnModeDarkClicked" />
             </StackPanel>
@@ -121,31 +125,36 @@
             <WrapPanel Orientation="Horizontal">
               <Button x:Name="AccentFollowButton"
                       Content="跟随系统"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Margin="0,0,8,8"
                       Click="OnAccentFollowClicked" />
               <Button x:Name="AccentBlueButton"
                       Content="品牌蓝"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Margin="0,0,8,8"
                       Click="OnAccentBlueClicked" />
               <Button x:Name="AccentTealButton"
                       Content="森林青"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Margin="0,0,8,8"
                       Click="OnAccentTealClicked" />
               <Button x:Name="AccentSunsetButton"
                       Content="日落陶红"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Margin="0,0,8,8"
                       Click="OnAccentSunsetClicked" />
               <Button x:Name="AccentVioletButton"
                       Content="紫罗兰"
-                      CornerRadius="16"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="14,7"
                       Margin="0,0,8,8"
                       Click="OnAccentVioletClicked" />

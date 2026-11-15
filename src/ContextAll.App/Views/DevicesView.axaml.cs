@@ -229,7 +229,7 @@ public partial class DevicesView : UserControl
                 var pairBtn = new Button
                 {
                     Content = "配对",
-                    CornerRadius = new CornerRadius(18),
+                    CornerRadius = new CornerRadius(20),
                     Padding = new Thickness(12, 6),
                     VerticalAlignment = VerticalAlignment.Center,
                 };
@@ -272,9 +272,10 @@ public partial class DevicesView : UserControl
             var backBtn = new Button
             {
                 Content = "← 返回设备列表",
-                CornerRadius = new CornerRadius(18),
+                CornerRadius = new CornerRadius(20),
                 Padding = new Thickness(12, 6),
                 HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center,
             };
             backBtn.Classes.Add("Text");
             backBtn.Click += (_, _) => _vm.ClearSelection();

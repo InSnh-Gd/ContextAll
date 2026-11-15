@@ -315,9 +315,39 @@
 
   <ControlTheme x:Key="Md3eRailNavButtonTheme" TargetType="Button">
     <Setter Property="MinWidth" Value="0" />
-    <Setter Property="MinHeight" Value="52" />
+    <Setter Property="MinHeight" Value="0" />
     <Setter Property="Padding" Value="0" />
-    <Setter Property="CornerRadius" Value="26" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="ClipToBounds" Value="False" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Root"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                ClipToBounds="False">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="Md3eToolbarNavButtonTheme" TargetType="Button">
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Cursor" Value="Hand" />
@@ -332,14 +362,15 @@
                 CornerRadius="{TemplateBinding CornerRadius}"
                 ClipToBounds="True">
           <Panel>
-            <Border Name="PART_HoverLayer"
-                    Background="{DynamicResource OnSurfaceHover}"
-                    IsVisible="False" />
             <ContentPresenter Content="{TemplateBinding Content}"
                               ContentTemplate="{TemplateBinding ContentTemplate}"
                               Padding="{TemplateBinding Padding}"
                               HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+            <Border Name="PART_HoverLayer"
+                    Background="{DynamicResource OnSurfaceHover}"
+                    IsVisible="False"
+                    IsHitTestVisible="False" />
           </Panel>
         </Border>
       </ControlTemplate>
@@ -418,120 +449,190 @@
             </StackPanel>
 
             <StackPanel Grid.Row="2" Spacing="8" VerticalAlignment="Top" Margin="20,18,20,0">
+              <StackPanel.Styles>
+                <Style Selector="Button.RailNavItem:pointerover Border.RailNavHover">
+                  <Setter Property="IsVisible" Value="True" />
+                </Style>
+                <Style Selector="Button.RailNavItem:pressed Border.RailNavHover">
+                  <Setter Property="IsVisible" Value="True" />
+                  <Setter Property="Background" Value="{DynamicResource OnSurfacePressed}" />
+                </Style>
+              </StackPanel.Styles>
+
               <Button Name="PART_NavDevices"
+                      Classes="RailNavItem"
                       Theme="{StaticResource Md3eRailNavButtonTheme}"
                       HorizontalAlignment="Stretch">
-                <StackPanel Name="PART_NavDevicesStack"
-                            Orientation="Vertical"
-                            Spacing="4"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Center">
+                <Grid Name="PART_NavDevicesGrid"
+                      ColumnDefinitions="56,*"
+                      RowDefinitions="Auto,Auto">
                   <Border Name="PART_NavDevicesPill"
-                          Width="56"
+                          Grid.Row="0"
+                          Grid.Column="0"
+                          MinWidth="56"
                           Height="32"
                           CornerRadius="16"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ClipToBounds="True"
                           Background="Transparent">
-                    <PathIcon Name="PART_NavDevicesIcon"
-                              Width="20" Height="20"
-                              Data="{DynamicResource Material_IconDevices}"
-                              Foreground="{DynamicResource OnSurfaceVariant}"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
+                    <Border Classes="RailNavHover"
+                            Background="{DynamicResource OnSurfaceHover}"
+                            IsVisible="False"
+                            IsHitTestVisible="False" />
                   </Border>
+                  <PathIcon Name="PART_NavDevicesIcon"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Width="20" Height="20"
+                            Data="{DynamicResource Material_IconDevices}"
+                            Foreground="{DynamicResource OnSurfaceVariant}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False" />
                   <TextBlock Name="PART_NavDevicesLabel"
+                             Grid.Row="1"
+                             Grid.Column="0"
+                             Margin="0,4,0,0"
                              Text="设备"
                              Classes="LabelMedium"
                              Foreground="{DynamicResource OnSurfaceVariant}"
                              HorizontalAlignment="Center"
-                             VerticalAlignment="Center" />
-                </StackPanel>
+                             VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                </Grid>
               </Button>
 
               <Button Name="PART_NavConnection"
+                      Classes="RailNavItem"
                       Theme="{StaticResource Md3eRailNavButtonTheme}"
                       HorizontalAlignment="Stretch">
-                <StackPanel Name="PART_NavConnectionStack"
-                            Orientation="Vertical"
-                            Spacing="4"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Center">
+                <Grid Name="PART_NavConnectionGrid"
+                      ColumnDefinitions="56,*"
+                      RowDefinitions="Auto,Auto">
                   <Border Name="PART_NavConnectionPill"
-                          Width="56"
+                          Grid.Row="0"
+                          Grid.Column="0"
+                          MinWidth="56"
                           Height="32"
                           CornerRadius="16"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ClipToBounds="True"
                           Background="Transparent">
-                    <PathIcon Name="PART_NavConnectionIcon"
-                              Width="20" Height="20"
-                              Data="{DynamicResource Material_IconLink}"
-                              Foreground="{DynamicResource OnSurfaceVariant}"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
+                    <Border Classes="RailNavHover"
+                            Background="{DynamicResource OnSurfaceHover}"
+                            IsVisible="False"
+                            IsHitTestVisible="False" />
                   </Border>
+                  <PathIcon Name="PART_NavConnectionIcon"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Width="20" Height="20"
+                            Data="{DynamicResource Material_IconLink}"
+                            Foreground="{DynamicResource OnSurfaceVariant}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False" />
                   <TextBlock Name="PART_NavConnectionLabel"
+                             Grid.Row="1"
+                             Grid.Column="0"
+                             Margin="0,4,0,0"
                              Text="连接"
                              Classes="LabelMedium"
                              Foreground="{DynamicResource OnSurfaceVariant}"
                              HorizontalAlignment="Center"
-                             VerticalAlignment="Center" />
-                </StackPanel>
+                             VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                </Grid>
               </Button>
 
               <Button Name="PART_NavTransfers"
+                      Classes="RailNavItem"
                       Theme="{StaticResource Md3eRailNavButtonTheme}"
                       HorizontalAlignment="Stretch">
-                <StackPanel Name="PART_NavTransfersStack"
-                            Orientation="Vertical"
-                            Spacing="4"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Center">
+                <Grid Name="PART_NavTransfersGrid"
+                      ColumnDefinitions="56,*"
+                      RowDefinitions="Auto,Auto">
                   <Border Name="PART_NavTransfersPill"
-                          Width="56"
+                          Grid.Row="0"
+                          Grid.Column="0"
+                          MinWidth="56"
                           Height="32"
                           CornerRadius="16"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ClipToBounds="True"
                           Background="Transparent">
-                    <PathIcon Name="PART_NavTransfersIcon"
-                              Width="20" Height="20"
-                              Data="{DynamicResource Material_IconSwapHoriz}"
-                              Foreground="{DynamicResource OnSurfaceVariant}"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
+                    <Border Classes="RailNavHover"
+                            Background="{DynamicResource OnSurfaceHover}"
+                            IsVisible="False"
+                            IsHitTestVisible="False" />
                   </Border>
+                  <PathIcon Name="PART_NavTransfersIcon"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Width="20" Height="20"
+                            Data="{DynamicResource Material_IconSwapHoriz}"
+                            Foreground="{DynamicResource OnSurfaceVariant}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False" />
                   <TextBlock Name="PART_NavTransfersLabel"
+                             Grid.Row="1"
+                             Grid.Column="0"
+                             Margin="0,4,0,0"
                              Text="传输"
                              Classes="LabelMedium"
                              Foreground="{DynamicResource OnSurfaceVariant}"
                              HorizontalAlignment="Center"
-                             VerticalAlignment="Center" />
-                </StackPanel>
+                             VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                </Grid>
               </Button>
 
               <Button Name="PART_NavThisDevice"
+                      Classes="RailNavItem"
                       Theme="{StaticResource Md3eRailNavButtonTheme}"
                       HorizontalAlignment="Stretch">
-                <StackPanel Name="PART_NavThisDeviceStack"
-                            Orientation="Vertical"
-                            Spacing="4"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Center">
+                <Grid Name="PART_NavThisDeviceGrid"
+                      ColumnDefinitions="56,*"
+                      RowDefinitions="Auto,Auto">
                   <Border Name="PART_NavThisDevicePill"
-                          Width="56"
+                          Grid.Row="0"
+                          Grid.Column="0"
+                          MinWidth="56"
                           Height="32"
                           CornerRadius="16"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ClipToBounds="True"
                           Background="Transparent">
-                    <PathIcon Name="PART_NavThisDeviceIcon"
-                              Width="20" Height="20"
-                              Data="{DynamicResource Material_IconDesktop}"
-                              Foreground="{DynamicResource OnSurfaceVariant}"
-                              HorizontalAlignment="Center"
-                              VerticalAlignment="Center" />
+                    <Border Classes="RailNavHover"
+                            Background="{DynamicResource OnSurfaceHover}"
+                            IsVisible="False"
+                            IsHitTestVisible="False" />
                   </Border>
+                  <PathIcon Name="PART_NavThisDeviceIcon"
+                            Grid.Row="0"
+                            Grid.Column="0"
+                            Width="20" Height="20"
+                            Data="{DynamicResource Material_IconDesktop}"
+                            Foreground="{DynamicResource OnSurfaceVariant}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False" />
                   <TextBlock Name="PART_NavThisDeviceLabel"
+                             Grid.Row="1"
+                             Grid.Column="0"
+                             Margin="0,4,0,0"
                              Text="本机"
                              Classes="LabelMedium"
                              Foreground="{DynamicResource OnSurfaceVariant}"
                              HorizontalAlignment="Center"
-                             VerticalAlignment="Center" />
-                </StackPanel>
+                             VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                </Grid>
               </Button>
             </StackPanel>
 
@@ -565,10 +666,17 @@
     <Style Selector="^:expanded /template/ TextBlock#PART_FabLabel">
       <Setter Property="IsVisible" Value="True" />
     </Style>
-    <Style Selector="^:expanded /template/ StackPanel#PART_NavDevicesStack, ^:expanded /template/ StackPanel#PART_NavConnectionStack, ^:expanded /template/ StackPanel#PART_NavTransfersStack, ^:expanded /template/ StackPanel#PART_NavThisDeviceStack">
-      <Setter Property="Orientation" Value="Horizontal" />
-      <Setter Property="Spacing" Value="12" />
+    <Style Selector="^:expanded /template/ Border#PART_NavDevicesPill, ^:expanded /template/ Border#PART_NavConnectionPill, ^:expanded /template/ Border#PART_NavTransfersPill, ^:expanded /template/ Border#PART_NavThisDevicePill">
+      <Setter Property="(Grid.ColumnSpan)" Value="2" />
+      <Setter Property="Height" Value="48" />
+      <Setter Property="CornerRadius" Value="24" />
+    </Style>
+    <Style Selector="^:expanded /template/ TextBlock#PART_NavDevicesLabel, ^:expanded /template/ TextBlock#PART_NavConnectionLabel, ^:expanded /template/ TextBlock#PART_NavTransfersLabel, ^:expanded /template/ TextBlock#PART_NavThisDeviceLabel">
+      <Setter Property="(Grid.Row)" Value="0" />
+      <Setter Property="(Grid.Column)" Value="1" />
+      <Setter Property="Margin" Value="12,0,16,0" />
       <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="^:expanded /template/ Border#PART_DaemonPill">
       <Setter Property="Margin" Value="20,0" />
@@ -628,6 +736,19 @@
       <Setter Property="Foreground" Value="{DynamicResource OnSurface}" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+
+    <Style Selector="^:expanded:devices /template/ TextBlock#PART_NavDevicesLabel">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:expanded:connection /template/ TextBlock#PART_NavConnectionLabel">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:expanded:transfers /template/ TextBlock#PART_NavTransfersLabel">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
+    <Style Selector="^:expanded:thisdevice /template/ TextBlock#PART_NavThisDeviceLabel">
+      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    </Style>
   </ControlTheme>
 
   <ControlTheme x:Key="{x:Type c:HorizontalFloatingToolbar}" TargetType="c:HorizontalFloatingToolbar">
@@ -645,9 +766,7 @@
                 Padding="{TemplateBinding Padding}">
           <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
             <Button Name="PART_NavDevices"
-                    Theme="{StaticResource Md3eRailNavButtonTheme}"
-                    MinHeight="0"
-                    CornerRadius="20">
+                    Theme="{StaticResource Md3eToolbarNavButtonTheme}">
               <Border Name="PART_PillDevices" CornerRadius="20" Padding="14,10" Background="Transparent">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <PathIcon Name="PART_IconDevices" Width="18" Height="18"
@@ -660,9 +779,7 @@
             </Button>
 
             <Button Name="PART_NavConnection"
-                    Theme="{StaticResource Md3eRailNavButtonTheme}"
-                    MinHeight="0"
-                    CornerRadius="20">
+                    Theme="{StaticResource Md3eToolbarNavButtonTheme}">
               <Border Name="PART_PillConnection" CornerRadius="20" Padding="14,10" Background="Transparent">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <PathIcon Name="PART_IconConnection" Width="18" Height="18"
@@ -675,9 +792,7 @@
             </Button>
 
             <Button Name="PART_NavTransfers"
-                    Theme="{StaticResource Md3eRailNavButtonTheme}"
-                    MinHeight="0"
-                    CornerRadius="20">
+                    Theme="{StaticResource Md3eToolbarNavButtonTheme}">
               <Border Name="PART_PillTransfers" CornerRadius="20" Padding="14,10" Background="Transparent">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <PathIcon Name="PART_IconTransfers" Width="18" Height="18"
@@ -690,9 +805,7 @@
             </Button>
 
             <Button Name="PART_NavThisDevice"
-                    Theme="{StaticResource Md3eRailNavButtonTheme}"
-                    MinHeight="0"
-                    CornerRadius="20">
+                    Theme="{StaticResource Md3eToolbarNavButtonTheme}">
               <Border Name="PART_PillThisDevice" CornerRadius="20" Padding="14,10" Background="Transparent">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <PathIcon Name="PART_IconThisDevice" Width="18" Height="18"

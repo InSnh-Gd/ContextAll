@@ -91,6 +91,8 @@
               <Button Grid.Column="1"
                       Content="关闭"
                       Classes="Text"
+                      VerticalAlignment="Center"
+                      CornerRadius="20"
                       Padding="10,4"
                       Click="OnDismissNoticeClicked" />
             </Grid>

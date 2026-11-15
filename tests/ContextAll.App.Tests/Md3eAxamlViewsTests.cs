@@ -283,6 +283,62 @@ public sealed class Md3eAxamlViewsTests
             Assert.Contains(allTexts, t => t.Contains("DEV-LOCAL-01", StringComparison.Ordinal));
         });
 
+    [Fact]
+    public void All_views_render_capsule_action_buttons_with_uniform_pill_radii_and_un_stretched_heights() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var client = new FakeLocalDaemonClient();
+            var peer = new DeviceSnapshotPayload("DEV-1", "主力工作站", true, "online", true, true, true, "192.168.1.10:42461");
+            var discovered = new DeviceSnapshotPayload("DEV-2", "Pixel 9", false, "online", null, null, null, "192.168.1.11:42461");
+            var prompt = new FilePromptSnapshotPayload("tr-1", "DEV-1", "very-long-file-name-for-layout-wrap-check.tar.zst", 2048, 30_000);
+            var active = new TransferSnapshotPayload("tr-2", "DEV-1", "send", "archive.zip", 2, 5, false, 10_000);
+            var history = new LocalTransferHistoryEntry("tr-0", "DEV-1", "主力工作站", "receive", "notes.txt", 512, "done", DateTimeOffset.UtcNow, "/tmp");
+
+            client.EmitState(LocalShellState.Empty with
+            {
+                ConnectionStatus = LocalConnectionStatus.Connected,
+                LocalDeviceId = "DEV-SELF",
+                LocalDisplayName = "Workstation",
+                LocalAddresses = ["192.168.1.50"],
+                QuicPort = 42461,
+                Devices = [peer, discovered],
+                FilePrompts = [prompt],
+                ActiveTransfers = [active],
+                History = [history],
+            });
+
+            var tdView = new ThisDeviceView(new ThisDeviceViewModel(client, new FakeDaemonController(), new ShellPreferences(), _ => { }));
+            var connView = new ConnectionView(new ConnectionViewModel(client));
+            var trView = new TransfersView(new TransfersViewModel(client));
+            var devVm = new DevicesViewModel(client);
+            devVm.SelectDevice("DEV-2");
+            var devView = new DevicesView(devVm);
+
+            foreach (Control view in new Control[] { tdView, connView, trView, devView })
+            {
+                var win = new Window { Width = 1040, Height = 820, Content = view };
+                win.Measure(new Size(1040, 820));
+                win.Arrange(new Rect(0, 0, 1040, 820));
+
+                foreach (var btn in view.GetLogicalDescendants().OfType<Button>())
+                {
+                    if (!btn.IsVisible || btn.Bounds.Height <= 0)
+                    {
+                        continue;
+                    }
+
+                    Assert.True(
+                        btn.Bounds.Height <= 46.0,
+                        $"Button '{btn.Name ?? btn.Content?.ToString()}' stretched to height {btn.Bounds.Height:F1}dp in {view.GetType().Name}.");
+
+                    if (btn.Classes.Any(c => c is "Filled" or "FilledTonal" or "Outlined") && btn.Bounds.Height >= 38.0)
+                    {
+                        Assert.Equal(new CornerRadius(20), btn.CornerRadius);
+                    }
+                }
+            }
+        });
+
     private sealed class FakeDaemonController : IDaemonController
     {
         public bool IsRunningFromAppImage => false;
