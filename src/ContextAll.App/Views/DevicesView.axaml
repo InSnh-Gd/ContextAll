@@ -1,0 +1,198 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:ContextAll.App.Controls"
+             xmlns:vm="using:ContextAll.App.ViewModels"
+             x:Class="ContextAll.App.Views.DevicesView"
+             x:DataType="vm:DevicesViewModel">
+  <Panel>
+    <Grid x:Name="DualSheetGrid" ColumnDefinitions="404,*">
+      <!-- Left 404dp sheet: header + pairing code + dynamic Trusted/Discovered stacks or unified empty state -->
+      <Border x:Name="ListPane"
+              Grid.Column="0"
+              CornerRadius="28"
+              Background="{DynamicResource Surface}"
+              BorderBrush="{DynamicResource OutlineVariant}"
+              BorderThickness="1"
+              Padding="18"
+              Margin="0,0,12,0">
+        <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="设备" Classes="HeadlineSmallEmphasized" Foreground="{DynamicResource OnSurface}" />
+              <TextBlock Text="已信任与局域网发现设备" Classes="BodySmall" Foreground="{DynamicResource OnSurfaceVariant}" />
+            </StackPanel>
+            <Button x:Name="GlobalPushClipboardButton"
+                    Grid.Column="1"
+                    Classes="FilledTonal"
+                    CornerRadius="20"
+                    Padding="14,9"
+                    VerticalAlignment="Center"
+                    Click="OnGlobalPushClipboardClicked">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="16" Height="16"
+                          Data="{DynamicResource Material_IconContentPaste}"
+                          Foreground="{DynamicResource OnSecondaryContainer}" />
+                <TextBlock Text="推送剪贴板" Classes="LabelLarge" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
+
+          <!-- Pairing prompt banner -->
+          <Border x:Name="PairingBanner"
+                  Grid.Row="1"
+                  IsVisible="{Binding PairingPrompt, Converter={x:Static ObjectConverters.IsNotNull}}"
+                  CornerRadius="24"
+                  Background="{DynamicResource PrimaryContainer}"
+                  BorderBrush="{DynamicResource Primary}"
+                  BorderThickness="1"
+                  Padding="16,14">
+            <StackPanel Spacing="8">
+              <TextBlock Text="配对短码核对"
+                         Classes="LabelMediumEmphasized"
+                         Foreground="{DynamicResource OnPrimaryContainer}" />
+              <TextBlock x:Name="PairingPeerLabel"
+                         Classes="TitleSmall"
+                         Foreground="{DynamicResource OnPrimaryContainer}"
+                         TextWrapping="Wrap" />
+              <TextBlock x:Name="PairingCodeLabel"
+                         Classes="DisplaySmallEmphasized MonoTabular"
+                         LetterSpacing="4"
+                         Foreground="{DynamicResource OnPrimaryContainer}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="Filled"
+                        Content="确认配对"
+                        CornerRadius="20"
+                        Click="OnAcceptPairingClicked" />
+                <Button Classes="Outlined"
+                        Content="拒绝"
+                        CornerRadius="20"
+                        Click="OnRejectPairingClicked" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Device stacks or unified empty state -->
+          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+            <Panel>
+              <StackPanel x:Name="DeviceListsContainer"
+                          Spacing="8"
+                          IsVisible="{Binding HasAnyDevices}">
+                <TextBlock Text="已信任设备"
+                           Classes="LabelLargeEmphasized"
+                           Foreground="{DynamicResource Primary}"
+                           Margin="4,2,0,2"
+                           IsVisible="{Binding HasTrustedDevices}" />
+                <StackPanel x:Name="TrustedPanel"
+                            Spacing="3"
+                            IsVisible="{Binding HasTrustedDevices}" />
+
+                <TextBlock Text="已发现待配对"
+                           Classes="LabelLargeEmphasized"
+                           Foreground="{DynamicResource OnSurfaceVariant}"
+                           Margin="4,10,0,2"
+                           IsVisible="{Binding HasDiscoveredDevices}" />
+                <StackPanel x:Name="DiscoveredPanel"
+                            Spacing="3"
+                            IsVisible="{Binding HasDiscoveredDevices}" />
+              </StackPanel>
+
+              <!-- 3.A unified organic empty state when neither group has devices -->
+              <StackPanel x:Name="EmptyStatePanel"
+                          IsVisible="{Binding !HasAnyDevices}"
+                          Spacing="14"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Margin="12,36">
+                <c:ExpressiveIconBadge Tone="Primary"
+                                       ContainerSize="64"
+                                       IconSize="30"
+                                       PathData="M1,9l2,2c4.97,-4.97 13.03,-4.97 18,0l2,-2C16.93,2.93 7.08,2.93 1,9zM9,17l3,3 3,-3c-1.65,-1.66 -4.34,-1.66 -6,0zM5,13l2,2c2.76,-2.76 7.24,-2.76 10,0l2,-2C15.14,9.14 8.87,9.14 5,13z"
+                                       HorizontalAlignment="Center" />
+                <TextBlock Text="正在搜索局域网设备"
+                           Classes="TitleMediumEmphasized"
+                           Foreground="{DynamicResource OnSurface}"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="请确保另一台设备已开启 ContextAll，并连接至同一局域网。"
+                           Classes="BodySmall"
+                           Foreground="{DynamicResource OnSurfaceVariant}"
+                           TextWrapping="Wrap"
+                           TextAlignment="Center"
+                           MaxWidth="260" />
+                <c:ContainedLoadingIndicator x:Name="EmptyLoadingIndicator"
+                                             IsActive="True"
+                                             HorizontalAlignment="Center" />
+              </StackPanel>
+            </Panel>
+          </ScrollViewer>
+
+          <!-- Discovery footer (visible only while devices list non-empty) -->
+          <StackPanel Grid.Row="3"
+                      Orientation="Horizontal"
+                      Spacing="10"
+                      IsVisible="{Binding HasAnyDevices}"
+                      VerticalAlignment="Center">
+            <c:ContainedLoadingIndicator Width="28" Height="28" IsActive="True" />
+            <TextBlock Text="正在持续监听局域网设备广播…"
+                       Classes="BodySmall"
+                       Foreground="{DynamicResource OnSurfaceVariant}"
+                       VerticalAlignment="Center" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- Right 28dp detail sheet -->
+      <Border x:Name="DetailPane"
+              Grid.Column="1"
+              CornerRadius="28"
+              Background="{DynamicResource Surface}"
+              BorderBrush="{DynamicResource OutlineVariant}"
+              BorderThickness="1"
+              Padding="22">
+        <Panel>
+          <StackPanel x:Name="EmptyDetailPlaceholder"
+                      Spacing="12"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNull}}">
+            <c:ExpressiveIconBadge Tone="Secondary"
+                                   ContainerSize="56"
+                                   IconSize="26"
+                                   PathData="M4,6h18V4H4C2.9,4 2,4.9 2,6v11H0v3h14v-3H4V6zM23,8h-6c-0.55,0 -1,0.45 -1,1v10c0,0.55 0.45,1 1,1h6c0.55,0 1,-0.45 1,-1V9C24,8.45 23.55,8 23,8zM22,17h-4v-7h4V17z"
+                                   HorizontalAlignment="Center" />
+            <TextBlock Text="选择左侧设备查看详情"
+                       Classes="TitleMedium"
+                       Foreground="{DynamicResource OnSurface}"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="可在此调整剪贴板双向同步、文件保存前询问及查看该设备的真实传输记录。"
+                       Classes="BodySmall"
+                       Foreground="{DynamicResource OnSurfaceVariant}"
+                       TextWrapping="Wrap"
+                       TextAlignment="Center"
+                       MaxWidth="320" />
+          </StackPanel>
+
+          <ScrollViewer IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="DetailContentPanel" Spacing="14" />
+          </ScrollViewer>
+        </Panel>
+      </Border>
+    </Grid>
+
+    <!-- Unpair confirmation dialog -->
+    <c:MaterialDialog x:Name="UnpairDialogControl"
+                      Title="确认取消配对"
+                      Message="取消配对后需要重新核对 6 位验证码才能恢复互信连接与文件传输。"
+                      PrimaryActionText="确认取消配对"
+                      CancelActionText="保留配对"
+                      DefaultFocusCancel="True" />
+
+    <!-- 1.A Clipboard broadcast modal dialog -->
+    <c:MaterialDialog x:Name="ClipboardDialogControl"
+                      Title="推送剪贴板文本"
+                      Message="{Binding ClipboardBroadcastClarification}"
+                      PrimaryActionText="推送"
+                      CancelActionText="取消"
+                      DismissOnScrimClick="True" />
+  </Panel>
+</UserControl>

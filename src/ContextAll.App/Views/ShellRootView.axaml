@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:ContextAll.App.Controls"
+             xmlns:v="using:ContextAll.App.Views"
+             xmlns:vm="using:ContextAll.App.ViewModels"
+             x:Class="ContextAll.App.Views.ShellRootView"
+             x:DataType="vm:ShellViewModel">
+  <Border x:Name="ChromeBorder"
+          CornerRadius="16"
+          BorderThickness="1"
+          ClipToBounds="True"
+          Background="{DynamicResource SurfaceContainer}"
+          BorderBrush="{DynamicResource OutlineVariant}">
+    <Panel>
+      <Grid RowDefinitions="Auto,*">
+        <c:IntegratedHeaderBar x:Name="HeaderBarControl"
+                               Grid.Row="0"
+                               TitleText="ContextAll" />
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+          <c:WideNavigationRail x:Name="NavRailControl"
+                                Grid.Column="0"
+                                DaemonStatusLabel="{Binding DaemonStatusLabel}"
+                                IsDaemonConnected="{Binding Connected}"
+                                IsExpanded="{Binding IsRailExpanded, Mode=TwoWay}"
+                                IsVisible="{Binding IsWideLayout}" />
+
+          <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" Margin="18,14,18,16">
+            <!-- Disconnected onboarding card: manual start only, never auto-starts daemon -->
+            <Border x:Name="OnboardingCard"
+                    Grid.Row="0"
+                    IsVisible="{Binding ShowDaemonOnboarding}"
+                    CornerRadius="28"
+                    Background="{DynamicResource SecondaryContainer}"
+                    BorderBrush="{DynamicResource OutlineVariant}"
+                    BorderThickness="1"
+                    Padding="20,16"
+                    Margin="0,0,0,12">
+              <StackPanel Spacing="10">
+                <TextBlock Text="后台守护服务尚未运行"
+                           Classes="TitleMediumEmphasized"
+                           Foreground="{DynamicResource OnSecondaryContainer}" />
+                <TextBlock Text="桌面外壳不会自动或静默拉起后台服务；请按需手动启动服务，或在系统启动后自动连接。"
+                           Classes="BodySmall"
+                           Foreground="{DynamicResource OnSecondaryContainer}"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{Binding OnboardingFeedback}"
+                           Classes="BodySmall"
+                           Foreground="{DynamicResource OnSecondaryContainer}"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding OnboardingFeedback, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <Button x:Name="StartDaemonButton"
+                          Classes="Filled"
+                          Content="启动后台服务"
+                          CornerRadius="20"
+                          IsEnabled="{Binding !IsOnboardingBusy}"
+                          Click="OnStartDaemonClicked" />
+                  <Button x:Name="EnableAutostartButton"
+                          Classes="Outlined"
+                          Content="启用开机自启"
+                          CornerRadius="20"
+                          IsEnabled="{Binding !IsOnboardingBusy}"
+                          Click="OnEnableAutostartClicked" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- Active section slot -->
+            <Grid Grid.Row="1">
+              <ContentControl x:Name="DevicesSlot" />
+              <ContentControl x:Name="ConnectionSlot" />
+              <ContentControl x:Name="TransfersSlot" />
+              <ContentControl x:Name="ThisDeviceSlot" />
+            </Grid>
+
+            <!-- Narrow (< 840dp) bottom HorizontalFloatingToolbar -->
+            <c:HorizontalFloatingToolbar x:Name="FloatingToolbarControl"
+                                         Grid.Row="2"
+                                         HorizontalAlignment="Center"
+                                         Margin="0,12,0,0"
+                                         IsVisible="{Binding !IsWideLayout}" />
+          </Grid>
+        </Grid>
+      </Grid>
+
+      <!-- Corrupt state confirmation dialog (default Cancel focus, explicit user confirm only) -->
+      <c:MaterialDialog x:Name="CorruptDialogControl"
+                        Title="本机身份或配置不可用"
+                        DefaultFocusCancel="True"
+                        DismissOnScrimClick="False"
+                        PrimaryActionText="重置身份并重试"
+                        CancelActionText="取消（保留现状）" />
+
+      <!-- Top-level snackbar queue -->
+      <c:MaterialSnackbarHost x:Name="SnackbarHostControl"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Bottom"
+                              Margin="24,18" />
+    </Panel>
+  </Border>
+</UserControl>

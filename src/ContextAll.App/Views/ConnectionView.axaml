@@ -1,0 +1,113 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:ContextAll.App.Controls"
+             xmlns:vm="using:ContextAll.App.ViewModels"
+             x:Class="ContextAll.App.Views.ConnectionView"
+             x:DataType="vm:ConnectionViewModel">
+  <Panel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="14" MaxWidth="780" HorizontalAlignment="Stretch">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Grid.Column="0" Spacing="2">
+            <TextBlock Text="连接与诊断" Classes="HeadlineSmallEmphasized" Foreground="{DynamicResource OnSurface}" />
+            <TextBlock Text="直连指定 IP:端口，并查看本机可达局域网端点与剪贴板状态"
+                       Classes="BodyMedium"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+          </StackPanel>
+          <Button Grid.Column="1"
+                  Classes="Outlined"
+                  Content="查看使用指南"
+                  CornerRadius="20"
+                  Padding="16,10"
+                  VerticalAlignment="Center"
+                  Click="OnOpenGuideClicked" />
+        </Grid>
+
+        <!-- PrimaryContainer Hero Card: Local reachable LAN endpoints + clipboard backend -->
+        <Border CornerRadius="28"
+                Background="{DynamicResource PrimaryContainer}"
+                Padding="22,20">
+          <StackPanel Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+              <c:ExpressiveIconBadge Tone="Primary"
+                                     ContainerSize="46"
+                                     IconSize="22"
+                                     PathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z" />
+              <StackPanel Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="本机局域网可达端点"
+                           Classes="TitleMediumEmphasized"
+                           Foreground="{DynamicResource OnPrimaryContainer}" />
+                <TextBlock Text="供同一网络对端手动输入的 QUIC 监听地址"
+                           Classes="BodySmall"
+                           Foreground="{DynamicResource OnPrimaryContainer}" />
+              </StackPanel>
+            </StackPanel>
+
+            <StackPanel x:Name="LocalEndpointsPanel" Spacing="6" />
+
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+              <TextBlock Text="守护进程剪贴板后端："
+                         Classes="LabelMedium"
+                         Foreground="{DynamicResource OnPrimaryContainer}"
+                         VerticalAlignment="Center" />
+              <TextBlock x:Name="ClipboardStatusLabel"
+                         Classes="LabelLargeEmphasized"
+                         Foreground="{DynamicResource OnPrimaryContainer}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Manual Dial Card -->
+        <c:ExpressiveGroupTile Position="Single" IsInteractive="False" Padding="20">
+          <StackPanel Spacing="12">
+            <TextBlock Text="手动拨号连接对端"
+                       Classes="TitleMediumEmphasized"
+                       Foreground="{DynamicResource OnSurface}" />
+            <TextBlock Text="当多播发现受限或需要跨子网直连时，输入对端 IP 与 QUIC 端口即可发起连接。"
+                       Classes="BodySmall"
+                       Foreground="{DynamicResource OnSurfaceVariant}"
+                       TextWrapping="Wrap" />
+
+            <TextBox x:Name="EndpointBox"
+                     Classes="Outlined"
+                     Classes.MonoTabular="True"
+                     PlaceholderText="例如 192.168.1.10:42461 或 [::1]:42461"
+                     Text="{Binding EndpointInput, Mode=TwoWay}" />
+
+            <TextBox x:Name="AliasBox"
+                     Classes="Outlined"
+                     PlaceholderText="可选设备备注名称"
+                     Text="{Binding AliasInput, Mode=TwoWay}" />
+
+            <Button Classes="Filled"
+                    Content="连接对端"
+                    CornerRadius="20"
+                    Padding="20,10"
+                    HorizontalAlignment="Left"
+                    Click="OnDialClicked" />
+
+            <Border x:Name="FeedbackBanner"
+                    CornerRadius="16"
+                    Padding="14,10"
+                    Background="{DynamicResource SecondaryContainer}"
+                    IsVisible="{Binding HasDialFeedback}">
+              <TextBlock x:Name="FeedbackLabel"
+                         Text="{Binding DialFeedback}"
+                         Classes="BodySmall"
+                         Foreground="{DynamicResource OnSecondaryContainer}"
+                         TextWrapping="Wrap" />
+            </Border>
+          </StackPanel>
+        </c:ExpressiveGroupTile>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Usage guide dialog -->
+    <c:MaterialDialog x:Name="GuideDialogControl"
+                      Title="ContextAll 快速使用指南"
+                      PrimaryActionText="我知道了"
+                      CancelActionText=""
+                      DismissOnScrimClick="True" />
+  </Panel>
+</UserControl>
