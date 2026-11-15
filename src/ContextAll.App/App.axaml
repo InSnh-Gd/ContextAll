@@ -1,9 +1,16 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:theme="using:CCSWE.Avalonia.Material"
-             x:Class="ContextAll.App.App"
-             RequestedThemeVariant="Light">
+             x:Class="ContextAll.App.App">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://ContextAll.App/Styles/Md3eTokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
   <Application.Styles>
     <theme:MaterialTheme />
+    <StyleInclude Source="avares://ContextAll.App/Styles/Md3eTypography.axaml" />
   </Application.Styles>
 </Application>
