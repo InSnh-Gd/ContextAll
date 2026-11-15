@@ -1,5 +1,7 @@
 using System.Net.Sockets;
 using ContextAll.App.Platform;
+using ContextAll.App.ViewModels;
+using ContextAll.Ipc;
 
 namespace ContextAll.App.Tests;
 
@@ -204,5 +206,39 @@ public sealed class ShellStartupAndPreferencesTests
                 // Ignore temp cleanup failure.
             }
         }
+    }
+
+    [Fact]
+    public void ThisDeviceViewModel_persists_appearance_mode_and_accent_overrides_through_preferences()
+    {
+        var saved = new List<ShellPreferences>();
+        var vm = new ThisDeviceViewModel(
+            new FakeLocalDaemonClient(),
+            new StubDaemonController(),
+            new ShellPreferences(),
+            saved.Add);
+
+        Assert.Equal(AppearanceModeOverride.FollowSystem, vm.AppearanceModeOverride);
+        Assert.Equal(AccentSourceOverride.FollowSystem, vm.AccentSourceOverride);
+
+        vm.SetAppearanceModeOverride(AppearanceModeOverride.Dark);
+        vm.SetAccentSourceOverride(AccentSourceOverride.SunsetTerracotta);
+
+        Assert.Equal(AppearanceModeOverride.Dark, vm.AppearanceModeOverride);
+        Assert.Equal(AccentSourceOverride.SunsetTerracotta, vm.AccentSourceOverride);
+        Assert.Equal(2, saved.Count);
+        Assert.Equal(AppearanceModeOverride.Dark, saved[^1].AppearanceModeOverride);
+        Assert.Equal(AccentSourceOverride.SunsetTerracotta, saved[^1].AccentSourceOverride);
+    }
+
+    private sealed class StubDaemonController : IDaemonController
+    {
+        public bool IsRunningFromAppImage => false;
+        public Task<DaemonStartResult> StartDaemonAsync(CancellationToken ct = default) =>
+            Task.FromResult(new DaemonStartResult(DaemonStartOutcome.Started));
+        public Task<DaemonActionResult> EnableAutostartAsync(CancellationToken ct = default) =>
+            Task.FromResult(new DaemonActionResult(true));
+        public Task<DaemonActionResult> ResetIdentityAndSettingsAsync(CancellationToken ct = default) =>
+            Task.FromResult(new DaemonActionResult(true));
     }
 }

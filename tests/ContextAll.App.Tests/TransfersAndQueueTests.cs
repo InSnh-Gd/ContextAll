@@ -1,3 +1,5 @@
+using ContextAll.App.Controls;
+using ContextAll.App.Platform;
 using ContextAll.App.ViewModels;
 using ContextAll.App.Views;
 using ContextAll.Ipc;
@@ -145,4 +147,54 @@ public sealed class TransfersAndQueueTests
             Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.RejectFile && c.Payload.TransferId == "tx-prompt");
             Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.CancelTransfer && c.Payload.TransferId == "tx-active");
         });
+
+    [Fact]
+    public void ShellViewModel_RailFabAction_switches_to_transfers_or_emits_snackbar_when_not_ready()
+    {
+        var client = new FakeLocalDaemonClient();
+        var daemon = new FakeStubDaemonController();
+        var vm = new ShellViewModel(client, daemon, new ShellPreferences(), _ => { });
+
+        var snackbars = new List<(string Message, string? ActionText, Action? Action)>();
+        vm.SnackbarRequested += (msg, act, cb) => snackbars.Add((msg, act, cb));
+
+        // Disconnected -> emits snackbar prompt and stays on Devices
+        vm.TriggerRailFab();
+        Assert.Single(snackbars);
+        Assert.Equal(ShellSection.Devices, vm.SelectedSection);
+
+        // Connected without trusted peers -> emits snackbar with connection action
+        client.EmitState(LocalShellState.Empty with
+        {
+            ConnectionStatus = LocalConnectionStatus.Connected,
+            Devices = [new DeviceSnapshotPayload("DISC-1", "发现设备", false, "online", null, null)],
+        });
+        vm.TriggerRailFab();
+        Assert.Equal(2, snackbars.Count);
+        Assert.NotNull(snackbars[1].Action);
+        snackbars[1].Action?.Invoke();
+        Assert.Equal(ShellSection.Connection, vm.SelectedSection);
+
+        // Connected with trusted selected peer -> selects target peer and switches to Transfers
+        client.EmitState(LocalShellState.Empty with
+        {
+            ConnectionStatus = LocalConnectionStatus.Connected,
+            Devices = [new DeviceSnapshotPayload("PEER-READY", "主力机", true, "online", true, true)],
+        });
+        vm.Devices.SelectDevice("PEER-READY");
+        vm.TriggerRailFab();
+        Assert.Equal(ShellSection.Transfers, vm.SelectedSection);
+        Assert.Equal("PEER-READY", vm.Transfers.SelectedTargetPeerId);
+    }
+
+    private sealed class FakeStubDaemonController : IDaemonController
+    {
+        public bool IsRunningFromAppImage => false;
+        public Task<DaemonStartResult> StartDaemonAsync(CancellationToken ct = default) =>
+            Task.FromResult(new DaemonStartResult(DaemonStartOutcome.Started));
+        public Task<DaemonActionResult> EnableAutostartAsync(CancellationToken ct = default) =>
+            Task.FromResult(new DaemonActionResult(true));
+        public Task<DaemonActionResult> ResetIdentityAndSettingsAsync(CancellationToken ct = default) =>
+            Task.FromResult(new DaemonActionResult(true));
+    }
 }

@@ -139,4 +139,39 @@ public sealed class DevicesAndConnectionViewModelTests
             Assert.False(view.IsGuideVisible);
             Assert.True(guideSeenRecorded);
         });
+
+    [Fact]
+    public void DevicesViewModel_exposes_real_history_hasAnyDevices_and_clipboard_broadcast_flags()
+    {
+        var client = new FakeLocalDaemonClient();
+        var trustedSyncOff = new DeviceSnapshotPayload("DEV-1", "台式机", true, "online", false, true, true, "192.168.1.2:42461");
+        var trustedSyncOn = new DeviceSnapshotPayload("DEV-2", "手机", true, "online", true, true, true, "192.168.1.3:42461");
+        var t1 = new LocalTransferHistoryEntry("h1", "DEV-1", "台式机", "send", "a.txt", 100, "done", DateTimeOffset.UtcNow.AddMinutes(-2), "/tmp");
+        var t2 = new LocalTransferHistoryEntry("h2", "DEV-2", "手机", "receive", "b.png", 200, "done", DateTimeOffset.UtcNow.AddMinutes(-1), "/tmp");
+        var t3 = new LocalTransferHistoryEntry("h3", "DEV-1", "台式机", "receive", "c.pdf", 300, "done", DateTimeOffset.UtcNow, "/tmp");
+
+        var vm = new DevicesViewModel(client);
+        Assert.False(vm.HasAnyDevices);
+
+        client.EmitState(LocalShellState.Empty with
+        {
+            ConnectionStatus = LocalConnectionStatus.Connected,
+            Devices = [trustedSyncOff, trustedSyncOn],
+            History = [t1, t2, t3],
+        });
+
+        Assert.True(vm.HasAnyDevices);
+        Assert.Empty(vm.SelectedDeviceHistory);
+        Assert.Contains("所有已开启剪贴板同步的可信设备", vm.ClipboardBroadcastClarification);
+
+        vm.SelectDevice("DEV-1");
+        Assert.True(vm.SelectedDeviceClipboardDisabled);
+        Assert.Contains("台式机", vm.ClipboardBroadcastClarification);
+        Assert.Contains("关闭", vm.ClipboardBroadcastClarification);
+        Assert.Equal(["h3", "h1"], vm.SelectedDeviceHistory.Select(h => h.TransferId).ToArray());
+
+        vm.SelectDevice("DEV-2");
+        Assert.False(vm.SelectedDeviceClipboardDisabled);
+        Assert.Equal(["h2"], vm.SelectedDeviceHistory.Select(h => h.TransferId).ToArray());
+    }
 }
