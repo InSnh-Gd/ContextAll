@@ -39,6 +39,7 @@ public static class LocalNetwork
                 {
                     InterfaceIndex = index,
                     LinkLocal = IsLinkLocal(unicast.Address),
+                    InterfaceId = nic.Id,
                 });
             }
         }

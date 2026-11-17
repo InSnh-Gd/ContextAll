@@ -63,6 +63,20 @@ public sealed class PeerLink
 
     public string RemoteName => pairing.RemoteName;
 
+    public string? EndpointText
+    {
+        get
+        {
+            if (connection?.RemoteEndPoint is not System.Net.IPEndPoint end)
+            {
+                return null;
+            }
+
+            var address = end.Address.IsIPv4MappedToIPv6 ? end.Address.MapToIPv4() : end.Address;
+            return RouteTable.FormatEndpoint(address.ToString(), end.Port);
+        }
+    }
+
     internal PairingSession Pairing => pairing;
 
     public long RemainingMs
@@ -1224,7 +1238,7 @@ public sealed class PeerLink
     }
 
     static TransferSnapshotPayload TransferView(TransferSlot slot) =>
-        new(slot.TransferId, slot.PeerId, slot.Direction, slot.FileName, slot.Completed, slot.SegmentCount, slot.MoveBlocked);
+        new(slot.TransferId, slot.PeerId, slot.Direction, slot.FileName, slot.Completed, slot.SegmentCount, slot.MoveBlocked, slot.TotalSize);
 
     static Frame Progress(TransferSlot? slot, string? ended) =>
         slot is null
