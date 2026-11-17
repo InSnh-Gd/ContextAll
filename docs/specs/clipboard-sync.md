@@ -1,6 +1,6 @@
 # 剪贴板同步
 
-对应 `session-protocol` 的 `clipboard-sync`。寄存器、分片和 `clipboard.json` 已有测试。Linux 守护进程优先用 `ext-data-control-v1` 读写纯文本，没有该全局对象时用 `wlr-data-control-unstable-v1`。两个协议都没有时剪贴板保持关闭，配对和文件传输继续。纯文本接受 `text/plain` 和 `text/plain;charset=utf-8`，两者都有时用后者。
+对应 `session-protocol` 与 `linux-desktop-shell` 的 `clipboard-sync`。寄存器、分片、`clipboard.json` 与 Linux Wayland/X11 回退均有测试。Linux 守护进程通过 `LinuxClipboardSource`（上报 `ClipboardBackendKind`：`wayland`、`x11` 或 `none`）依次尝试后端：优先通过 `ext-data-control-v1` 读写纯文本，没有该全局对象时使用 `wlr-data-control-unstable-v1`；当两者均不可用且 `DISPLAY` 非空时，通过 `X11Clipboard`（经 `NativeLibrary.TryLoad` 按需加载 `libX11.so.6` 与 `libXfixes.so.3`，不依赖 GNOME Shell 扩展或外部 CLI 工具）监听 `XFixes` `CLIPBOARD` 选区所有权变化并过滤自写回声，使用直传与最长 2 秒块超时的 `INCR` 分片协议读写上限 1 MiB 的 UTF-8 纯文本（忽略图像与文件列表目标；测试：`X11ClipboardTests`）。当无头主机缺少 X11 动态库或所有后端均不可用时，剪贴板保持禁用而不报错，配对与文件传输正常启动。纯文本接受 `text/plain` 和 `text/plain;charset=utf-8`，两者都有时用后者。
 
 ## 对端剪贴板
 
