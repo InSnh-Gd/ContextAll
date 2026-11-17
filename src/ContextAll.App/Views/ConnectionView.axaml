@@ -6,19 +6,20 @@
              x:DataType="vm:ConnectionViewModel">
   <Panel>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Spacing="14" MaxWidth="780" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="16" MaxWidth="780" HorizontalAlignment="Stretch">
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
           <StackPanel Grid.Column="0" Spacing="2">
-            <TextBlock Text="连接与诊断" Classes="HeadlineSmallEmphasized" Foreground="{DynamicResource OnSurface}" />
-            <TextBlock Text="直连指定 IP:端口，并查看本机可达局域网端点与剪贴板状态"
+            <TextBlock Text="连接与网络" Classes="HeadlineSmallEmphasized" Foreground="{DynamicResource OnSurface}" />
+            <TextBlock Text="查看本机局域网地址、设备连接状态，或通过 IP 手动直连"
                        Classes="BodyMedium"
-                       Foreground="{DynamicResource OnSurfaceVariant}" />
+                       Foreground="{DynamicResource OnSurfaceVariant}"
+                       TextWrapping="Wrap" />
           </StackPanel>
           <Button Grid.Column="1"
                   Classes="Outlined"
-                  Content="查看使用指南"
+                  Content="使用指南"
                   CornerRadius="20"
-                  Padding="16,10"
+                  Padding="16,9"
                   VerticalAlignment="Center"
                   Click="OnOpenGuideClicked" />
         </Grid>
@@ -34,23 +35,51 @@
                                      IconSize="22"
                                      PathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z" />
               <StackPanel Spacing="2" VerticalAlignment="Center">
-                <TextBlock Text="本机局域网可达端点"
+                <TextBlock Text="本机局域网地址"
                            Classes="TitleMediumEmphasized"
                            Foreground="{DynamicResource OnPrimaryContainer}" />
-                <TextBlock Text="供同一网络对端手动输入的 QUIC 监听地址"
+                <TextBlock Text="同一局域网下的其他设备可输入以下地址直连本机"
                            Classes="BodySmall"
-                           Foreground="{DynamicResource OnPrimaryContainer}" />
+                           Foreground="{DynamicResource OnPrimaryContainer}"
+                           TextWrapping="Wrap" />
               </StackPanel>
             </StackPanel>
 
-            <StackPanel x:Name="LocalEndpointsPanel" Spacing="6" />
+            <TextBlock Text="暂未检测到可用的局域网地址，确认网络已连接后会自动刷新"
+                       Classes="BodyMedium"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding !HasLocalEndpoints}" />
+            <ItemsControl ItemsSource="{Binding EndpointItems}" IsVisible="{Binding HasLocalEndpoints}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="6" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:EndpointRowItem">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding Endpoint}"
+                               Classes="BodyMedium MonoTabular"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Classes="FilledTonal"
+                            Content="复制"
+                            CornerRadius="20"
+                            Padding="12,6"
+                            Command="{Binding CopyCommand}"
+                            CommandParameter="{Binding Endpoint}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-              <TextBlock Text="守护进程剪贴板后端："
+              <TextBlock Text="本机剪贴板通道："
                          Classes="LabelMedium"
                          Foreground="{DynamicResource OnPrimaryContainer}"
                          VerticalAlignment="Center" />
               <TextBlock x:Name="ClipboardStatusLabel"
+                         Text="{Binding ClipboardStatusText}"
                          Classes="LabelLargeEmphasized"
                          Foreground="{DynamicResource OnPrimaryContainer}"
                          VerticalAlignment="Center" />
@@ -61,10 +90,10 @@
         <!-- Manual Dial Card -->
         <c:ExpressiveGroupTile Position="Single" IsInteractive="False" Padding="20">
           <StackPanel Spacing="12">
-            <TextBlock Text="手动拨号连接对端"
+            <TextBlock Text="手动输入地址连接"
                        Classes="TitleMediumEmphasized"
                        Foreground="{DynamicResource OnSurface}" />
-            <TextBlock Text="当多播发现受限或需要跨子网直连时，输入对端 IP 与 QUIC 端口即可发起连接。"
+            <TextBlock Text="未自动搜到设备或需要跨网段直连时，输入对方 IP（可省略端口，默认 42461）即可发起连接。"
                        Classes="BodySmall"
                        Foreground="{DynamicResource OnSurfaceVariant}"
                        TextWrapping="Wrap" />
@@ -72,19 +101,45 @@
             <TextBox x:Name="EndpointBox"
                      Classes="Outlined"
                      Classes.MonoTabular="True"
-                     PlaceholderText="例如 192.168.1.10:42461 或 [::1]:42461"
+                     PlaceholderText="例如 192.168.1.10 或 [::1]:42461"
                      Text="{Binding EndpointInput, Mode=TwoWay}" />
+
+            <StackPanel Spacing="6">
+              <TextBlock Text="快捷填入"
+                         Classes="LabelMedium"
+                         Foreground="{DynamicResource OnSurfaceVariant}" />
+              <ItemsControl ItemsSource="{Binding LanPresetItems}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:LanPresetItem">
+                    <Button Classes="Outlined"
+                            CornerRadius="20"
+                            Padding="12,6"
+                            Margin="0,0,8,6"
+                            Command="{Binding ApplyCommand}"
+                            CommandParameter="{Binding Preset}">
+                      <TextBlock Text="{Binding Preset}" Classes="LabelMedium MonoTabular" />
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
 
             <TextBox x:Name="AliasBox"
                      Classes="Outlined"
-                     PlaceholderText="可选设备备注名称"
+                     PlaceholderText="设备备注名称（选填）"
                      Text="{Binding AliasInput, Mode=TwoWay}" />
 
             <Button Classes="Filled"
-                    Content="连接对端"
+                    Content="发起连接"
                     CornerRadius="20"
                     Padding="20,10"
                     HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
                     Click="OnDialClicked" />
 
             <Border x:Name="FeedbackBanner"
@@ -100,12 +155,125 @@
             </Border>
           </StackPanel>
         </c:ExpressiveGroupTile>
+
+        <!-- QUIC & Security Protocol Specification Group Card -->
+        <StackPanel Spacing="8">
+          <TextBlock Text="传输加密与网络参数"
+                     Classes="LabelLargeEmphasized"
+                     Foreground="{DynamicResource Primary}"
+                     Margin="4,0,0,0" />
+          <StackPanel Spacing="2">
+            <c:ExpressiveGroupTile Position="First" IsInteractive="False" Padding="18,14">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <c:ExpressiveIconBadge Grid.Column="0"
+                                       Tone="Secondary"
+                                       ContainerSize="40"
+                                       IconSize="20"
+                                       PathData="M3.9,12c0,-1.71 1.39,-3.1 3.1,-3.1h4V7H7c-2.76,0 -5,2.24 -5,5s2.24,5 5,5h4v-1.9H7C5.29,15.1 3.9,13.71 3.9,12zM8,13h8v-2H8v2zM17,7h-4v1.9h4c1.71,0 3.1,1.39 3.1,3.1s-1.39,3.1 -3.1,3.1h-4V17h4c2.76,0 5,-2.24 5,-5S19.76,7 17,7z" />
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                  <TextBlock Text="局域网直连通道"
+                             Classes="BodySmall"
+                             Foreground="{DynamicResource OnSurfaceVariant}" />
+                  <TextBlock x:Name="QuicSpecValue"
+                             Text="{Binding QuicSpecText}"
+                             Classes="TitleSmall MonoTabular"
+                             Foreground="{DynamicResource OnSurface}" />
+                </StackPanel>
+              </Grid>
+            </c:ExpressiveGroupTile>
+
+            <c:ExpressiveGroupTile Position="Last" IsInteractive="False" Padding="18,14">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                <c:ExpressiveIconBadge Grid.Column="0"
+                                       Tone="Tertiary"
+                                       ContainerSize="40"
+                                       IconSize="20"
+                                       PathData="M12,1L3,5v6c0,5.55 3.84,10.74 9,12c5.16,-1.26 9,-6.45 9,-12V5L12,1zM12,11.99h7c-0.53,4.12 -3.28,7.79 -7,8.94V12H5V6.3l7,-3.11V11.99z" />
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                  <TextBlock Text="安全校验机制"
+                             Classes="BodySmall"
+                             Foreground="{DynamicResource OnSurfaceVariant}" />
+                  <TextBlock Text="ECDSA P-256 双向认证 · SHA-256 分块检验"
+                             Classes="TitleSmall"
+                             Foreground="{DynamicResource OnSurface}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+            </c:ExpressiveGroupTile>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Per-Peer Connection Overview Card -->
+        <StackPanel Spacing="8" Margin="0,0,0,12">
+          <TextBlock x:Name="PeersSectionLabel"
+                     Text="{Binding PeersSectionTitle}"
+                     Classes="LabelLargeEmphasized"
+                     Foreground="{DynamicResource Primary}"
+                     Margin="4,0,0,0" />
+          <c:ExpressiveGroupTile Position="Single"
+                                 IsInteractive="False"
+                                 Padding="18,16"
+                                 IsVisible="{Binding !HasDevices}">
+            <TextBlock Text="当前还没有已配对或已发现的设备，可先在「设备」页搜索，或用上方输入框手动连接。"
+                       Classes="BodyMedium"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource OnSurfaceVariant}" />
+          </c:ExpressiveGroupTile>
+          <ItemsControl ItemsSource="{Binding PeerOverviewItems}" IsVisible="{Binding HasDevices}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PeerOverviewItem">
+                <c:ExpressiveGroupTile Position="{Binding Position}" IsInteractive="False" Padding="18,14">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <c:ExpressiveIconBadge Tone="{Binding PresenceTone}"
+                                           ContainerSize="40"
+                                           IconSize="20"
+                                           PathData="M4,6h18V4H4C2.9,4 2,4.9 2,6v11H0v3h14v-3H4V6zM23,8h-6c-0.55,0 -1,0.45 -1,1v10c0,0.55 0.45,1 1,1h6c0.55,0 1,-0.45 1,-1V9C24,8.45 23.55,8 23,8zM22,17h-4v-7h4V17z" />
+                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding DisplayName}" Classes="TitleSmall" VerticalAlignment="Center" />
+                        <Border CornerRadius="12" Padding="8,3" Background="{DynamicResource SecondaryContainer}"
+                                VerticalAlignment="Center">
+                          <TextBlock Text="{Binding PresenceLabel}"
+                                     Classes="LabelSmallEmphasized"
+                                     Foreground="{DynamicResource OnSecondaryContainer}" />
+                        </Border>
+                      </StackPanel>
+                      <TextBlock Text="{Binding EndpointLabel}"
+                                 Classes="BodySmall MonoTabular"
+                                 TextWrapping="Wrap"
+                                 Foreground="{DynamicResource OnSurfaceVariant}" />
+                    </StackPanel>
+                    <Button Grid.Column="2"
+                            Classes="FilledTonal"
+                            Content="配对"
+                            CornerRadius="20"
+                            Padding="14,6"
+                            IsVisible="{Binding !IsTrusted}"
+                            Command="{Binding StartPairingCommand}"
+                            CommandParameter="{Binding DeviceId}" />
+                    <TextBlock Grid.Column="2"
+                               Text="已配对"
+                               Classes="LabelMedium"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding IsTrusted}"
+                               Foreground="{DynamicResource OnSurfaceVariant}" />
+                  </Grid>
+                </c:ExpressiveGroupTile>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
       </StackPanel>
     </ScrollViewer>
 
-    <!-- Usage guide dialog -->
+    <!-- Usage guide dialog (4-step walkthrough) -->
     <c:MaterialDialog x:Name="GuideDialogControl"
-                      Title="ContextAll 快速使用指南"
+                      Title="ContextAll 使用指南"
                       PrimaryActionText="我知道了"
                       CancelActionText=""
                       DismissOnScrimClick="True" />

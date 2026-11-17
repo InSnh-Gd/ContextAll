@@ -1,12 +1,27 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
+using System.Windows.Input;
+using ContextAll.App.Controls;
 using ContextAll.Ipc;
+using ContextAll.Protocol;
 
 namespace ContextAll.App.ViewModels;
 
-/// <summary>View model for the Connection (连接) section: manual IP:port dial, LAN endpoints, clipboard status, usage guide.</summary>
+/// <summary>View model for the Connection (连接与网络) section: manual dial, LAN endpoints, protocol specs, peer overview, and onboarding guide.</summary>
 public sealed class ConnectionViewModel : ViewModelBase
 {
+    public const int DefaultQuicPort = 42461;
+    public const int GuideStepCount = 4;
+
+    public static readonly IReadOnlyList<string> LanPresets =
+    [
+        "192.168.1.",
+        "10.0.0.",
+        "172.16.0.",
+        "[::1]:42461",
+    ];
+
     private readonly ILocalDaemonClient _client;
     private readonly Action<bool>? _onGuideSeenChanged;
     private LocalShellState _state = LocalShellState.Empty;
@@ -15,6 +30,7 @@ public sealed class ConnectionViewModel : ViewModelBase
     private string? _dialFeedback;
     private bool _dialIsError;
     private bool _isGuideOpen;
+    private int _guideStepIndex;
 
     public ConnectionViewModel(
         ILocalDaemonClient client,
@@ -26,7 +42,36 @@ public sealed class ConnectionViewModel : ViewModelBase
         _onGuideSeenChanged = onGuideSeenChanged;
         _state = client.CurrentState;
         _client.StateChanged += next => DispatchToUi(() => ApplyState(next));
+        CopyEndpointCommand = new ShellRelayCommand(parameter =>
+        {
+            if (parameter is string endpoint)
+            {
+                CopyRequested?.Invoke(endpoint);
+            }
+        });
+        ApplyLanPresetCommand = new ShellRelayCommand(parameter =>
+        {
+            if (parameter is string preset)
+            {
+                ApplyLanPreset(preset);
+            }
+        });
+        StartPairingCommand = new ShellRelayCommand(async parameter =>
+        {
+            if (parameter is string deviceId)
+            {
+                await StartPairingAsync(deviceId);
+            }
+        });
     }
+
+    public event Action<string>? CopyRequested;
+
+    public ICommand CopyEndpointCommand { get; }
+
+    public ICommand ApplyLanPresetCommand { get; }
+
+    public ICommand StartPairingCommand { get; }
 
     public string EndpointInput
     {
@@ -55,9 +100,69 @@ public sealed class ConnectionViewModel : ViewModelBase
     }
 
     public int QuicPort => _state.QuicPort;
+    public int EffectiveQuicPort => _state.QuicPort > 0 ? _state.QuicPort : DefaultQuicPort;
     public string ClipboardBackendCode => _state.ClipboardBackend;
     public bool HasLocalEndpoints => LocalEndpoints.Count > 0;
     public bool HasDialFeedback => !string.IsNullOrWhiteSpace(DialFeedback);
+
+    public IReadOnlyList<DeviceSnapshotPayload> Devices => _state.Devices;
+    public bool HasDevices => _state.Devices.Count > 0;
+    public int ConnectedDeviceCount => _state.Devices.Count(d => IsConnectedPresence(d.Presence));
+
+    public string ClipboardStatusText => $"{ClipboardBackendLabel} ({ClipboardBackendCode})";
+
+    public string QuicSpecText => $"QUIC TLS 1.3 · UDP {EffectiveQuicPort}";
+
+    public string PeersSectionTitle => HasDevices
+        ? $"设备连接状态 ({Devices.Count})"
+        : "设备连接状态";
+
+    public IReadOnlyList<EndpointRowItem> EndpointItems =>
+        [.. LocalEndpoints.Select(endpoint => new EndpointRowItem
+        {
+            Endpoint = endpoint,
+            CopyCommand = CopyEndpointCommand,
+        })];
+
+    public IReadOnlyList<LanPresetItem> LanPresetItems =>
+        [.. LanPresets.Select(preset => new LanPresetItem
+        {
+            Preset = preset,
+            ApplyCommand = ApplyLanPresetCommand,
+        })];
+
+    public IReadOnlyList<PeerOverviewItem> PeerOverviewItems
+    {
+        get
+        {
+            var devices = Devices;
+            var count = devices.Count;
+            var items = new PeerOverviewItem[count];
+            for (var i = 0; i < count; i++)
+            {
+                var peer = devices[i];
+                items[i] = new PeerOverviewItem
+                {
+                    DeviceId = peer.DeviceId,
+                    DisplayName = peer.DisplayName,
+                    PresenceLabel = FormatPresenceLabel(peer.Presence),
+                    PresenceTone = IsConnectedPresence(peer.Presence)
+                        ? BadgeTone.Primary
+                        : IsReachablePresence(peer.Presence)
+                            ? BadgeTone.Secondary
+                            : BadgeTone.Neutral,
+                    EndpointLabel = string.IsNullOrWhiteSpace(peer.Endpoint)
+                        ? $"局域网自动发现 · 端口 {EffectiveQuicPort}"
+                        : peer.Endpoint,
+                    IsTrusted = peer.Trusted,
+                    Position = GroupPositions.Of(i, count),
+                    StartPairingCommand = StartPairingCommand,
+                };
+            }
+
+            return items;
+        }
+    }
 
     public string ClipboardBackendLabel => _state.ClipboardBackend switch
     {
@@ -90,17 +195,47 @@ public sealed class ConnectionViewModel : ViewModelBase
         private set => SetField(ref _isGuideOpen, value);
     }
 
+    public int GuideStepIndex
+    {
+        get => _guideStepIndex;
+        private set
+        {
+            var clamped = Math.Clamp(value, 0, GuideStepCount - 1);
+            if (SetField(ref _guideStepIndex, clamped))
+            {
+                OnPropertyChanged(nameof(CanGoPreviousGuideStep));
+                OnPropertyChanged(nameof(IsLastGuideStep));
+            }
+        }
+    }
+
+    public bool CanGoPreviousGuideStep => GuideStepIndex > 0;
+    public bool IsLastGuideStep => GuideStepIndex >= GuideStepCount - 1;
+
     public void ApplyState(LocalShellState state)
     {
         _state = state;
         OnPropertyChanged(nameof(LocalEndpoints));
         OnPropertyChanged(nameof(HasLocalEndpoints));
         OnPropertyChanged(nameof(QuicPort));
+        OnPropertyChanged(nameof(EffectiveQuicPort));
         OnPropertyChanged(nameof(ClipboardBackendCode));
         OnPropertyChanged(nameof(ClipboardBackendLabel));
+        OnPropertyChanged(nameof(ClipboardStatusText));
+        OnPropertyChanged(nameof(QuicSpecText));
+        OnPropertyChanged(nameof(Devices));
+        OnPropertyChanged(nameof(HasDevices));
+        OnPropertyChanged(nameof(ConnectedDeviceCount));
+        OnPropertyChanged(nameof(PeersSectionTitle));
+        OnPropertyChanged(nameof(EndpointItems));
+        OnPropertyChanged(nameof(PeerOverviewItems));
     }
 
-    public void OpenGuide() => IsGuideOpen = true;
+    public void OpenGuide()
+    {
+        GuideStepIndex = 0;
+        IsGuideOpen = true;
+    }
 
     public void CloseGuide()
     {
@@ -108,11 +243,61 @@ public sealed class ConnectionViewModel : ViewModelBase
         _onGuideSeenChanged?.Invoke(true);
     }
 
+    public void NextGuideStep()
+    {
+        if (GuideStepIndex < GuideStepCount - 1)
+        {
+            GuideStepIndex++;
+        }
+        else
+        {
+            CloseGuide();
+        }
+    }
+
+    public void PreviousGuideStep()
+    {
+        if (GuideStepIndex > 0)
+        {
+            GuideStepIndex--;
+        }
+    }
+
+    public void SetGuideStep(int stepIndex) => GuideStepIndex = stepIndex;
+
+    public void ApplyLanPreset(string preset)
+    {
+        EndpointInput = preset;
+        DialFeedback = null;
+        DialIsError = false;
+    }
+
+    public async Task<bool> StartPairingAsync(string deviceId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return false;
+        }
+
+        var result = await _client.StartPairingAsync(deviceId, ct);
+        if (result.Ok)
+        {
+            var deviceName = _state.Devices.FirstOrDefault(d => string.Equals(d.DeviceId, deviceId, StringComparison.Ordinal))?.DisplayName ?? deviceId;
+            DialFeedback = $"已向「{deviceName}」发起配对，请在「设备」页核对 6 位配对码。";
+            DialIsError = false;
+            return true;
+        }
+
+        DialFeedback = string.IsNullOrWhiteSpace(result.Error) ? "发起配对失败，请确认对方设备在线。" : result.Error;
+        DialIsError = true;
+        return false;
+    }
+
     public async Task<bool> DialEndpointAsync(CancellationToken ct = default)
     {
         if (!TryParseEndpoint(_endpointInput, out var host, out var port))
         {
-            DialFeedback = "端点格式无效，请输入 IP:端口（如 192.168.1.10:42461 或 [::1]:42461）。";
+            DialFeedback = BuildEndpointValidationError(_endpointInput);
             DialIsError = true;
             return false;
         }
@@ -126,10 +311,33 @@ public sealed class ConnectionViewModel : ViewModelBase
             return true;
         }
 
-        DialFeedback = string.IsNullOrWhiteSpace(result.Error) ? "手动连接失败。" : result.Error;
+        DialFeedback = string.IsNullOrWhiteSpace(result.Error) ? "手动连接未成功，请检查地址和端口后重试。" : result.Error;
         DialIsError = true;
         return false;
     }
+
+    public static string FormatPresenceLabel(string? presence)
+    {
+        if (IsConnectedPresence(presence))
+        {
+            return "已连接";
+        }
+
+        if (IsReachablePresence(presence))
+        {
+            return "局域网可达";
+        }
+
+        return "离线";
+    }
+
+    public static bool IsConnectedPresence(string? presence) =>
+        string.Equals(presence, "connected", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(presence, "online", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsReachablePresence(string? presence) =>
+        string.Equals(presence, "reachable", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(presence, "connecting", StringComparison.OrdinalIgnoreCase);
 
     public static bool TryParseEndpoint(string? input, out string host, out int port)
     {
@@ -147,59 +355,175 @@ public sealed class ConnectionViewModel : ViewModelBase
             return false;
         }
 
-        string hostPart;
-        string portPart;
-
         if (trimmed.StartsWith('['))
         {
             var closeBracket = trimmed.IndexOf(']');
-            if (closeBracket <= 1 ||
-                closeBracket + 2 >= trimmed.Length ||
-                trimmed[closeBracket + 1] != ':')
+            if (closeBracket <= 1)
             {
                 return false;
             }
 
-            hostPart = trimmed[1..closeBracket];
-            portPart = trimmed[(closeBracket + 2)..];
-        }
-        else
-        {
-            var firstColon = trimmed.IndexOf(':');
-            var lastColon = trimmed.LastIndexOf(':');
-            if (firstColon <= 0 || firstColon != lastColon || firstColon == trimmed.Length - 1)
+            var v6HostPart = trimmed[1..closeBracket];
+            if (!IPAddress.TryParse(v6HostPart, out var parsedV6) ||
+                parsedV6.AddressFamily != AddressFamily.InterNetworkV6)
             {
                 return false;
             }
 
-            hostPart = trimmed[..firstColon];
-            portPart = trimmed[(firstColon + 1)..];
+            if (closeBracket == trimmed.Length - 1)
+            {
+                host = parsedV6.ToString();
+                port = DefaultQuicPort;
+                return true;
+            }
+
+            if (closeBracket + 2 >= trimmed.Length || trimmed[closeBracket + 1] != ':')
+            {
+                return false;
+            }
+
+            var v6PortPart = trimmed[(closeBracket + 2)..];
+            if (!TryParsePort(v6PortPart, out port))
+            {
+                return false;
+            }
+
+            host = parsedV6.ToString();
+            return true;
         }
 
-        if (!int.TryParse(portPart, NumberStyles.None, CultureInfo.InvariantCulture, out port) ||
-            port < 1 ||
-            port > 65535)
+        var firstColon = trimmed.IndexOf(':');
+        var lastColon = trimmed.LastIndexOf(':');
+
+        // Bare IPv6 address without brackets (e.g. "::1" or "fd00::1") defaults to DefaultQuicPort.
+        if (firstColon >= 0 && firstColon != lastColon)
         {
-            host = string.Empty;
-            port = 0;
+            if (IPAddress.TryParse(trimmed, out var bareV6) &&
+                bareV6.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                host = bareV6.ToString();
+                port = DefaultQuicPort;
+                return true;
+            }
+
             return false;
         }
 
-        if (IPAddress.TryParse(hostPart, out var parsedIp))
+        if (firstColon >= 0)
         {
-            host = parsedIp.ToString();
+            if (firstColon == 0 || firstColon == trimmed.Length - 1)
+            {
+                return false;
+            }
+
+            var hostPart = trimmed[..firstColon];
+            var portPart = trimmed[(firstColon + 1)..];
+            if (!TryParsePort(portPart, out port))
+            {
+                return false;
+            }
+
+            if (!TryNormalizeHost(hostPart, allowSingleLabelDns: true, out host))
+            {
+                port = 0;
+                return false;
+            }
+
             return true;
         }
 
-        if (Uri.CheckHostName(hostPart) == UriHostNameType.Dns)
+        if (!TryNormalizeHost(trimmed, allowSingleLabelDns: false, out host))
         {
-            host = hostPart;
+            return false;
+        }
+
+        port = DefaultQuicPort;
+        return true;
+    }
+
+    private static bool TryParsePort(string portPart, out int port) =>
+        int.TryParse(portPart, NumberStyles.None, CultureInfo.InvariantCulture, out port) &&
+        port is >= 1 and <= 65535;
+
+    private static bool TryNormalizeHost(string hostPart, bool allowSingleLabelDns, out string normalized)
+    {
+        normalized = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(hostPart) || hostPart.StartsWith('.') || hostPart.EndsWith('.'))
+        {
+            return false;
+        }
+
+        // Require standard dotted-quad notation so partial numeric strings (e.g. "192.168.1") are rejected.
+        if (hostPart.Count(c => c == '.') == 3 &&
+            IPAddress.TryParse(hostPart, out var parsedIp) &&
+            parsedIp.AddressFamily == AddressFamily.InterNetwork)
+        {
+            normalized = parsedIp.ToString();
             return true;
         }
 
-        host = string.Empty;
-        port = 0;
-        return false;
+        if (Uri.CheckHostName(hostPart) != UriHostNameType.Dns)
+        {
+            return false;
+        }
+
+        var labels = hostPart.Split('.');
+        if (labels.Length == 0 || labels[^1].All(char.IsDigit))
+        {
+            return false;
+        }
+
+        foreach (var label in labels)
+        {
+            if (label.Length is 0 or > 63 || label[0] == '-' || label[^1] == '-')
+            {
+                return false;
+            }
+        }
+
+        if (!allowSingleLabelDns &&
+            labels.Length < 2 &&
+            !string.Equals(hostPart, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        normalized = hostPart;
+        return true;
+    }
+
+    private static string BuildEndpointValidationError(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return "请输入对方设备的 IP 地址或域名，例如 192.168.1.10 或 [::1]:42461。";
+        }
+
+        var trimmed = input.Trim();
+        if (trimmed.Contains(':', StringComparison.Ordinal))
+        {
+            var closeBracket = trimmed.IndexOf(']');
+            if (trimmed.StartsWith('[') && closeBracket > 0 && closeBracket < trimmed.Length - 1)
+            {
+                var suffix = trimmed[(closeBracket + 1)..];
+                if (suffix == ":" || (suffix.StartsWith(':') && !TryParsePort(suffix[1..], out _)))
+                {
+                    return "端口号无效，请输入 1–65535 之间的数字，或省略端口以使用默认 42461。";
+                }
+            }
+            else if (trimmed.Count(c => c == ':') == 1)
+            {
+                var idx = trimmed.IndexOf(':');
+                var portSlice = trimmed[(idx + 1)..];
+                if (!TryParsePort(portSlice, out _))
+                {
+                    return "端口号无效，请输入 1–65535 之间的数字，或省略端口以使用默认 42461。";
+                }
+            }
+        }
+
+        return "地址格式无效，请输入有效 IP 或域名（如 192.168.1.10、192.168.1.10:42461 或 [::1]:42461）。";
     }
 
     private static string FormatEndpoint(string host, int port)

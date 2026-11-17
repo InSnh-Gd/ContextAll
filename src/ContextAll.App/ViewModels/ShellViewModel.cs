@@ -11,6 +11,7 @@ public sealed class ShellViewModel : ViewModelBase
     private readonly IDaemonController _daemon;
     private readonly Action<ShellPreferences> _savePreferences;
     private ShellPreferences _preferences;
+    private bool _autoGuideTriggered;
     private ShellSection _selectedSection = ShellSection.Devices;
     private double _width = ShellLayout.TwoColumnWidth;
     private bool _isRailExpanded;
@@ -32,6 +33,7 @@ public sealed class ShellViewModel : ViewModelBase
         _client = client;
         _daemon = daemon;
         _preferences = initialPreferences;
+        _autoGuideTriggered = initialPreferences.GuideSeen;
         _savePreferences = savePreferences;
         _state = client.CurrentState;
 
@@ -57,6 +59,7 @@ public sealed class ShellViewModel : ViewModelBase
         Transfers.NoticeNotification += (msg, _) => RequestSnackbar(msg);
 
         _client.StateChanged += next => DispatchToUi(() => ApplyState(next));
+        MaybeAutoOpenGuide();
     }
 
     public event Action<ShellPreferences>? PreferencesChanged;
@@ -100,6 +103,10 @@ public sealed class ShellViewModel : ViewModelBase
     public bool ShowDaemonOnboarding => !_state.Connected;
     public string LocalDisplayName => _state.LocalDisplayName;
     public string? LastDisconnectReason => _state.LastDisconnectReason;
+    public bool HasLastDisconnectReason => !string.IsNullOrWhiteSpace(_state.LastDisconnectReason);
+    public string LastDisconnectReasonText => string.IsNullOrWhiteSpace(_state.LastDisconnectReason)
+        ? string.Empty
+        : $"上次断开原因：{_state.LastDisconnectReason}";
 
     public bool IsOnboardingBusy
     {
@@ -154,6 +161,10 @@ public sealed class ShellViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowDaemonOnboarding));
         OnPropertyChanged(nameof(LocalDisplayName));
         OnPropertyChanged(nameof(LastDisconnectReason));
+        OnPropertyChanged(nameof(HasLastDisconnectReason));
+        OnPropertyChanged(nameof(LastDisconnectReasonText));
+
+        MaybeAutoOpenGuide();
     }
 
     /// <summary>Raises a non-blocking snackbar toast notification for the active shell host.</summary>
@@ -170,13 +181,13 @@ public sealed class ShellViewModel : ViewModelBase
     {
         if (!Connected)
         {
-            RequestSnackbar("后台服务未连接，请先启动或连接后台服务。");
+            RequestSnackbar("后台服务尚未连接，请先启动服务。");
             return;
         }
 
         if (Devices.TrustedDevices.Count == 0)
         {
-            RequestSnackbar("请先配对至少一台可信设备再发送文件。", "去连接", () => SelectedSection = ShellSection.Connection);
+            RequestSnackbar("请先配对至少一台设备再发送文件。", "去连接", () => SelectedSection = ShellSection.Connection);
             return;
         }
 
@@ -208,14 +219,14 @@ public sealed class ShellViewModel : ViewModelBase
             {
                 case DaemonStartOutcome.Started:
                     _client.RetryNow();
-                    OnboardingFeedback = "后台服务已启动，正在建立本地连接…";
+                    OnboardingFeedback = "后台服务已启动，正在连接…";
                     return true;
                 case DaemonStartOutcome.CorruptState:
-                    CorruptStateError = result.Message ?? "检测到本机身份凭证或配置文件不可用，是否重置并重建？";
+                    CorruptStateError = result.Message ?? "本机身份信息或配置文件已损坏，是否重置并重新生成？";
                     IsCorruptStateDialogOpen = true;
                     return false;
                 default:
-                    OnboardingFeedback = result.Message ?? "启动后台服务失败。";
+                    OnboardingFeedback = result.Message ?? "后台服务启动失败。";
                     return false;
             }
         }
@@ -264,14 +275,14 @@ public sealed class ShellViewModel : ViewModelBase
             var reset = await _daemon.ResetIdentityAndSettingsAsync(ct);
             if (!reset.Succeeded)
             {
-                CorruptStateError = reset.Message ?? "身份重置失败。";
+                CorruptStateError = reset.Message ?? "重置失败，未能重建本机身份。";
                 return false;
             }
 
             var start = await _daemon.StartDaemonAsync(ct);
             if (start.Outcome != DaemonStartOutcome.Started)
             {
-                CorruptStateError = start.Message ?? "重置后未能启动后台服务。";
+                CorruptStateError = start.Message ?? "身份已重置，但后台服务启动失败。";
                 return false;
             }
 
@@ -284,6 +295,18 @@ public sealed class ShellViewModel : ViewModelBase
         {
             IsCorruptRecovering = false;
         }
+    }
+
+    private void MaybeAutoOpenGuide()
+    {
+        if (_autoGuideTriggered || _preferences.GuideSeen || !_state.Connected)
+        {
+            return;
+        }
+
+        _autoGuideTriggered = true;
+        SelectedSection = ShellSection.Connection;
+        Connection.OpenGuide();
     }
 
     private void UpdatePreferences(ShellPreferences next)

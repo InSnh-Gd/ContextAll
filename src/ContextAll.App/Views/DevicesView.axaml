@@ -19,7 +19,7 @@
           <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
               <TextBlock Text="设备" Classes="HeadlineSmallEmphasized" Foreground="{DynamicResource OnSurface}" />
-              <TextBlock Text="已信任与局域网发现设备" Classes="BodySmall" Foreground="{DynamicResource OnSurfaceVariant}" />
+              <TextBlock Text="已配对与附近可连接设备" Classes="BodySmall" Foreground="{DynamicResource OnSurfaceVariant}" />
             </StackPanel>
             <Button x:Name="GlobalPushClipboardButton"
                     Grid.Column="1"
@@ -46,83 +46,294 @@
                   BorderBrush="{DynamicResource Primary}"
                   BorderThickness="1"
                   Padding="16,14">
-            <StackPanel Spacing="8">
-              <TextBlock Text="配对短码核对"
+            <StackPanel Spacing="10">
+              <TextBlock Text="核对 6 位配对码"
                          Classes="LabelMediumEmphasized"
                          Foreground="{DynamicResource OnPrimaryContainer}" />
               <TextBlock x:Name="PairingPeerLabel"
                          Classes="TitleSmall"
                          Foreground="{DynamicResource OnPrimaryContainer}"
                          TextWrapping="Wrap" />
-              <TextBlock x:Name="PairingCodeLabel"
-                         Classes="DisplaySmallEmphasized MonoTabular"
-                         LetterSpacing="4"
-                         Foreground="{DynamicResource OnPrimaryContainer}" />
+              <StackPanel x:Name="PairingCodeBoxesPanel"
+                          Orientation="Horizontal"
+                          Spacing="10"
+                          HorizontalAlignment="Left" />
+              <StackPanel Spacing="4">
+                <c:LinearWavyProgressIndicator x:Name="PairingProgressBar"
+                                               IndicatorBrush="{DynamicResource Primary}"
+                                               TrackBrush="{DynamicResource SurfaceContainerHighest}" />
+                <TextBlock x:Name="PairingCountdownLabel"
+                           Classes="BodySmall MonoTabular"
+                           Foreground="{DynamicResource OnPrimaryContainer}" />
+              </StackPanel>
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Classes="Filled"
                         Content="确认配对"
                         CornerRadius="20"
+                        Padding="16,8"
+                        VerticalAlignment="Center"
                         Click="OnAcceptPairingClicked" />
                 <Button Classes="Outlined"
                         Content="拒绝"
                         CornerRadius="20"
+                        Padding="14,8"
+                        VerticalAlignment="Center"
                         Click="OnRejectPairingClicked" />
               </StackPanel>
             </StackPanel>
           </Border>
 
-          <!-- Device stacks or unified empty state -->
+          <!-- LAN status banner, clipboard quick card, and device stacks / empty state -->
           <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <Panel>
-              <StackPanel x:Name="DeviceListsContainer"
-                          Spacing="8"
-                          IsVisible="{Binding HasAnyDevices}">
-                <TextBlock Text="已信任设备"
-                           Classes="LabelLargeEmphasized"
-                           Foreground="{DynamicResource Primary}"
-                           Margin="4,2,0,2"
-                           IsVisible="{Binding HasTrustedDevices}" />
-                <StackPanel x:Name="TrustedPanel"
-                            Spacing="3"
-                            IsVisible="{Binding HasTrustedDevices}" />
-
-                <TextBlock Text="已发现待配对"
-                           Classes="LabelLargeEmphasized"
-                           Foreground="{DynamicResource OnSurfaceVariant}"
-                           Margin="4,10,0,2"
-                           IsVisible="{Binding HasDiscoveredDevices}" />
-                <StackPanel x:Name="DiscoveredPanel"
-                            Spacing="3"
-                            IsVisible="{Binding HasDiscoveredDevices}" />
-              </StackPanel>
-
-              <!-- 3.A unified organic empty state when neither group has devices -->
-              <StackPanel x:Name="EmptyStatePanel"
-                          IsVisible="{Binding !HasAnyDevices}"
-                          Spacing="14"
-                          HorizontalAlignment="Center"
+            <StackPanel Spacing="10">
+              <c:ExpressiveGroupTile x:Name="LanStatusBannerTile"
+                                     Position="Single"
+                                     IsInteractive="True"
+                                     Padding="14,12">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                  <c:ExpressiveIconBadge x:Name="LanStatusIconBadge"
+                                         Grid.Column="0"
+                                         Tone="Primary"
+                                         ContainerSize="40"
+                                         IconSize="20"
+                                         IconGeometry="{DynamicResource Material_IconWifi}"
+                                         VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding LanStatusTitle}"
+                               Classes="TitleSmall"
+                               Foreground="{DynamicResource OnSurface}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding LanStatusSubtitle}"
+                               Classes="BodySmall"
+                               Foreground="{DynamicResource OnSurfaceVariant}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Border x:Name="LanStatusPillBorder"
+                          Grid.Column="2"
+                          CornerRadius="16"
+                          Padding="10,4"
                           VerticalAlignment="Center"
-                          Margin="12,36">
-                <c:ExpressiveIconBadge Tone="Primary"
-                                       ContainerSize="64"
-                                       IconSize="30"
-                                       PathData="M1,9l2,2c4.97,-4.97 13.03,-4.97 18,0l2,-2C16.93,2.93 7.08,2.93 1,9zM9,17l3,3 3,-3c-1.65,-1.66 -4.34,-1.66 -6,0zM5,13l2,2c2.76,-2.76 7.24,-2.76 10,0l2,-2C15.14,9.14 8.87,9.14 5,13z"
-                                       HorizontalAlignment="Center" />
-                <TextBlock Text="正在搜索局域网设备"
-                           Classes="TitleMediumEmphasized"
-                           Foreground="{DynamicResource OnSurface}"
-                           HorizontalAlignment="Center" />
-                <TextBlock Text="请确保另一台设备已开启 ContextAll，并连接至同一局域网。"
-                           Classes="BodySmall"
-                           Foreground="{DynamicResource OnSurfaceVariant}"
-                           TextWrapping="Wrap"
-                           TextAlignment="Center"
-                           MaxWidth="260" />
-                <c:ContainedLoadingIndicator x:Name="EmptyLoadingIndicator"
-                                             IsActive="True"
-                                             HorizontalAlignment="Center" />
-              </StackPanel>
-            </Panel>
+                          Background="{DynamicResource PrimaryContainer}">
+                    <TextBlock x:Name="LanStatusPillText"
+                               Text="{Binding LanStatusPill}"
+                               Classes="LabelSmallEmphasized"
+                               Foreground="{DynamicResource OnPrimaryContainer}" />
+                  </Border>
+                </Grid>
+              </c:ExpressiveGroupTile>
+
+              <c:ExpressiveGroupTile x:Name="ClipboardQuickCard"
+                                     Position="Single"
+                                     IsInteractive="True"
+                                     Padding="14,12">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                  <c:ExpressiveIconBadge Grid.Column="0"
+                                         Tone="Secondary"
+                                         ContainerSize="38"
+                                         IconSize="18"
+                                         IconGeometry="{DynamicResource Material_IconContentPaste}"
+                                         VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="跨设备剪贴板"
+                               Classes="TitleSmall"
+                               Foreground="{DynamicResource OnSurface}" />
+                    <TextBlock Text="{Binding ClipboardQuickSummary}"
+                               Classes="BodySmall"
+                               Foreground="{DynamicResource OnSurfaceVariant}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button x:Name="QuickClipboardOpenButton"
+                          Grid.Column="2"
+                          Classes="FilledTonal"
+                          Content="推送文本"
+                          CornerRadius="20"
+                          Padding="12,6"
+                          VerticalAlignment="Center"
+                          Click="OnGlobalPushClipboardClicked" />
+                </Grid>
+              </c:ExpressiveGroupTile>
+
+              <Panel>
+                <StackPanel x:Name="DeviceListsContainer"
+                            Spacing="8"
+                            IsVisible="{Binding HasAnyDevices}">
+                  <TextBlock Text="已配对设备"
+                             Classes="LabelLargeEmphasized"
+                             Foreground="{DynamicResource Primary}"
+                             Margin="4,2,0,2"
+                             IsVisible="{Binding HasTrustedDevices}" />
+                  <ItemsControl ItemsSource="{Binding TrustedDeviceItems}"
+                                IsVisible="{Binding HasTrustedDevices}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="3" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:DeviceListItem">
+                        <c:ExpressiveGroupTile Position="{Binding Position}"
+                                               IsInteractive="True"
+                                               IsSelected="{Binding IsSelected}"
+                                               Command="{Binding SelectCommand}"
+                                               CommandParameter="{Binding Device.DeviceId}"
+                                               Padding="12,10">
+                          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                            <c:ExpressiveIconBadge Grid.Column="0"
+                                                   Tone="{Binding PresenceTone}"
+                                                   PathData="M4,6h18V4H4C2.9,4 2,4.9 2,6v11H0v3h14v-3H4V6zM23,8h-6c-0.55,0 -1,0.45 -1,1v10c0,0.55 0.45,1 1,1h6c0.55,0 1,-0.45 1,-1V9C24,8.45 23.55,8 23,8zM22,17h-4v-7h4V17z"
+                                                   ContainerSize="42"
+                                                   IconSize="20"
+                                                   VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                              <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding Device.DisplayName}"
+                                           Classes="TitleSmall"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                                <Border CornerRadius="12"
+                                        Padding="8,2"
+                                        VerticalAlignment="Center"
+                                        Background="{DynamicResource SecondaryContainer}">
+                                  <TextBlock Text="{Binding PresenceLabel}"
+                                             Classes="LabelSmallEmphasized"
+                                             Foreground="{DynamicResource OnSecondaryContainer}" />
+                                </Border>
+                              </StackPanel>
+                              <WrapPanel Orientation="Horizontal" IsVisible="{Binding IsTrusted}">
+                                <Border CornerRadius="10"
+                                        Padding="8,2"
+                                        Margin="0,0,6,2"
+                                        Background="{DynamicResource SecondaryContainer}"
+                                        IsVisible="{Binding ClipboardPolicyOn}">
+                                  <TextBlock Text="{Binding ClipboardPolicy}" Classes="LabelSmall"
+                                             Foreground="{DynamicResource OnSecondaryContainer}" />
+                                </Border>
+                                <Border CornerRadius="10"
+                                        Padding="8,2"
+                                        Margin="0,0,6,2"
+                                        Background="{DynamicResource SurfaceContainerHigh}"
+                                        IsVisible="{Binding !ClipboardPolicyOn}">
+                                  <TextBlock Text="{Binding ClipboardPolicy}" Classes="LabelSmall"
+                                             Foreground="{DynamicResource OnSurfaceVariant}" />
+                                </Border>
+                                <Border CornerRadius="10"
+                                        Padding="8,2"
+                                        Margin="0,0,6,2"
+                                        Background="{DynamicResource SurfaceContainerHigh}">
+                                  <TextBlock Text="{Binding SavePolicy}" Classes="LabelSmall"
+                                             Foreground="{DynamicResource OnSurfaceVariant}" />
+                                </Border>
+                              </WrapPanel>
+                              <TextBlock Text="{Binding Device.Endpoint}"
+                                         Classes="BodySmall MonoTabular"
+                                         IsVisible="{Binding HasEndpoint}" />
+                              <TextBlock Text="{Binding Subtitle}"
+                                         Classes="BodySmall MonoTabular"
+                                         IsVisible="{Binding !IsTrusted}" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Classes="Outlined"
+                                    Content="配对"
+                                    CornerRadius="20"
+                                    Padding="12,6"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding !IsTrusted}"
+                                    Command="{Binding StartPairingCommand}"
+                                    CommandParameter="{Binding Device.DeviceId}" />
+                          </Grid>
+                        </c:ExpressiveGroupTile>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <TextBlock Text="附近可配对设备"
+                             Classes="LabelLargeEmphasized"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             Margin="4,10,0,2"
+                             IsVisible="{Binding HasDiscoveredDevices}" />
+                  <ItemsControl ItemsSource="{Binding DiscoveredDeviceItems}"
+                                IsVisible="{Binding HasDiscoveredDevices}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="3" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:DeviceListItem">
+                        <c:ExpressiveGroupTile Position="{Binding Position}"
+                                               IsInteractive="True"
+                                               IsSelected="{Binding IsSelected}"
+                                               Command="{Binding SelectCommand}"
+                                               CommandParameter="{Binding Device.DeviceId}"
+                                               Padding="12,10">
+                          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                            <c:ExpressiveIconBadge Grid.Column="0"
+                                                   Tone="{Binding PresenceTone}"
+                                                   PathData="M4,6h18V4H4C2.9,4 2,4.9 2,6v11H0v3h14v-3H4V6zM23,8h-6c-0.55,0 -1,0.45 -1,1v10c0,0.55 0.45,1 1,1h6c0.55,0 1,-0.45 1,-1V9C24,8.45 23.55,8 23,8zM22,17h-4v-7h4V17z"
+                                                   ContainerSize="42"
+                                                   IconSize="20"
+                                                   VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                              <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding Device.DisplayName}"
+                                           Classes="TitleSmall"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                                <Border CornerRadius="12"
+                                        Padding="8,2"
+                                        VerticalAlignment="Center"
+                                        Background="{DynamicResource SecondaryContainer}">
+                                  <TextBlock Text="{Binding PresenceLabel}"
+                                             Classes="LabelSmallEmphasized"
+                                             Foreground="{DynamicResource OnSecondaryContainer}" />
+                                </Border>
+                              </StackPanel>
+                              <TextBlock Text="{Binding Subtitle}"
+                                         Classes="BodySmall MonoTabular" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    Classes="Outlined"
+                                    Content="配对"
+                                    CornerRadius="20"
+                                    Padding="12,6"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding StartPairingCommand}"
+                                    CommandParameter="{Binding Device.DeviceId}" />
+                          </Grid>
+                        </c:ExpressiveGroupTile>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+
+                <!-- 3.A unified organic empty state when neither group has devices -->
+                <StackPanel x:Name="EmptyStatePanel"
+                            IsVisible="{Binding !HasAnyDevices}"
+                            Spacing="14"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Margin="12,24">
+                  <c:ExpressiveIconBadge Tone="Primary"
+                                         ContainerSize="64"
+                                         IconSize="30"
+                                         PathData="M1,9l2,2c4.97,-4.97 13.03,-4.97 18,0l2,-2C16.93,2.93 7.08,2.93 1,9zM9,17l3,3 3,-3c-1.65,-1.66 -4.34,-1.66 -6,0zM5,13l2,2c2.76,-2.76 7.24,-2.76 10,0l2,-2C15.14,9.14 8.87,9.14 5,13z"
+                                         HorizontalAlignment="Center" />
+                  <TextBlock Text="正在搜索附近设备"
+                             Classes="TitleMediumEmphasized"
+                             Foreground="{DynamicResource OnSurface}"
+                             HorizontalAlignment="Center" />
+                  <TextBlock Text="请确保另一台设备已打开 ContextAll，并连在同一局域网下。"
+                             Classes="BodySmall"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             TextWrapping="Wrap"
+                             TextAlignment="Center"
+                             MaxWidth="260" />
+                  <c:ContainedLoadingIndicator x:Name="EmptyLoadingIndicator"
+                                               IsActive="True"
+                                               HorizontalAlignment="Center" />
+                </StackPanel>
+              </Panel>
+            </StackPanel>
           </ScrollViewer>
 
           <!-- Discovery footer (visible only while devices list non-empty) -->
@@ -132,7 +343,7 @@
                       IsVisible="{Binding HasAnyDevices}"
                       VerticalAlignment="Center">
             <c:ContainedLoadingIndicator Width="28" Height="28" IsActive="True" />
-            <TextBlock Text="正在持续监听局域网设备广播…"
+            <TextBlock Text="正在搜索同一局域网下的其他设备…"
                        Classes="BodySmall"
                        Foreground="{DynamicResource OnSurfaceVariant}"
                        VerticalAlignment="Center" />
@@ -153,17 +364,17 @@
                       Spacing="12"
                       HorizontalAlignment="Center"
                       VerticalAlignment="Center"
-                      IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNull}}">
+                      IsVisible="{Binding !HasSelectedDevice}">
             <c:ExpressiveIconBadge Tone="Secondary"
                                    ContainerSize="56"
                                    IconSize="26"
                                    PathData="M4,6h18V4H4C2.9,4 2,4.9 2,6v11H0v3h14v-3H4V6zM23,8h-6c-0.55,0 -1,0.45 -1,1v10c0,0.55 0.45,1 1,1h6c0.55,0 1,-0.45 1,-1V9C24,8.45 23.55,8 23,8zM22,17h-4v-7h4V17z"
                                    HorizontalAlignment="Center" />
-            <TextBlock Text="选择左侧设备查看详情"
+            <TextBlock Text="选择一台设备查看详情"
                        Classes="TitleMedium"
                        Foreground="{DynamicResource OnSurface}"
                        HorizontalAlignment="Center" />
-            <TextBlock Text="可在此调整剪贴板双向同步、文件保存前询问及查看该设备的真实传输记录。"
+            <TextBlock Text="在左侧点选设备后，可调整剪贴板同步、文件接收确认方式，或查看传输记录。"
                        Classes="BodySmall"
                        Foreground="{DynamicResource OnSurfaceVariant}"
                        TextWrapping="Wrap"
@@ -171,9 +382,172 @@
                        MaxWidth="320" />
           </StackPanel>
 
-          <ScrollViewer IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+          <ScrollViewer IsVisible="{Binding HasSelectedDevice}"
                         VerticalScrollBarVisibility="Auto">
-            <StackPanel x:Name="DetailContentPanel" Spacing="14" />
+            <StackPanel x:Name="DetailContentPanel" Spacing="14">
+              <Button Classes="Text"
+                      Content="← 返回"
+                      CornerRadius="20"
+                      Padding="12,6"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding CanNavigateBack}"
+                      Command="{Binding ClearSelectionCommand}" />
+
+              <Border CornerRadius="24"
+                      Padding="20"
+                      Background="{DynamicResource PrimaryContainer}">
+                <StackPanel Spacing="8">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <c:ExpressiveIconBadge Grid.Column="0"
+                                           Tone="{Binding SelectedPresenceTone}"
+                                           ContainerSize="52"
+                                           IconSize="26"
+                                           PathData="M4,6h18V4H4C2.9,4 2,4.9 2,6v11H0v3h14v-3H4V6zM23,8h-6c-0.55,0 -1,0.45 -1,1v10c0,0.55 0.45,1 1,1h6c0.55,0 1,-0.45 1,-1V9C24,8.45 23.55,8 23,8zM22,17h-4v-7h4V17z" />
+                    <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding SelectedDisplayName}"
+                                 Classes="HeadlineSmallEmphasized"
+                                 Foreground="{DynamicResource OnPrimaryContainer}" />
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Border CornerRadius="12" Padding="8,2" Background="{DynamicResource SecondaryContainer}">
+                          <TextBlock Text="{Binding SelectedPresenceLabel}"
+                                     Classes="LabelSmallEmphasized"
+                                     Foreground="{DynamicResource OnSecondaryContainer}" />
+                        </Border>
+                        <Border CornerRadius="10" Padding="8,2" Background="{DynamicResource SecondaryContainer}"
+                                IsVisible="{Binding SelectedDeviceTrusted}">
+                          <TextBlock Text="已配对" Classes="LabelSmall"
+                                     Foreground="{DynamicResource OnSecondaryContainer}" />
+                        </Border>
+                        <Border CornerRadius="10" Padding="8,2" Background="{DynamicResource SurfaceContainerHigh}"
+                                IsVisible="{Binding !SelectedDeviceTrusted}">
+                          <TextBlock Text="待配对" Classes="LabelSmall"
+                                     Foreground="{DynamicResource OnSurfaceVariant}" />
+                        </Border>
+                      </StackPanel>
+                    </StackPanel>
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <TextBlock Grid.Column="0" Text="设备 ID" Classes="LabelMedium"
+                               Foreground="{DynamicResource OnPrimaryContainer}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SelectedDeviceIdText}"
+                               Classes="BodySmall MonoTabular"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource OnPrimaryContainer}"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="2"
+                            Classes="FilledTonal"
+                            Content="复制 ID"
+                            CornerRadius="20"
+                            Padding="12,5"
+                            Command="{Binding CopyDeviceIdCommand}" />
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10"
+                        IsVisible="{Binding SelectedDeviceHasEndpoint}">
+                    <TextBlock Grid.Column="0" Text="直连地址" Classes="LabelMedium"
+                               Foreground="{DynamicResource OnPrimaryContainer}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SelectedEndpointText}"
+                               Classes="BodySmall MonoTabular"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource OnPrimaryContainer}"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="2"
+                            Classes="Outlined"
+                            Content="复制地址"
+                            CornerRadius="20"
+                            Padding="10,4"
+                            Command="{Binding CopyEndpointCommand}" />
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                        IsVisible="{Binding !SelectedDeviceHasEndpoint}">
+                    <TextBlock Grid.Column="0" Text="直连地址" Classes="LabelMedium"
+                               Foreground="{DynamicResource OnPrimaryContainer}" />
+                    <TextBlock Grid.Column="1" Text="暂未上报" Classes="BodySmall"
+                               Foreground="{DynamicResource OnPrimaryContainer}" />
+                  </Grid>
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                        IsVisible="{Binding SelectedDeviceTrusted}">
+                    <TextBlock Grid.Column="0" Text="对端剪贴板" Classes="LabelMedium"
+                               Foreground="{DynamicResource OnPrimaryContainer}" />
+                    <TextBlock Grid.Column="1" Text="{Binding SelectedRemoteClipboardLabel}" Classes="BodySmall"
+                               Foreground="{DynamicResource OnPrimaryContainer}" />
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <StackPanel Spacing="8" IsVisible="{Binding SelectedDeviceTrusted}">
+                <WrapPanel Orientation="Horizontal">
+                  <Button Classes="Filled" Content="发送文件" CornerRadius="20" Padding="16,10"
+                          Margin="0,0,8,8" Command="{Binding SendFilesCommand}" />
+                  <Button Classes="FilledTonal" Content="推送剪贴板" CornerRadius="20" Padding="16,10"
+                          Margin="0,0,8,8" Command="{Binding OpenClipboardCommand}" />
+                  <Button Classes="Outlined" Content="取消配对" CornerRadius="20" Padding="16,10"
+                          Margin="0,0,8,8" Command="{Binding RequestUnpairCommand}" />
+                </WrapPanel>
+                <c:ExpressiveGroupTile Position="First" IsInteractive="False" Padding="16,12">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                      <TextBlock Text="剪贴板同步" Classes="TitleSmall" />
+                      <TextBlock Text="双方均开启且在线时，自动同步复制的纯文本"
+                                 Classes="BodySmall" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <c:ExpressiveSwitch Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        IsChecked="{Binding SelectedClipboardSync, Mode=OneWay}"
+                                        Command="{Binding ToggleClipboardSyncCommand}" />
+                  </Grid>
+                </c:ExpressiveGroupTile>
+                <c:ExpressiveGroupTile Position="Last" IsInteractive="False" Padding="16,12">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="2" VerticalAlignment="Center">
+                      <TextBlock Text="接收文件前先询问" Classes="TitleSmall" />
+                      <TextBlock Text="收到文件时弹出确认；关闭后直接保存"
+                                 Classes="BodySmall" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <c:ExpressiveSwitch Grid.Column="1"
+                                        VerticalAlignment="Center"
+                                        IsChecked="{Binding SelectedAskBeforeSave, Mode=OneWay}"
+                                        Command="{Binding ToggleAskBeforeSaveCommand}" />
+                  </Grid>
+                </c:ExpressiveGroupTile>
+              </StackPanel>
+
+              <Button Classes="Filled"
+                      Content="发起配对"
+                      CornerRadius="20"
+                      Padding="20,10"
+                      HorizontalAlignment="Left"
+                      IsVisible="{Binding !SelectedDeviceTrusted}"
+                      Command="{Binding StartPairingCommand}"
+                      CommandParameter="{Binding SelectedDeviceId}" />
+
+              <TextBlock Text="传输记录"
+                         Classes="LabelLargeEmphasized"
+                         Margin="4,6,0,2"
+                         IsVisible="{Binding HasSelectedDeviceHistory}" />
+              <ItemsControl ItemsSource="{Binding SelectedDeviceHistoryItems}"
+                            IsVisible="{Binding HasSelectedDeviceHistory}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Spacing="3" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DeviceHistoryItem">
+                    <c:ExpressiveGroupTile Position="{Binding Position}" IsInteractive="False" Padding="12,10">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Title}" Classes="TitleSmall" />
+                        <TextBlock Text="{Binding Subtitle}" Classes="BodySmall" />
+                      </StackPanel>
+                    </c:ExpressiveGroupTile>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
           </ScrollViewer>
         </Panel>
       </Border>
@@ -182,9 +556,9 @@
     <!-- Unpair confirmation dialog -->
     <c:MaterialDialog x:Name="UnpairDialogControl"
                       Title="确认取消配对"
-                      Message="取消配对后需要重新核对 6 位验证码才能恢复互信连接与文件传输。"
+                      Message="取消配对后将断开连接，下次互传需重新核对 6 位配对码。"
                       PrimaryActionText="确认取消配对"
-                      CancelActionText="保留配对"
+                      CancelActionText="取消"
                       DefaultFocusCancel="True" />
 
     <!-- 1.A Clipboard broadcast modal dialog -->

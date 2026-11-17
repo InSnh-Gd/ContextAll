@@ -29,7 +29,7 @@ public partial class ShellRootView : UserControl
 
     public ShellRootView()
         : this(new ShellViewModel(
-            new LocalDaemonConnection(),
+            IdleLocalChannel.Shared,
             new Platform.LinuxDaemonController(),
             new Platform.ShellPreferences(),
             _ => { }))
@@ -59,6 +59,14 @@ public partial class ShellRootView : UserControl
         _connectionView = new ConnectionView(_vm.Connection);
         _transfersView = new TransfersView(_vm.Transfers);
         _thisDeviceView = new ThisDeviceView(_vm.ThisDevice);
+
+        _devicesView.NavigateToConnectionRequested += () => _vm.SelectedSection = ShellSection.Connection;
+        _transfersView.NavigateToDevicesRequested += () => _vm.SelectedSection = ShellSection.Devices;
+        _thisDeviceView.OpenGuideRequested += () =>
+        {
+            _vm.SelectedSection = ShellSection.Connection;
+            _vm.Connection.OpenGuide();
+        };
 
         if (devicesSlot is not null)
         {
@@ -132,11 +140,11 @@ public partial class ShellRootView : UserControl
 
         _headerBar.SubtitleText = _vm.Connected && !string.IsNullOrWhiteSpace(_vm.LocalDisplayName)
             ? _vm.LocalDisplayName
-            : _vm.Connected ? "已连接" : "未连接后台";
+            : _vm.Connected ? "已连接" : "未连接";
 
         _corruptDialog.IsOpen = _vm.IsCorruptStateDialogOpen;
         _corruptDialog.Message = string.IsNullOrWhiteSpace(_vm.CorruptStateError)
-            ? "检测到本机身份或配置文件损坏。取消将保留磁盘现状；仅在明确确认后才重置身份并重启服务。"
+            ? "检测到本机身份或配置文件已损坏。点击取消将保留现有文件；确认后将重置本机身份并重启后台服务。"
             : _vm.CorruptStateError;
     }
 }

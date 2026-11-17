@@ -37,13 +37,23 @@
                     Padding="20,16"
                     Margin="0,0,0,12">
               <StackPanel Spacing="10">
-                <TextBlock Text="后台守护服务尚未运行"
+                <TextBlock Text="后台连接服务尚未启动"
                            Classes="TitleMediumEmphasized"
                            Foreground="{DynamicResource OnSecondaryContainer}" />
-                <TextBlock Text="桌面外壳不会自动或静默拉起后台服务；请按需手动启动服务，或在系统启动后自动连接。"
+                <TextBlock Text="请手动启动后台服务；如果希望登录后自动连上，也可以开启开机自启。"
                            Classes="BodySmall"
                            Foreground="{DynamicResource OnSecondaryContainer}"
                            TextWrapping="Wrap" />
+                <Border x:Name="LastDisconnectBanner"
+                        CornerRadius="14"
+                        Padding="12,8"
+                        Background="{DynamicResource SurfaceContainerLow}"
+                        IsVisible="{Binding HasLastDisconnectReason}">
+                  <TextBlock Text="{Binding LastDisconnectReasonText}"
+                             Classes="BodySmall"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             TextWrapping="Wrap" />
+                </Border>
                 <TextBlock Text="{Binding OnboardingFeedback}"
                            Classes="BodySmall"
                            Foreground="{DynamicResource OnSecondaryContainer}"
@@ -54,12 +64,16 @@
                           Classes="Filled"
                           Content="启动后台服务"
                           CornerRadius="20"
+                          Padding="16,9"
+                          VerticalAlignment="Center"
                           IsEnabled="{Binding !IsOnboardingBusy}"
                           Click="OnStartDaemonClicked" />
                   <Button x:Name="EnableAutostartButton"
                           Classes="Outlined"
                           Content="启用开机自启"
                           CornerRadius="20"
+                          Padding="16,9"
+                          VerticalAlignment="Center"
                           IsEnabled="{Binding !IsOnboardingBusy}"
                           Click="OnEnableAutostartClicked" />
                 </StackPanel>
@@ -86,11 +100,11 @@
 
       <!-- Corrupt state confirmation dialog (default Cancel focus, explicit user confirm only) -->
       <c:MaterialDialog x:Name="CorruptDialogControl"
-                        Title="本机身份或配置不可用"
+                        Title="本机身份或配置已损坏"
                         DefaultFocusCancel="True"
                         DismissOnScrimClick="False"
                         PrimaryActionText="重置身份并重试"
-                        CancelActionText="取消（保留现状）" />
+                        CancelActionText="取消" />
 
       <!-- Top-level snackbar queue -->
       <c:MaterialSnackbarHost x:Name="SnackbarHostControl"

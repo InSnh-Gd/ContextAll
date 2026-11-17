@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using ContextAll.App.Controls;
 using ContextAll.App.ViewModels;
 using ContextAll.Ipc;
@@ -9,19 +11,43 @@ using ContextAll.Ipc;
 namespace ContextAll.App.Views;
 
 /// <summary>
-/// MD3E Connection and Diagnostics view for manual QUIC dialing, LAN endpoints copy, and onboarding guide.
+/// MD3E Connection and Network view for manual QUIC dialing, LAN endpoints copy, protocol specs,
+/// per-peer connection overview, and a 4-step interactive usage guide.
 /// </summary>
 public partial class ConnectionView : UserControl
 {
+    private static readonly (string Tag, string Title, string Description)[] GuideSteps =
+    [
+        (
+            "无需账号 · 本地直连",
+            "1. 同网直连，不经云端",
+            "设备连入同一局域网后即可直接建立 QUIC 加密连接，文字和文件都在本地传输，不经过任何云端服务器。"
+        ),
+        (
+            "双向确认 · 安全信任",
+            "2. 6 位配对码双向核对",
+            "首次连接新设备时，双方屏幕会显示同一组 6 位配对码。核对无误并在两端确认，即可建立长期信任。"
+        ),
+        (
+            "按设备控制 · 边界清晰",
+            "3. 按设备控制同步与保存策略",
+            "在「设备」页可为每台已配对设备单独开启或关闭剪贴板同步，也能自由选择收到文件时先确认或直接保存。"
+        ),
+        (
+            "有序排队 · 分块校验",
+            "4. 多文件排队与分块校验",
+            "在「传输」页一次选择或拖入多个文件时，系统会按设备顺序依次发送，并逐块完成 SHA-256 完整性校验。"
+        ),
+    ];
+
     private readonly ConnectionViewModel _vm;
-    private StackPanel? _localEndpointsPanel;
-    private TextBlock? _clipboardStatusLabel;
+    private TextBox? _endpointBox;
     private Border? _feedbackBanner;
     private TextBlock? _feedbackLabel;
     private MaterialDialog _guideDialog = new();
 
     public ConnectionView()
-        : this(new ConnectionViewModel(new LocalDaemonConnection()))
+        : this(new ConnectionViewModel(IdleLocalChannel.Shared))
     {
     }
 
@@ -29,27 +55,26 @@ public partial class ConnectionView : UserControl
     {
         _vm = vm;
         DataContext = vm;
+        _vm.CopyRequested += text => _ = CopyEndpointAsync(text);
 
         AvaloniaXamlLoader.Load(this);
         ResolveNamedParts();
-        BuildGuideBody();
 
         _guideDialog.PrimaryActionClicked += (_, _) => _vm.CloseGuide();
         _guideDialog.Canceled += (_, _) => _vm.CloseGuide();
 
-        Md3eResourceLookup.TrackThemeChanges(this, UpdateFeedbackTone);
+        Md3eResourceLookup.TrackThemeChanges(this, RefreshDynamicVisuals);
         _vm.PropertyChanged += (_, _) => Refresh();
         Refresh();
     }
 
     public bool IsGuideVisible => _guideDialog.IsOpen;
-    public string ClipboardStatusText => _clipboardStatusLabel?.Text ?? string.Empty;
+    public string ClipboardStatusText => _vm.ClipboardStatusText;
     public MaterialDialog GuideDialog => _guideDialog;
 
     private void ResolveNamedParts()
     {
-        _localEndpointsPanel = this.FindControl<StackPanel>("LocalEndpointsPanel");
-        _clipboardStatusLabel = this.FindControl<TextBlock>("ClipboardStatusLabel");
+        _endpointBox = this.FindControl<TextBox>("EndpointBox");
         _feedbackBanner = this.FindControl<Border>("FeedbackBanner");
         _feedbackLabel = this.FindControl<TextBlock>("FeedbackLabel");
         if (this.FindControl<MaterialDialog>("GuideDialogControl") is { } guide)
@@ -58,29 +83,148 @@ public partial class ConnectionView : UserControl
         }
     }
 
-    private void BuildGuideBody()
+    private void RebuildGuideBody()
     {
-        _guideDialog.BodyContent = new StackPanel
+        var stepIndex = Math.Clamp(_vm.GuideStepIndex, 0, GuideSteps.Length - 1);
+        var step = GuideSteps[stepIndex];
+
+        var stepCounter = new TextBlock
         {
-            Spacing = 10,
-            Children =
+            Text = $"步骤 {stepIndex + 1} / {GuideSteps.Length}",
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = Md3eResourceLookup.ResolveBrush(this, "OnSecondaryContainer", static p => p.OnSecondaryContainer),
+        };
+        stepCounter.Classes.Add("LabelMediumEmphasized");
+
+        var counterPill = new Border
+        {
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(10, 4),
+            Background = Md3eResourceLookup.ResolveBrush(this, "SecondaryContainer", static p => p.SecondaryContainer),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = stepCounter,
+        };
+
+        var dotsPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        var primaryBrush = Md3eResourceLookup.ResolveBrush(this, "Primary", static p => p.Primary);
+        var inactiveDotBrush = Md3eResourceLookup.ResolveBrush(this, "SurfaceContainerHighest", static p => p.SurfaceContainerHighest);
+        for (var i = 0; i < GuideSteps.Length; i++)
+        {
+            var active = i == stepIndex;
+            dotsPanel.Children.Add(new Border
             {
-                BuildGuideStep("1. 确认同一局域网设备已启动 ContextAll 守护进程（默认端口 UDP 42461）。"),
-                BuildGuideStep("2. 若 mDNS 未自动发现对端，可在此页面输入对方「本机局域网地址」手动拨号。"),
-                BuildGuideStep("3. 配对时请核对 6 位等宽验证码，通过后可在「设备」开启剪贴板同步，或在「传输」发送多文件。"),
+                Width = active ? 24 : 8,
+                Height = 8,
+                CornerRadius = new CornerRadius(4),
+                Background = active ? primaryBrush : inactiveDotBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+
+        var topRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 12,
+        };
+        Grid.SetColumn(counterPill, 0);
+        Grid.SetColumn(dotsPanel, 1);
+        topRow.Children.Add(counterPill);
+        topRow.Children.Add(dotsPanel);
+
+        var tagBlock = new TextBlock
+        {
+            Text = step.Tag,
+            Foreground = primaryBrush,
+        };
+        tagBlock.Classes.Add("LabelLargeEmphasized");
+
+        var titleBlock = new TextBlock
+        {
+            Text = step.Title,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Md3eResourceLookup.ResolveBrush(this, "OnSurface", static p => p.OnSurface),
+        };
+        titleBlock.Classes.Add("TitleMediumEmphasized");
+
+        var descBlock = new TextBlock
+        {
+            Text = step.Description,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Md3eResourceLookup.ResolveBrush(this, "OnSurfaceVariant", static p => p.OnSurfaceVariant),
+        };
+        descBlock.Classes.Add("BodyMedium");
+
+        var card = new Border
+        {
+            CornerRadius = new CornerRadius(20),
+            Padding = new Thickness(16),
+            Background = Md3eResourceLookup.ResolveBrush(this, "SurfaceContainer", static p => p.SurfaceContainer),
+            Child = new StackPanel
+            {
+                Spacing = 8,
+                Children = { tagBlock, titleBlock, descBlock },
             },
         };
-    }
 
-    private static TextBlock BuildGuideStep(string text)
-    {
-        var block = new TextBlock
+        var navRow = new StackPanel
         {
-            Text = text,
-            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Left,
         };
-        block.Classes.Add("BodyMedium");
-        return block;
+
+        if (_vm.CanGoPreviousGuideStep)
+        {
+            var prevBtn = new Button
+            {
+                Content = "上一步",
+                CornerRadius = new CornerRadius(20),
+                Padding = new Thickness(14, 7),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            prevBtn.Classes.Add("Outlined");
+            prevBtn.Click += (_, _) => _vm.PreviousGuideStep();
+            navRow.Children.Add(prevBtn);
+        }
+
+        if (!_vm.IsLastGuideStep)
+        {
+            var nextBtn = new Button
+            {
+                Content = "下一步",
+                CornerRadius = new CornerRadius(20),
+                Padding = new Thickness(16, 7),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            nextBtn.Classes.Add("FilledTonal");
+            nextBtn.Click += (_, _) => _vm.NextGuideStep();
+            navRow.Children.Add(nextBtn);
+        }
+        else
+        {
+            var finishBtn = new Button
+            {
+                Content = "完成",
+                CornerRadius = new CornerRadius(20),
+                Padding = new Thickness(16, 7),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            finishBtn.Classes.Add("FilledTonal");
+            finishBtn.Click += (_, _) => _vm.CloseGuide();
+            navRow.Children.Add(finishBtn);
+        }
+
+        _guideDialog.BodyContent = new StackPanel
+        {
+            Spacing = 12,
+            Children = { topRow, card, navRow },
+        };
     }
 
     private void OnOpenGuideClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
@@ -91,65 +235,24 @@ public partial class ConnectionView : UserControl
 
     private void Refresh()
     {
-        if (_localEndpointsPanel is not null)
-        {
-            _localEndpointsPanel.Children.Clear();
-            if (_vm.LocalEndpoints.Count == 0)
-            {
-                var empty = new TextBlock { Text = "暂未获取本机局域网地址" };
-                empty.Classes.Add("BodyMedium");
-                _localEndpointsPanel.Children.Add(empty);
-            }
-            else
-            {
-                foreach (var endpoint in _vm.LocalEndpoints)
-                {
-                    var row = new Grid
-                    {
-                        ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-                        ColumnSpacing = 8,
-                    };
-                    var epText = new TextBlock
-                    {
-                        Text = endpoint,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    };
-                    epText.Classes.Add("BodyMedium MonoTabular");
-
-                    var copyBtn = new Button
-                    {
-                        Content = "复制",
-                        CornerRadius = new Avalonia.CornerRadius(20),
-                        Padding = new Avalonia.Thickness(12, 6),
-                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                    };
-                    copyBtn.Classes.Add("FilledTonal");
-                    var captured = endpoint;
-                    copyBtn.Click += async (_, _) =>
-                    {
-                        var topLevel = TopLevel.GetTopLevel(this);
-                        if (topLevel?.Clipboard is { } clipboard)
-                        {
-                            await clipboard.SetTextAsync(captured);
-                        }
-                    };
-
-                    Grid.SetColumn(epText, 0);
-                    Grid.SetColumn(copyBtn, 1);
-                    row.Children.Add(epText);
-                    row.Children.Add(copyBtn);
-                    _localEndpointsPanel.Children.Add(row);
-                }
-            }
-        }
-
-        if (_clipboardStatusLabel is not null)
-        {
-            _clipboardStatusLabel.Text = $"{_vm.ClipboardBackendLabel} ({_vm.ClipboardBackendCode})";
-        }
-
+        RebuildGuideBody();
         _guideDialog.IsOpen = _vm.IsGuideOpen;
         UpdateFeedbackTone();
+    }
+
+    private void RefreshDynamicVisuals()
+    {
+        RebuildGuideBody();
+        UpdateFeedbackTone();
+    }
+
+    private async Task CopyEndpointAsync(string text)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(text);
+        }
     }
 
     private void UpdateFeedbackTone()
@@ -161,11 +264,11 @@ public partial class ConnectionView : UserControl
 
         var bgKey = _vm.DialIsError ? "ErrorContainer" : "SecondaryContainer";
         var fgKey = _vm.DialIsError ? "OnErrorContainer" : "OnSecondaryContainer";
-        if (this.TryFindResource(bgKey, ActualThemeVariant, out var bg) && bg is Avalonia.Media.IBrush bgBrush)
+        if (this.TryFindResource(bgKey, ActualThemeVariant, out var bg) && bg is IBrush bgBrush)
         {
             _feedbackBanner.Background = bgBrush;
         }
-        if (this.TryFindResource(fgKey, ActualThemeVariant, out var fg) && fg is Avalonia.Media.IBrush fgBrush)
+        if (this.TryFindResource(fgKey, ActualThemeVariant, out var fg) && fg is IBrush fgBrush)
         {
             _feedbackLabel.Foreground = fgBrush;
         }
