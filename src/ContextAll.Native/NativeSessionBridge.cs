@@ -254,7 +254,7 @@ public sealed class NativeSessionBridge : IDisposable
         }
 
         var decodedPayload = ControlJson.Decode(roundTripped.Payload.Span, ProtocolJsonContext.Default.LocalCommandPayload);
-        if (decodedPayload.IsFailure || decodedPayload.Value is null || !RequestIdOk(decodedPayload.Value.RequestId))
+        if (decodedPayload.IsFailure || decodedPayload.Value is null || !LocalOperator.RequestIdOk(decodedPayload.Value.RequestId))
         {
             return EncodeCommandResult(decodedPayload.Value?.RequestId ?? "0", false, "invalid");
         }
@@ -269,9 +269,10 @@ public sealed class NativeSessionBridge : IDisposable
                 return EncodeCommandResult(body.RequestId, false, "not-running");
             }
 
-            if (!seenRequests.Add(body.RequestId))
+            var duplicate = LocalOperator.Remember(seenRequests, body.RequestId);
+            if (duplicate is not null)
             {
-                return EncodeCommandResult(body.RequestId, false, "duplicate-request");
+                return EncodeCommandResult(body.RequestId, false, duplicate);
             }
         }
 
@@ -677,9 +678,6 @@ public sealed class NativeSessionBridge : IDisposable
             return 0;
         }
     }
-
-    static bool RequestIdOk(string id) =>
-        id.Length is >= 1 and <= 64 && id.All(ch => ch is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     static List<OnLinkPrefix> ParsePrefixes(string csv)
     {

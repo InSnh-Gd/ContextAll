@@ -70,6 +70,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     readonly IClipboardSource? clipboard;
     readonly IDiscovery? discovery;
     readonly ITransferSink? transferSink;
+    readonly IFirewallProfile? firewall;
     readonly int quicPort;
     PeerLink? prompt;
     string? pendingText;
@@ -84,11 +85,13 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         IDiscovery? discovery = null,
         ITransferSink? transferSink = null,
         int quicPort = QuicLink.Port,
-        IdentityMaterial? preloadedIdentity = null)
+        IdentityMaterial? preloadedIdentity = null,
+        IFirewallProfile? firewall = null)
     {
         this.clipboard = clipboard;
         this.discovery = discovery;
         this.transferSink = transferSink;
+        this.firewall = firewall;
         this.quicPort = quicPort;
 
         if (preloadedIdentity is not null)
@@ -159,7 +162,8 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         IClipboardSource? clipboard = null,
         IDiscovery? discovery = null,
         ITransferSink? transferSink = null,
-        int quicPort = QuicLink.Port)
+        int quicPort = QuicLink.Port,
+        IFirewallProfile? firewall = null)
     {
         this.identity = identity;
         this.settingsPath = settingsPath;
@@ -168,6 +172,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         this.clipboard = clipboard;
         this.discovery = discovery;
         this.transferSink = transferSink;
+        this.firewall = firewall;
         this.quicPort = quicPort;
         LocalSpki = identity.Spki;
         DisplayName = string.IsNullOrEmpty(settings.DisplayName)
@@ -208,6 +213,8 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     public string LocalDeviceId => identity.DeviceId;
 
     public int QuicPort => quicPort;
+
+    public string ClipboardBackend => clipboard?.BackendName ?? "unavailable";
 
     public int ActiveListenerCount => listenerSet?.Count ?? 0;
 
@@ -276,6 +283,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             Console.Error.WriteLine("clipboard-disabled");
         }
 
+        var customDiscovery = discovery is not null;
         var ownsNetwork = discovery is { OwnsNetworkAndSockets: true };
         if (discovery is not null)
         {
@@ -291,7 +299,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
         _ = Task.Run(() => ListenAsync(token), token);
 
-        if (!ownsNetwork)
+        if (!customDiscovery)
         {
             udp = ListenBeacon(AddressFamily.InterNetwork, IPAddress.Any);
             udp6 = ListenBeacon(AddressFamily.InterNetworkV6, IPAddress.IPv6Any);
@@ -304,7 +312,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             localPrefixes = prefixes.ToList();
         }
 
-        if (!ownsNetwork)
+        if (!customDiscovery)
         {
             mdns = new MdnsDiscovery(DeviceIds.Text(identity.Spki), DisplayName, quicPort, NoteMdns);
             mdns.Start(localPrefixes);
@@ -312,6 +320,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
         lastNetwork = localPrefixes.ToArray();
         networkMonitor = new NetworkMonitor(() => _ = SafeRebuildAsync());
+        if (firewall is not null)
+        {
+            firewall.Changed += OnFirewallChanged;
+        }
         if (!ownsNetwork)
         {
             NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
@@ -320,9 +332,9 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
         _ = Task.Run(() => ReconcileLoop(token), token);
 
-        if (ownsNetwork && discovery is not null)
+        if (discovery is { } injectedDiscovery)
         {
-            _ = Task.Run(() => CustomBeaconLoop(discovery, token), token);
+            _ = Task.Run(() => CustomBeaconLoop(injectedDiscovery, token), token);
         }
         else
         {
@@ -398,6 +410,8 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             {
                 Console.Error.WriteLine("clipboard-mutual " + deviceId);
             }
+
+            Publish([DeviceEvent(deviceId, Presence(deviceId))]);
         }
     }
 
@@ -810,6 +824,15 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             discovery.NetworkChanged -= OnCustomNetworkChanged;
         }
 
+        if (firewall is not null)
+        {
+            firewall.Changed -= OnFirewallChanged;
+            if (firewall is IDisposable disposableFirewall)
+            {
+                disposableFirewall.Dispose();
+            }
+        }
+
         clipboard?.Dispose();
         discovery?.Dispose();
         mdns?.Dispose();
@@ -937,6 +960,8 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
     void OnNetworkAvailabilityChanged(object? sender, NetworkAvailabilityEventArgs args) => networkMonitor?.Signal();
 
+    void OnFirewallChanged(object? sender, EventArgs args) => networkMonitor?.Signal();
+
     async Task ReconcileLoop(CancellationToken cancellationToken)
     {
         try
@@ -992,6 +1017,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                     RefreshPrefixes();
                     local = prefixes.ToArray();
                 }
+                else if (firewall is not null)
+                {
+                    local = FirewallProfiles.Filter(local, firewall).ToArray();
+                }
 
                 changed = force || !SamePrefixes(lastNetwork, local);
                 lastNetwork = local.ToArray();
@@ -1009,10 +1038,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                 return;
             }
 
-            if (discovery is { OwnsNetworkAndSockets: true } customDiscovery)
+            if (discovery is not null)
             {
                 Volatile.Write(ref lastBeaconTick, Environment.TickCount64);
-                _ = customDiscovery.AnnounceAsync((ushort)quicPort, run?.Token ?? CancellationToken.None);
+                _ = discovery.AnnounceAsync((ushort)quicPort, run?.Token ?? CancellationToken.None);
             }
             else
             {
@@ -1059,16 +1088,25 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
     public string? Apply(LocalCommandPayload body, byte type)
     {
+        if (type != FrameTypes.SendFile)
+        {
+            var validation = LocalOperator.Validate(type, body);
+            if (validation is not null)
+            {
+                return validation;
+            }
+        }
+
         switch (type)
         {
             case FrameTypes.SetDisplayName:
-                if (body.DisplayName is null || !DisplayNames.IsLegal(body.DisplayName))
+                if (body.DisplayName is not { } displayName)
                 {
                     return "invalid-name";
                 }
 
-                DisplayName = body.DisplayName;
-                settings.DisplayName = body.DisplayName;
+                DisplayName = displayName;
+                settings.DisplayName = displayName;
                 Persist();
                 discovery?.UpdateDisplayName(DisplayName);
                 foreach (var link in links)
@@ -1078,11 +1116,6 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
                 return null;
             case FrameTypes.SetDownloadDirectory:
-                if (body.Path is { Length: > 0 } && !Directory.Exists(body.Path))
-                {
-                    return "invalid-path";
-                }
-
                 settings.DownloadDirectory = body.Path ?? "";
                 Downloads = SettingsStore.ResolveDownload(settings.DownloadDirectory, home);
                 Directory.CreateDirectory(Downloads);
@@ -1114,6 +1147,13 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                 return FileCommand(body.TransferId, (link, id) => link.RejectFile(id));
             case FrameTypes.CancelTransfer:
                 return FileCommand(body.TransferId, (link, id) => link.CancelFile(id));
+            case FrameTypes.PushClipboardText:
+                if (body.Text is null)
+                {
+                    return "invalid";
+                }
+
+                return PushClipboardText(body.Text);
             default:
                 return "invalid";
         }
@@ -1254,12 +1294,25 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     PeerLink? Live(string deviceId) =>
         links.FirstOrDefault(link => link.RemoteId == deviceId && link.Entered && !link.Closed);
 
-    void OnPlain(string text)
+    public string? PushClipboardText(string text)
+    {
+        if (Encoding.UTF8.GetByteCount(text) > FrameLimits.MaxClipboardBytes)
+        {
+            return "too-large";
+        }
+
+        ApplyLocalClipboard(text, skipIfUnchanged: false);
+        return null;
+    }
+
+    void OnPlain(string text) => ApplyLocalClipboard(text, skipIfUnchanged: true);
+
+    void ApplyLocalClipboard(string text, bool skipIfUnchanged)
     {
         List<DirectedFrame> sent = [];
         lock (Gate)
         {
-            if (text == Applied)
+            if (skipIfUnchanged && text == Applied)
             {
                 return;
             }
@@ -1731,7 +1784,9 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                 trust.ContainsKey(id),
                 Presence(id),
                 trust.ContainsKey(id) ? trust[id].ClipboardSync : null,
-                trust.ContainsKey(id) ? trust[id].AskBeforeSave : null))
+                trust.ContainsKey(id) ? trust[id].AskBeforeSave : null,
+                trust.ContainsKey(id) ? RemoteClipboard(id) : null,
+                EndpointOf(id)))
             .ToArray();
         var pairing = prompt is { Prompting: true }
             ? new PairingSnapshotPayload(prompt.RemoteId, prompt.RemoteName, prompt.Code ?? "", prompt.RemainingMs)
@@ -1741,7 +1796,18 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             0,
             0,
             FrameTypes.SessionStream,
-            new SnapshotPayload(DisplayName, settings.DownloadDirectory, devices, pairing, prompts.ToArray(), transfers.ToArray()),
+            new SnapshotPayload(
+                DisplayName,
+                settings.DownloadDirectory,
+                devices,
+                pairing,
+                prompts.ToArray(),
+                transfers.ToArray(),
+                LocalDeviceId,
+                Downloads,
+                LocalAddresses(),
+                quicPort,
+                ClipboardBackend),
             ProtocolJsonContext.Default.SnapshotPayload);
     }
 
@@ -1752,7 +1818,12 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             trust.ContainsKey(deviceId),
             presence,
             trust.ContainsKey(deviceId) ? trust[deviceId].ClipboardSync : null,
-            trust.ContainsKey(deviceId) ? trust[deviceId].AskBeforeSave : null);
+            trust.ContainsKey(deviceId) ? trust[deviceId].AskBeforeSave : null,
+            trust.ContainsKey(deviceId) ? RemoteClipboard(deviceId) : null,
+            EndpointOf(deviceId));
+
+    string? EndpointOf(string deviceId) =>
+        Live(deviceId)?.EndpointText ?? routes.PreferredEndpointOf(deviceId);
 
     string Presence(string deviceId)
     {
@@ -1792,8 +1863,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             return;
         }
 
-        prefixes.AddRange(LocalNetwork.Enumerate());
+        prefixes.AddRange(FirewallProfiles.Filter(LocalNetwork.Enumerate(), firewall));
     }
+
+    internal IReadOnlyList<OnLinkPrefix> LastNetworkForTest => lastNetwork;
 
     bool OnLinkUnlocked(string address)
     {
@@ -1882,11 +1955,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         return X509CertificateLoader.LoadPkcs12(exported, "contextall", X509KeyStorageFlags.Exportable);
     }
 
-    static bool RequestIdOk(string id) =>
-        id.Length is >= 1 and <= 64 && id.All(ch => ch is >= '0' and <= '9' or >= 'a' and <= 'f');
-
-    static Frame Result(string requestId, bool ok, string? error) =>
-        FrameMessages.Json(FrameTypes.CommandResult, 0, 0, FrameTypes.SessionStream, new CommandResultPayload(requestId, ok, error), ProtocolJsonContext.Default.CommandResultPayload);
+    internal bool UsesBuiltInDiscovery => mdns is not null || udp is not null || udp6 is not null;
 
     static Frame PromptFrame(PeerLink link) =>
         FrameMessages.Json(
