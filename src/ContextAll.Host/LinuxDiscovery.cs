@@ -11,8 +11,8 @@ public sealed class LinuxDiscovery : IDiscovery
 {
     readonly string deviceId;
     readonly byte[] digest;
-    readonly string? displayName;
     readonly ushort port;
+    string? displayName;
     readonly Action<string>? log;
     readonly CancellationTokenSource stop = new();
     readonly object gate = new();
@@ -70,9 +70,23 @@ public sealed class LinuxDiscovery : IDiscovery
         return Task.CompletedTask;
     }
 
+    public void UpdateDisplayName(string newDisplayName)
+    {
+        lock (gate)
+        {
+            displayName = newDisplayName;
+        }
+    }
+
     public Task AnnounceAsync(ushort port, CancellationToken ct = default)
     {
-        var outcome = BeaconCodec.Encode(digest, port, displayName ?? "ContextAll");
+        string? name;
+        lock (gate)
+        {
+            name = displayName;
+        }
+
+        var outcome = BeaconCodec.Encode(digest, port, name ?? "ContextAll");
         if (outcome.IsFailure || outcome.Value is null) return Task.CompletedTask;
         var beaconBytes = outcome.Value;
         var localPrefixes = LocalNetwork.Enumerate();
