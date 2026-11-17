@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using ContextAll.App.Controls;
 using ContextAll.App.Platform;
 using ContextAll.App.ViewModels;
@@ -133,19 +134,26 @@ public sealed class TransfersAndQueueTests
             string? openedFolder = null;
             var vm = new TransfersViewModel(client, openFolder: dir => openedFolder = dir);
             var view = new TransfersView(vm);
+            var window = AvaloniaUiTestHost.ShowAndLayout(view, 1160, 760);
+            try
+            {
+                Assert.Equal(1, view.RenderedActiveTransferCount);
+                Assert.Equal(1, view.RenderedHistoryCount);
 
-            Assert.Equal(1, view.RenderedActiveTransferCount);
-            Assert.Equal(1, view.RenderedHistoryCount);
+                Assert.True(await vm.AcceptFileAsync("tx-prompt"));
+                Assert.True(await vm.RejectFileAsync("tx-prompt"));
+                Assert.True(await vm.CancelTransferAsync("tx-active"));
+                Assert.True(vm.OpenContainingFolder(history));
+                Assert.Equal("/home/user/Downloads", openedFolder);
 
-            Assert.True(await vm.AcceptFileAsync("tx-prompt"));
-            Assert.True(await vm.RejectFileAsync("tx-prompt"));
-            Assert.True(await vm.CancelTransferAsync("tx-active"));
-            Assert.True(vm.OpenContainingFolder(history));
-            Assert.Equal("/home/user/Downloads", openedFolder);
-
-            Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.AcceptFile && c.Payload.TransferId == "tx-prompt");
-            Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.RejectFile && c.Payload.TransferId == "tx-prompt");
-            Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.CancelTransfer && c.Payload.TransferId == "tx-active");
+                Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.AcceptFile && c.Payload.TransferId == "tx-prompt");
+                Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.RejectFile && c.Payload.TransferId == "tx-prompt");
+                Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.CancelTransfer && c.Payload.TransferId == "tx-active");
+            }
+            finally
+            {
+                window.Close();
+            }
         });
 
     [Fact]

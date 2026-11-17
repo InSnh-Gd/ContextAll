@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using ContextAll.App.Controls;
 using ContextAll.App.Platform;
 using ContextAll.App.ViewModels;
@@ -101,63 +102,67 @@ public sealed class Md3eAxamlViewsTests
             var client = new FakeLocalDaemonClient();
             var vm = new DevicesViewModel(client);
             var view = new DevicesView(vm);
-
-            // Empty state: shows unified empty panel with ContainedLoadingIndicator, hides section headers
-            vm.ApplyWidth(1280);
-            view.Measure(new Size(1160, 740));
-            view.Arrange(new Rect(0, 0, 1160, 740));
-            Assert.True(view.IsEmptyStateVisible);
-            Assert.NotNull(view.GetLogicalDescendants().OfType<ContainedLoadingIndicator>().FirstOrDefault());
-
-            // Populate trusted (ClipboardSync = false) + discovered + real transfer history
-            var syncOffPeer = new DeviceSnapshotPayload("DEV-A", "工作站", true, "online", false, true, true, "192.168.1.5:42461");
-            var discoveredPeer = new DeviceSnapshotPayload("DEV-B", "新手机", false, "online", null, null, null, "192.168.1.9:42461");
-            var history = new LocalTransferHistoryEntry("t1", "DEV-A", "工作站", "receive", "notes.txt", 512, "done", DateTimeOffset.UtcNow, "/tmp");
-
-            client.EmitState(LocalShellState.Empty with
+            var window = AvaloniaUiTestHost.ShowAndLayout(view, 1160, 740);
+            try
             {
-                ConnectionStatus = LocalConnectionStatus.Connected,
-                Devices = [syncOffPeer, discoveredPeer],
-                History = [history],
-            });
+                // Empty state: shows unified empty panel with ContainedLoadingIndicator, hides section headers
+                vm.ApplyWidth(1280);
+                AvaloniaUiTestHost.Layout(window, 1160, 740);
+                Assert.True(view.IsEmptyStateVisible);
+                Assert.NotNull(view.GetLogicalDescendants().OfType<ContainedLoadingIndicator>().FirstOrDefault());
 
-            view.Measure(new Size(1160, 740));
-            view.Arrange(new Rect(0, 0, 1160, 740));
-            Assert.False(view.IsEmptyStateVisible);
-            Assert.True(view.IsListPaneVisible);
-            Assert.True(view.IsDetailPaneVisible);
+                // Populate trusted (ClipboardSync = false) + discovered + real transfer history
+                var syncOffPeer = new DeviceSnapshotPayload("DEV-A", "工作站", true, "online", false, true, true, "192.168.1.5:42461");
+                var discoveredPeer = new DeviceSnapshotPayload("DEV-B", "新手机", false, "online", null, null, null, "192.168.1.9:42461");
+                var history = new LocalTransferHistoryEntry("t1", "DEV-A", "工作站", "receive", "notes.txt", 512, "done", DateTimeOffset.UtcNow, "/tmp");
 
-            // Narrow (< 840) drill-in
-            vm.ApplyWidth(520);
-            Assert.True(view.IsListPaneVisible);
-            Assert.False(view.IsDetailPaneVisible);
+                client.EmitState(LocalShellState.Empty with
+                {
+                    ConnectionStatus = LocalConnectionStatus.Connected,
+                    Devices = [syncOffPeer, discoveredPeer],
+                    History = [history],
+                });
 
-            vm.SelectDevice("DEV-A");
-            Assert.False(view.IsListPaneVisible);
-            Assert.True(view.IsDetailPaneVisible);
+                AvaloniaUiTestHost.Layout(window, 1160, 740);
+                Assert.False(view.IsEmptyStateVisible);
+                Assert.True(view.IsListPaneVisible);
+                Assert.True(view.IsDetailPaneVisible);
 
-            view.Measure(new Size(500, 680));
-            view.Arrange(new Rect(0, 0, 500, 680));
+                // Narrow (< 840) drill-in
+                vm.ApplyWidth(520);
+                Assert.True(view.IsListPaneVisible);
+                Assert.False(view.IsDetailPaneVisible);
 
-            var renderedTexts = view.GetLogicalDescendants()
-                .OfType<TextBlock>()
-                .Select(t => t.Text ?? string.Empty)
-                .ToArray();
+                vm.SelectDevice("DEV-A");
+                Assert.False(view.IsListPaneVisible);
+                Assert.True(view.IsDetailPaneVisible);
 
-            // Zero fabricated telemetry anywhere in rendered tree
-            Assert.DoesNotContain(renderedTexts, t => t.Contains("RTT", StringComparison.OrdinalIgnoreCase));
-            Assert.DoesNotContain(renderedTexts, t => t.Contains("最近活跃", StringComparison.Ordinal));
-            Assert.DoesNotContain(renderedTexts, t => t.Contains("SHA-256", StringComparison.OrdinalIgnoreCase));
+                AvaloniaUiTestHost.Layout(window, 500, 680);
 
-            // Real history and endpoint appear
-            Assert.Contains(renderedTexts, t => t.Contains("notes.txt", StringComparison.Ordinal));
-            Assert.Contains(renderedTexts, t => t.Contains("192.168.1.5:42461", StringComparison.Ordinal));
+                var renderedTexts = view.GetVisualDescendants()
+                    .OfType<TextBlock>()
+                    .Select(t => t.Text ?? string.Empty)
+                    .ToArray();
 
-            // 1.A clipboard broadcast MaterialDialog clarifies broadcast + disabled peer notice
-            vm.OpenClipboardModal();
-            Assert.True(view.ClipboardDialog.IsOpen);
-            Assert.Contains("广播", view.ClipboardDialog.Message);
-            Assert.Contains("关闭剪贴板同步", view.ClipboardDialog.Message);
+                // Zero fabricated telemetry anywhere in rendered tree
+                Assert.DoesNotContain(renderedTexts, t => t.Contains("RTT", StringComparison.OrdinalIgnoreCase));
+                Assert.DoesNotContain(renderedTexts, t => t.Contains("最近活跃", StringComparison.Ordinal));
+                Assert.DoesNotContain(renderedTexts, t => t.Contains("SHA-256", StringComparison.OrdinalIgnoreCase));
+
+                // Real history and endpoint appear
+                Assert.Contains(renderedTexts, t => t.Contains("notes.txt", StringComparison.Ordinal));
+                Assert.Contains(renderedTexts, t => t.Contains("192.168.1.5:42461", StringComparison.Ordinal));
+
+                // 1.A clipboard broadcast MaterialDialog clarifies broadcast + disabled peer notice
+                vm.OpenClipboardModal();
+                Assert.True(view.ClipboardDialog.IsOpen);
+                Assert.Contains("广播", view.ClipboardDialog.Message);
+                Assert.Contains("关闭剪贴板同步", view.ClipboardDialog.Message);
+            }
+            finally
+            {
+                window.Close();
+            }
         });
 
     [Fact]
@@ -200,45 +205,53 @@ public sealed class Md3eAxamlViewsTests
 
             var vm = new TransfersViewModel(client);
             var view = new TransfersView(vm);
-
-            // Wide (>= 840) enables g2-split-workbench dual-sheet split; narrow (< 840) stacks vertically
-            view.Measure(new Size(1160, 760));
-            view.Arrange(new Rect(0, 0, 1160, 760));
-            Assert.True(view.IsSplitLayout);
-
-            view.Measure(new Size(520, 720));
-            view.Arrange(new Rect(0, 0, 520, 720));
-            Assert.False(view.IsSplitLayout);
-
-            view.Measure(new Size(1160, 760));
-            view.Arrange(new Rect(0, 0, 1160, 760));
-
-            client.EmitState(LocalShellState.Empty with
+            var window = AvaloniaUiTestHost.ShowAndLayout(view, 1160, 760);
+            try
             {
-                ConnectionStatus = LocalConnectionStatus.Connected,
-                Devices = [peer],
-                FilePrompts = [prompt],
-                ActiveTransfers = [active],
-                History = [history],
-            });
+                // Wide (>= 840) enables g2-split-workbench dual-sheet split; narrow (< 840) stacks vertically
+                view.ApplyResponsiveLayout(1160);
+                AvaloniaUiTestHost.Layout(window, 1160, 760);
+                Assert.True(view.IsSplitLayout);
 
-            Assert.Equal(1, view.RenderedActiveTransferCount);
-            Assert.Equal(1, view.RenderedHistoryCount);
+                view.ApplyResponsiveLayout(520);
+                AvaloniaUiTestHost.Layout(window, 520, 720);
+                Assert.False(view.IsSplitLayout);
 
-            var wavy = Assert.Single(view.GetLogicalDescendants().OfType<LinearWavyProgressIndicator>());
-            Assert.Equal(10, wavy.Maximum);
-            Assert.Equal(4, wavy.Value);
+                view.ApplyResponsiveLayout(1160);
+                AvaloniaUiTestHost.Layout(window, 1160, 760);
 
-            var renderedTexts = view.GetLogicalDescendants()
-                .OfType<TextBlock>()
-                .Select(t => t.Text ?? string.Empty)
-                .ToArray();
-            Assert.Contains(renderedTexts, t => t.Contains("photo.png", StringComparison.Ordinal));
-            Assert.Contains(renderedTexts, t => t.Contains("movie.mp4", StringComparison.Ordinal));
-            Assert.Contains(renderedTexts, t => t.Contains("doc.pdf", StringComparison.Ordinal));
+                client.EmitState(LocalShellState.Empty with
+                {
+                    ConnectionStatus = LocalConnectionStatus.Connected,
+                    Devices = [peer],
+                    FilePrompts = [prompt],
+                    ActiveTransfers = [active],
+                    History = [history],
+                });
 
-            Assert.True(await vm.AcceptFileAsync("t-in-1"));
-            Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.AcceptFile && c.Payload.TransferId == "t-in-1");
+                AvaloniaUiTestHost.Layout(window, 1160, 760);
+                Assert.Equal(1, view.RenderedActiveTransferCount);
+                Assert.Equal(1, view.RenderedHistoryCount);
+
+                var wavy = Assert.Single(view.GetVisualDescendants().OfType<LinearWavyProgressIndicator>());
+                Assert.Equal(10, wavy.Maximum);
+                Assert.Equal(4, wavy.Value);
+
+                var renderedTexts = view.GetVisualDescendants()
+                    .OfType<TextBlock>()
+                    .Select(t => t.Text ?? string.Empty)
+                    .ToArray();
+                Assert.Contains(renderedTexts, t => t.Contains("photo.png", StringComparison.Ordinal));
+                Assert.Contains(renderedTexts, t => t.Contains("movie.mp4", StringComparison.Ordinal));
+                Assert.Contains(renderedTexts, t => t.Contains("doc.pdf", StringComparison.Ordinal));
+
+                Assert.True(await vm.AcceptFileAsync("t-in-1"));
+                Assert.Contains(client.SentCommands, c => c.FrameType == FrameTypes.AcceptFile && c.Payload.TransferId == "t-in-1");
+            }
+            finally
+            {
+                window.Close();
+            }
         });
 
     [Fact]

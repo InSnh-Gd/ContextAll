@@ -6,137 +6,435 @@
              x:DataType="vm:TransfersViewModel"
              DragDrop.AllowDrop="True">
 
-  <ScrollViewer Padding="4,0,4,16"
-                HorizontalScrollBarVisibility="Disabled"
-                VerticalScrollBarVisibility="Auto">
-    <Grid x:Name="WorkbenchGrid">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="400" />
-        <ColumnDefinition Width="*" />
-      </Grid.ColumnDefinitions>
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
-      </Grid.RowDefinitions>
-
-      <!-- Left workbench sheet (400dp on >=840dp, stacked top on <840dp) -->
-      <Border x:Name="WorkbenchPane"
-              Grid.Row="0"
-              Grid.Column="0"
-              Margin="0,0,12,0"
-              CornerRadius="28"
-              Padding="20"
-              Background="{DynamicResource SurfaceContainerLow}">
-        <StackPanel Spacing="14">
-          <StackPanel Spacing="4">
-            <TextBlock Text="文件传输与队列"
-                       Classes="HeadlineSmall" />
-            <TextBlock Text="按对端顺序发送多个文件，查看接收询问与会话历史"
-                       Classes="BodyMedium"
-                       Foreground="{DynamicResource OnSurfaceVariant}"
-                       TextWrapping="Wrap" />
-          </StackPanel>
-
-          <Button x:Name="ChooseFilesButton"
-                  Content="选择多个文件发送…"
-                  Classes="Filled"
-                  HorizontalAlignment="Left"
+  <Panel>
+    <ScrollViewer Padding="4,0,4,16"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="14">
+        <!-- Session Transfer KPI Strip -->
+        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+          <Border Grid.Column="0"
                   CornerRadius="20"
-                  Padding="18,10"
-                  Click="OnChooseFilesClicked" />
+                  Padding="16,12"
+                  Background="{DynamicResource SurfaceContainerLow}"
+                  BorderBrush="{DynamicResource OutlineVariant}"
+                  BorderThickness="1">
+            <StackPanel Spacing="2">
+              <TextBlock Text="累计发送"
+                         Classes="LabelMedium"
+                         Foreground="{DynamicResource OnSurfaceVariant}" />
+              <TextBlock x:Name="KpiSentValue"
+                         Text="{Binding TotalSentLabel}"
+                         Classes="TitleMediumEmphasized MonoTabular"
+                         Foreground="{DynamicResource Primary}" />
+            </StackPanel>
+          </Border>
 
-          <Border x:Name="DropZone"
-                  CornerRadius="24"
-                  Padding="16"
-                  BorderThickness="1"
-                  BorderBrush="{DynamicResource Outline}"
-                  Background="{DynamicResource SurfaceContainer}"
-                  DragDrop.AllowDrop="True">
-            <StackPanel Spacing="10">
-              <StackPanel Orientation="Horizontal" Spacing="10">
-                <controls:ExpressiveIconBadge ContainerSize="40"
-                                              IconSize="20"
-                                              Tone="Secondary"
-                                              PathData="M7 10l5-5 5 5H7zm10 4l-5 5-5-5h10z" />
-                <StackPanel VerticalAlignment="Center" Spacing="2">
-                  <TextBlock Text="发送目标设备与拖放区域"
-                             Classes="TitleSmall" />
-                  <TextBlock Text="选择已配对设备，并将普通文件直接拖放到此处"
+          <Border Grid.Column="1"
+                  CornerRadius="20"
+                  Padding="16,12"
+                  Background="{DynamicResource SurfaceContainerLow}"
+                  BorderBrush="{DynamicResource OutlineVariant}"
+                  BorderThickness="1">
+            <StackPanel Spacing="2">
+              <TextBlock Text="累计接收"
+                         Classes="LabelMedium"
+                         Foreground="{DynamicResource OnSurfaceVariant}" />
+              <TextBlock x:Name="KpiReceivedValue"
+                         Text="{Binding TotalReceivedLabel}"
+                         Classes="TitleMediumEmphasized MonoTabular"
+                         Foreground="{DynamicResource Secondary}" />
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Column="2"
+                  CornerRadius="20"
+                  Padding="16,12"
+                  Background="{DynamicResource SurfaceContainerLow}"
+                  BorderBrush="{DynamicResource OutlineVariant}"
+                  BorderThickness="1">
+            <StackPanel Spacing="2">
+              <TextBlock Text="已完成分块 / 次数"
+                         Classes="LabelMedium"
+                         Foreground="{DynamicResource OnSurfaceVariant}" />
+              <TextBlock x:Name="KpiCompletedValue"
+                         Text="{Binding CompletedKpiLabel}"
+                         Classes="TitleMediumEmphasized MonoTabular"
+                         Foreground="{DynamicResource Tertiary}" />
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Grid x:Name="WorkbenchGrid">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="400" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <!-- Left workbench sheet (400dp on >=840dp, stacked top on <840dp) -->
+          <Border x:Name="WorkbenchPane"
+                  Grid.Row="0"
+                  Grid.Column="0"
+                  Margin="0,0,12,0"
+                  CornerRadius="28"
+                  Padding="20"
+                  Background="{DynamicResource SurfaceContainerLow}">
+            <StackPanel Spacing="14">
+              <StackPanel Spacing="4">
+                <TextBlock Text="文件传输"
+                           Classes="HeadlineSmallEmphasized" />
+                <TextBlock Text="选好设备后即可发送文件或文本，多文件会自动按顺序排队传输"
+                           Classes="BodyMedium"
+                           Foreground="{DynamicResource OnSurfaceVariant}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+
+              <WrapPanel Orientation="Horizontal">
+                <Button x:Name="ChooseFilesButton"
+                        Content="选择多个文件…"
+                        Classes="Filled"
+                        CornerRadius="20"
+                        Padding="18,9"
+                        Margin="0,0,8,8"
+                        VerticalAlignment="Center"
+                        Click="OnChooseFilesClicked" />
+
+                <Button x:Name="NewTextFileButton"
+                        Content="新建文本文件发送"
+                        Classes="FilledTonal"
+                        CornerRadius="20"
+                        Padding="14,9"
+                        Margin="0,0,8,8"
+                        VerticalAlignment="Center"
+                        Click="OnNewTextFileClicked" />
+
+                <Button x:Name="ClipboardFileButton"
+                        Content="剪贴板存为文件发送"
+                        Classes="Outlined"
+                        CornerRadius="20"
+                        Padding="14,9"
+                        Margin="0,0,0,8"
+                        VerticalAlignment="Center"
+                        Click="OnClipboardToFileClicked" />
+              </WrapPanel>
+
+              <Border x:Name="DropZone"
+                      CornerRadius="24"
+                      Padding="16"
+                      BorderThickness="1"
+                      BorderBrush="{DynamicResource Outline}"
+                      Background="{DynamicResource SurfaceContainer}"
+                      DragDrop.AllowDrop="True">
+                <StackPanel Spacing="10">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <controls:ExpressiveIconBadge ContainerSize="40"
+                                                  IconSize="20"
+                                                  Tone="Secondary"
+                                                  PathData="M7 10l5-5 5 5H7zm10 4l-5 5-5-5h10z" />
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                      <TextBlock Text="发送目标与拖放区"
+                                 Classes="TitleSmall" />
+                      <TextBlock Text="点选已配对设备，或直接把文件拖到这里"
+                                 Classes="BodySmall"
+                                 Foreground="{DynamicResource OnSurfaceVariant}"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </StackPanel>
+
+                  <Panel>
+                    <StackPanel Spacing="8" IsVisible="{Binding !HasTrustedPeers}">
+                      <TextBlock Text="还没有已配对设备，先前往「设备」页完成配对后即可互传文件。"
+                                 Classes="BodyMedium"
+                                 TextWrapping="Wrap" />
+                      <Button Classes="FilledTonal"
+                              Content="前往设备页配对"
+                              CornerRadius="20"
+                              Padding="14,7"
+                              HorizontalAlignment="Left"
+                              Command="{Binding GoToDevicesCommand}" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding PeerChipItems}"
+                                  IsVisible="{Binding HasTrustedPeers}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PeerChipItem">
+                          <Button Content="{Binding DisplayName}"
+                                  CornerRadius="20"
+                                  Padding="14,7"
+                                  Margin="0,0,8,8"
+                                  VerticalAlignment="Center"
+                                  Classes.FilledTonal="{Binding IsSelected}"
+                                  Classes.Outlined="{Binding !IsSelected}"
+                                  Command="{Binding SelectCommand}"
+                                  CommandParameter="{Binding DeviceId}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Panel>
+
+                  <TextBlock Text="支持同时拖入多个文件排队发送；文件夹会自动跳过并给出提示。"
                              Classes="BodySmall"
                              Foreground="{DynamicResource OnSurfaceVariant}"
                              TextWrapping="Wrap" />
                 </StackPanel>
-              </StackPanel>
+              </Border>
 
-              <WrapPanel x:Name="PeerChipsPanel"
-                         Orientation="Horizontal" />
-
-              <TextBlock Text="支持多文件有序队列发送；文件夹会自动跳过并给出提示。"
-                         Classes="BodySmall"
-                         Foreground="{DynamicResource OnSurfaceVariant}"
-                         TextWrapping="Wrap" />
+              <Border x:Name="NoticeBanner"
+                      CornerRadius="16"
+                      Padding="14,10"
+                      IsVisible="False">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock x:Name="NoticeLabel"
+                             Grid.Column="0"
+                             Classes="BodyMedium"
+                             TextWrapping="Wrap"
+                             VerticalAlignment="Center" />
+                  <Button Grid.Column="1"
+                          Content="关闭"
+                          Classes="Text"
+                          VerticalAlignment="Center"
+                          CornerRadius="20"
+                          Padding="10,4"
+                          Click="OnDismissNoticeClicked" />
+                </Grid>
+              </Border>
             </StackPanel>
           </Border>
 
-          <Border x:Name="NoticeBanner"
-                  CornerRadius="16"
-                  Padding="14,10"
-                  IsVisible="False">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-              <TextBlock x:Name="NoticeLabel"
-                         Grid.Column="0"
-                         Classes="BodyMedium"
-                         TextWrapping="Wrap"
-                         VerticalAlignment="Center" />
-              <Button Grid.Column="1"
-                      Content="关闭"
-                      Classes="Text"
-                      VerticalAlignment="Center"
-                      CornerRadius="20"
-                      Padding="10,4"
-                      Click="OnDismissNoticeClicked" />
-            </Grid>
+          <!-- Right live queue & history sheet -->
+          <Border x:Name="QueuePane"
+                  Grid.Row="0"
+                  Grid.Column="1"
+                  CornerRadius="28"
+                  Padding="20"
+                  Background="{DynamicResource SurfaceContainerLow}">
+            <StackPanel Spacing="14">
+              <ItemsControl ItemsSource="{Binding FilterChipItems}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:FilterChipItem">
+                    <Button Content="{Binding Label}"
+                            CornerRadius="20"
+                            Padding="14,6"
+                            Margin="0,0,8,6"
+                            VerticalAlignment="Center"
+                            Classes.FilledTonal="{Binding IsSelected}"
+                            Classes.Outlined="{Binding !IsSelected}"
+                            Command="{Binding SelectCommand}"
+                            CommandParameter="{Binding Filter}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <StackPanel x:Name="PromptsSection" Spacing="8" IsVisible="{Binding ShowPromptsSection}">
+                <TextBlock Text="待确认接收"
+                           Classes="TitleSmall"
+                           Foreground="{DynamicResource OnSurfaceVariant}" />
+                <controls:ExpressiveGroupTile IsInteractive="False" IsVisible="{Binding !HasFilteredPrompts}">
+                  <TextBlock Text="当前没有待确认接收的文件请求" Classes="BodyMedium" />
+                </controls:ExpressiveGroupTile>
+                <ItemsControl ItemsSource="{Binding PromptItems}" IsVisible="{Binding HasFilteredPrompts}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PromptCardItem">
+                      <Border CornerRadius="24" Padding="16,14" Background="{DynamicResource TertiaryContainer}">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                          <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding FileName}"
+                                       Classes="TitleSmall"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource OnTertiaryContainer}" />
+                            <TextBlock Text="{Binding Subtitle}"
+                                       Classes="BodySmall MonoTabular"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource OnTertiaryContainer}" />
+                          </StackPanel>
+                          <Button Grid.Column="1"
+                                  Classes="Filled"
+                                  Content="接收文件"
+                                  CornerRadius="20"
+                                  Padding="14,6"
+                                  Command="{Binding AcceptCommand}"
+                                  CommandParameter="{Binding TransferId}" />
+                          <Button Grid.Column="2"
+                                  Classes="Outlined"
+                                  Content="拒绝"
+                                  CornerRadius="20"
+                                  Padding="12,6"
+                                  Command="{Binding RejectCommand}"
+                                  CommandParameter="{Binding TransferId}" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <StackPanel x:Name="ActiveSection" Spacing="8" IsVisible="{Binding ShowActiveSection}">
+                <TextBlock Text="正在传输"
+                           Classes="TitleSmall"
+                           Foreground="{DynamicResource OnSurfaceVariant}" />
+                <controls:ExpressiveGroupTile IsInteractive="False" IsVisible="{Binding !HasFilteredActiveTransfers}">
+                  <TextBlock Text="暂无进行中的文件传输" Classes="BodyMedium" />
+                </controls:ExpressiveGroupTile>
+                <ItemsControl x:Name="ActivePanel" ItemsSource="{Binding ActiveTransferItems}" IsVisible="{Binding HasFilteredActiveTransfers}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ActiveTransferItem">
+                      <controls:ExpressiveGroupTile Tag="active-item"
+                                                    Position="{Binding Position}"
+                                                    IsInteractive="False"
+                                                    Padding="14,12">
+                        <StackPanel Spacing="8">
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <StackPanel Spacing="2">
+                              <TextBlock Text="{Binding Title}" Classes="TitleSmall" TextWrapping="Wrap" />
+                              <TextBlock Text="{Binding Stats}" Classes="BodySmall MonoTabular" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Classes="Outlined"
+                                    Content="取消传输"
+                                    CornerRadius="20"
+                                    Padding="12,6"
+                                    Command="{Binding CancelCommand}"
+                                    CommandParameter="{Binding TransferId}" />
+                          </Grid>
+                          <controls:LinearWavyProgressIndicator Maximum="{Binding ProgressMaximum}"
+                                                                Value="{Binding ProgressValue}" />
+                          <Border CornerRadius="12"
+                                  Padding="12,8"
+                                  Background="{DynamicResource ErrorContainer}"
+                                  IsVisible="{Binding MoveBlocked}">
+                            <TextBlock Text="文件已接收完毕，但保存到下载目录时受阻，请检查目录权限或可用空间。"
+                                       Classes="BodySmall"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource OnErrorContainer}" />
+                          </Border>
+                        </StackPanel>
+                      </controls:ExpressiveGroupTile>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <StackPanel x:Name="QueueSection" Spacing="8" IsVisible="{Binding ShowQueueSection}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock Grid.Column="0"
+                             Text="等待发送队列"
+                             Classes="TitleSmall"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             VerticalAlignment="Center" />
+                  <Button x:Name="ClearQueueButton"
+                          Grid.Column="1"
+                          Content="清空队列"
+                          Classes="Text"
+                          CornerRadius="20"
+                          Padding="10,4"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding HasFilteredQueueItems}"
+                          Click="OnClearQueueClicked" />
+                </Grid>
+                <controls:ExpressiveGroupTile IsInteractive="False" IsVisible="{Binding !HasFilteredQueueItems}">
+                  <TextBlock Text="发送队列当前为空" Classes="BodyMedium" />
+                </controls:ExpressiveGroupTile>
+                <ItemsControl ItemsSource="{Binding QueueRowItems}" IsVisible="{Binding HasFilteredQueueItems}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:QueueRowItem">
+                      <controls:ExpressiveGroupTile Position="{Binding Position}" IsInteractive="False" Padding="12,10">
+                        <TextBlock Text="{Binding Label}" Classes="BodyMedium" TextWrapping="Wrap" />
+                      </controls:ExpressiveGroupTile>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <StackPanel x:Name="HistorySection" Spacing="8">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock Grid.Column="0"
+                             Text="传输记录"
+                             Classes="TitleSmall"
+                             Foreground="{DynamicResource OnSurfaceVariant}"
+                             VerticalAlignment="Center" />
+                  <Button x:Name="ClearHistoryButton"
+                          Grid.Column="1"
+                          Content="清空记录"
+                          Classes="Text"
+                          CornerRadius="20"
+                          Padding="10,4"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding HasFilteredHistory}"
+                          Click="OnClearHistoryClicked" />
+                </Grid>
+                <controls:ExpressiveGroupTile IsInteractive="False" IsVisible="{Binding !HasFilteredHistory}">
+                  <TextBlock Text="{Binding HistoryEmptyText}" Classes="BodyMedium" />
+                </controls:ExpressiveGroupTile>
+                <ItemsControl x:Name="HistoryPanel" ItemsSource="{Binding HistoryRowItems}" IsVisible="{Binding HasFilteredHistory}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="6" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HistoryRowItem">
+                      <controls:ExpressiveGroupTile Tag="history-item"
+                                                    Position="{Binding Position}"
+                                                    IsInteractive="False"
+                                                    Padding="12,10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                          <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding Title}" Classes="TitleSmall" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Meta}" Classes="BodySmall MonoTabular" TextWrapping="Wrap" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Button Classes="FilledTonal" Content="重发" CornerRadius="20" Padding="12,6"
+                                    IsVisible="{Binding CanResend}"
+                                    Command="{Binding ResendCommand}" />
+                            <Button Classes="FilledTonal" Content="打开所在文件夹" CornerRadius="20" Padding="12,6"
+                                    IsVisible="{Binding CanOpenFolder}"
+                                    Command="{Binding OpenFolderCommand}" />
+                          </StackPanel>
+                        </Grid>
+                      </controls:ExpressiveGroupTile>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </StackPanel>
           </Border>
-        </StackPanel>
-      </Border>
+        </Grid>
+      </StackPanel>
+    </ScrollViewer>
 
-      <!-- Right live queue & history sheet -->
-      <Border x:Name="QueuePane"
-              Grid.Row="0"
-              Grid.Column="1"
-              CornerRadius="28"
-              Padding="20"
-              Background="{DynamicResource SurfaceContainerLow}">
-        <StackPanel Spacing="14">
-          <StackPanel Spacing="8">
-            <TextBlock Text="待确认接收文件"
-                       Classes="TitleSmall"
-                       Foreground="{DynamicResource OnSurfaceVariant}" />
-            <StackPanel x:Name="PromptsPanel" Spacing="8" />
-          </StackPanel>
-
-          <StackPanel Spacing="8">
-            <TextBlock Text="进行中的传输"
-                       Classes="TitleSmall"
-                       Foreground="{DynamicResource OnSurfaceVariant}" />
-            <StackPanel x:Name="ActivePanel" Spacing="8" />
-          </StackPanel>
-
-          <StackPanel Spacing="8">
-            <TextBlock Text="按对端排队的待发送文件"
-                       Classes="TitleSmall"
-                       Foreground="{DynamicResource OnSurfaceVariant}" />
-            <StackPanel x:Name="QueuePanel" Spacing="6" />
-          </StackPanel>
-
-          <StackPanel Spacing="8">
-            <TextBlock Text="本次会话传输历史"
-                       Classes="TitleSmall"
-                       Foreground="{DynamicResource OnSurfaceVariant}" />
-            <StackPanel x:Name="HistoryPanel" Spacing="6" />
-          </StackPanel>
-        </StackPanel>
-      </Border>
-    </Grid>
-  </ScrollViewer>
+    <!-- Text / Clipboard-to-File Compose Dialog -->
+    <controls:MaterialDialog x:Name="TextFileDialogControl"
+                             Title="作为文本文件发送"
+                             PrimaryActionText="立即发送"
+                             CancelActionText="取消"
+                             DismissOnScrimClick="True" />
+  </Panel>
 </UserControl>

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using ContextAll.App.Controls;
@@ -10,7 +11,7 @@ namespace ContextAll.App.Views;
 
 /// <summary>
 /// MD3E This Device view for local identity, download folder, appearance/accent overrides,
-/// tray/SSD toggles, and autostart installation. Never shows reset actions while connected.
+/// tray/window toggles, live background service status, usage guide entry, and host diagnostics.
 /// </summary>
 public partial class ThisDeviceView : UserControl
 {
@@ -24,6 +25,23 @@ public partial class ThisDeviceView : UserControl
     private ExpressiveSwitch? _traySwitch;
     private ExpressiveSwitch? _nativeTitleBarSwitch;
     private Button? _autostartButton;
+    private Button? _reconnectDaemonButton;
+    private Border? _serviceStatusPill;
+    private TextBlock? _serviceStatusBadgeText;
+    private TextBlock? _serviceStatusDetailText;
+    private ExpressiveGroupTile? _guideTile;
+    private ExpressiveGroupTile? _aboutTile;
+    private TextBlock? _aboutEntrySummaryText;
+    private MaterialDialog _aboutDialog = new();
+    private TextBlock? _aboutVersionText;
+    private TextBlock? _aboutProtocolText;
+    private TextBlock? _aboutOsDescriptionText;
+    private TextBlock? _aboutOsVersionText;
+    private TextBlock? _aboutCpuText;
+    private TextBlock? _aboutDisplayServerText;
+    private TextBlock? _aboutClipboardBackendText;
+    private TextBlock? _aboutDeviceIdText;
+    private TextBlock? _aboutCopyFeedbackText;
     private Button? _modeFollowButton;
     private Button? _modeLightButton;
     private Button? _modeDarkButton;
@@ -35,7 +53,7 @@ public partial class ThisDeviceView : UserControl
 
     public ThisDeviceView()
         : this(new ThisDeviceViewModel(
-            new LocalDaemonConnection(),
+            IdleLocalChannel.Shared,
             new LinuxDaemonController(),
             new ShellPreferences(),
             _ => { }))
@@ -61,13 +79,30 @@ public partial class ThisDeviceView : UserControl
             _nativeTitleBarSwitch.Toggled += useNative => _vm.SetUseNativeTitleBar(useNative);
         }
 
+        if (_guideTile is not null)
+        {
+            _guideTile.Activated += () => OpenGuideRequested?.Invoke();
+        }
+
+        if (_aboutTile is not null)
+        {
+            _aboutTile.Activated += () => _vm.OpenAboutDialog();
+        }
+
+        _aboutDialog.PrimaryActionClicked += (_, _) => _vm.CloseAboutDialog();
+        _aboutDialog.Canceled += (_, _) => _vm.CloseAboutDialog();
+
         Md3eResourceLookup.TrackThemeChanges(this, UpdateBannerColors);
         _vm.PropertyChanged += (_, _) => Refresh();
         Refresh();
     }
 
+    public event Action? OpenGuideRequested;
+
     public AppearanceModeOverride SelectedAppearanceMode => _vm.AppearanceModeOverride;
     public AccentSourceOverride SelectedAccentSource => _vm.AccentSourceOverride;
+    public MaterialDialog AboutDialog => _aboutDialog;
+    public bool IsAboutDialogOpen => _aboutDialog.IsOpen;
 
     public void SelectAppearanceMode(AppearanceModeOverride mode) =>
         _vm.SetAppearanceModeOverride(mode);
@@ -85,6 +120,26 @@ public partial class ThisDeviceView : UserControl
         _traySwitch = this.FindControl<ExpressiveSwitch>("TraySwitch");
         _nativeTitleBarSwitch = this.FindControl<ExpressiveSwitch>("NativeTitleBarSwitch");
         _autostartButton = this.FindControl<Button>("AutostartButton");
+        _reconnectDaemonButton = this.FindControl<Button>("ReconnectDaemonButton");
+        _serviceStatusPill = this.FindControl<Border>("ServiceStatusPill");
+        _serviceStatusBadgeText = this.FindControl<TextBlock>("ServiceStatusBadgeText");
+        _serviceStatusDetailText = this.FindControl<TextBlock>("ServiceStatusDetailText");
+        _guideTile = this.FindControl<ExpressiveGroupTile>("GuideTile");
+        _aboutTile = this.FindControl<ExpressiveGroupTile>("AboutTile");
+        _aboutEntrySummaryText = this.FindControl<TextBlock>("AboutEntrySummaryText");
+        if (this.FindControl<MaterialDialog>("AboutDialogControl") is { } aboutDialog)
+        {
+            _aboutDialog = aboutDialog;
+        }
+        _aboutVersionText = this.FindControl<TextBlock>("AboutVersionText");
+        _aboutProtocolText = this.FindControl<TextBlock>("AboutProtocolText");
+        _aboutOsDescriptionText = this.FindControl<TextBlock>("AboutOsDescriptionText");
+        _aboutOsVersionText = this.FindControl<TextBlock>("AboutOsVersionText");
+        _aboutCpuText = this.FindControl<TextBlock>("AboutCpuText");
+        _aboutDisplayServerText = this.FindControl<TextBlock>("AboutDisplayServerText");
+        _aboutClipboardBackendText = this.FindControl<TextBlock>("AboutClipboardBackendText");
+        _aboutDeviceIdText = this.FindControl<TextBlock>("AboutDeviceIdText");
+        _aboutCopyFeedbackText = this.FindControl<TextBlock>("AboutCopyFeedbackText");
         _modeFollowButton = this.FindControl<Button>("ModeFollowButton");
         _modeLightButton = this.FindControl<Button>("ModeLightButton");
         _modeDarkButton = this.FindControl<Button>("ModeDarkButton");
@@ -111,6 +166,25 @@ public partial class ThisDeviceView : UserControl
 
     private async void OnAutostartClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         await _vm.EnableAutostartAsync();
+
+    private async void OnStartDaemonClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        await _vm.StartDaemonAsync();
+
+    private void OnOpenGuideClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        OpenGuideRequested?.Invoke();
+
+    private void OnOpenAboutClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        _vm.OpenAboutDialog();
+
+    private async void OnCopyDiagnosticsClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(_vm.BuildDiagnosticsSummary());
+            _vm.NotifyDiagnosticsCopied();
+        }
+    }
 
     private void OnModeFollowClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         _vm.SetAppearanceModeOverride(AppearanceModeOverride.FollowSystem);
@@ -189,6 +263,67 @@ public partial class ThisDeviceView : UserControl
             _autostartButton.Content = _vm.AutostartActionLabel;
         }
 
+        if (_serviceStatusBadgeText is not null)
+        {
+            _serviceStatusBadgeText.Text = _vm.ServiceStatusLabel;
+        }
+
+        if (_serviceStatusDetailText is not null)
+        {
+            _serviceStatusDetailText.Text = _vm.ServiceStatusDetail;
+        }
+
+        if (_reconnectDaemonButton is not null)
+        {
+            _reconnectDaemonButton.IsVisible = !_vm.IsDaemonConnected;
+            _reconnectDaemonButton.IsEnabled = _vm.CanStartDaemon;
+            _reconnectDaemonButton.Content = _vm.IsStartingDaemon ? "正在启动…" : "启动后台服务";
+        }
+
+        if (_aboutEntrySummaryText is not null)
+        {
+            _aboutEntrySummaryText.Text = _vm.AboutEntrySummary;
+        }
+
+        _aboutDialog.IsOpen = _vm.IsAboutDialogOpen;
+        if (_aboutVersionText is not null)
+        {
+            _aboutVersionText.Text = _vm.AppVersionLabel;
+        }
+        if (_aboutProtocolText is not null)
+        {
+            _aboutProtocolText.Text = _vm.ProtocolStackDetail;
+        }
+        if (_aboutOsDescriptionText is not null)
+        {
+            _aboutOsDescriptionText.Text = _vm.HostOsDescription;
+        }
+        if (_aboutOsVersionText is not null)
+        {
+            _aboutOsVersionText.Text = _vm.HostOsVersion;
+        }
+        if (_aboutCpuText is not null)
+        {
+            _aboutCpuText.Text = _vm.HostCpuSummary;
+        }
+        if (_aboutDisplayServerText is not null)
+        {
+            _aboutDisplayServerText.Text = _vm.DisplayServerLabel;
+        }
+        if (_aboutClipboardBackendText is not null)
+        {
+            _aboutClipboardBackendText.Text = $"{_vm.ClipboardBackendLabel} ({_vm.ClipboardBackendCode})";
+        }
+        if (_aboutDeviceIdText is not null)
+        {
+            _aboutDeviceIdText.Text = string.IsNullOrWhiteSpace(_vm.LocalDeviceId) ? "未连接" : _vm.LocalDeviceId;
+        }
+        if (_aboutCopyFeedbackText is not null)
+        {
+            _aboutCopyFeedbackText.IsVisible = !string.IsNullOrWhiteSpace(_vm.DiagnosticsCopiedFeedback);
+            _aboutCopyFeedbackText.Text = _vm.DiagnosticsCopiedFeedback ?? string.Empty;
+        }
+
         ApplySelectionClass(_modeFollowButton, _vm.AppearanceModeOverride == AppearanceModeOverride.FollowSystem);
         ApplySelectionClass(_modeLightButton, _vm.AppearanceModeOverride == AppearanceModeOverride.Light);
         ApplySelectionClass(_modeDarkButton, _vm.AppearanceModeOverride == AppearanceModeOverride.Dark);
@@ -210,17 +345,25 @@ public partial class ThisDeviceView : UserControl
 
     private void UpdateBannerColors()
     {
-        if (_statusBanner is null || _statusText is null)
+        if (_statusBanner is not null && _statusText is not null)
         {
-            return;
+            _statusBanner.Background = _vm.StatusIsError
+                ? Md3eResourceLookup.ResolveBrush(this, "ErrorContainer", static p => p.ErrorContainer)
+                : Md3eResourceLookup.ResolveBrush(this, "SecondaryContainer", static p => p.SecondaryContainer);
+            _statusText.Foreground = _vm.StatusIsError
+                ? Md3eResourceLookup.ResolveBrush(this, "OnErrorContainer", static p => p.OnErrorContainer)
+                : Md3eResourceLookup.ResolveBrush(this, "OnSecondaryContainer", static p => p.OnSecondaryContainer);
         }
 
-        _statusBanner.Background = _vm.StatusIsError
-            ? Md3eResourceLookup.ResolveBrush(this, "ErrorContainer", static p => p.ErrorContainer)
-            : Md3eResourceLookup.ResolveBrush(this, "SecondaryContainer", static p => p.SecondaryContainer);
-        _statusText.Foreground = _vm.StatusIsError
-            ? Md3eResourceLookup.ResolveBrush(this, "OnErrorContainer", static p => p.OnErrorContainer)
-            : Md3eResourceLookup.ResolveBrush(this, "OnSecondaryContainer", static p => p.OnSecondaryContainer);
+        if (_serviceStatusPill is not null && _serviceStatusBadgeText is not null)
+        {
+            _serviceStatusPill.Background = _vm.IsDaemonConnected
+                ? Md3eResourceLookup.ResolveBrush(this, "SecondaryContainer", static p => p.SecondaryContainer)
+                : Md3eResourceLookup.ResolveBrush(this, "SurfaceContainerHighest", static p => p.SurfaceContainerHighest);
+            _serviceStatusBadgeText.Foreground = _vm.IsDaemonConnected
+                ? Md3eResourceLookup.ResolveBrush(this, "OnSecondaryContainer", static p => p.OnSecondaryContainer)
+                : Md3eResourceLookup.ResolveBrush(this, "OnSurfaceVariant", static p => p.OnSurfaceVariant);
+        }
     }
 
     private static void ApplySelectionClass(Button? button, bool active)

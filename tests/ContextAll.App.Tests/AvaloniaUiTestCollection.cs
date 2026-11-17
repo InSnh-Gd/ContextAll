@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Xunit;
 
@@ -118,6 +120,27 @@ public static partial class AvaloniaUiTestHost
         }
 
         await Dispatcher.UIThread.InvokeAsync(func);
+    }
+
+    public static void Layout(Layoutable control, double width, double height)
+    {
+        control.Measure(new Size(width, height));
+        control.Arrange(new Rect(0, 0, width, height));
+        control.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    public static Window ShowAndLayout(Control content, double width, double height)
+    {
+        var window = new Window
+        {
+            Width = width,
+            Height = height,
+            Content = content,
+        };
+        window.Show();
+        Layout(window, width, height);
+        return window;
     }
 
     private static void PreloadNixSharedLibs()
