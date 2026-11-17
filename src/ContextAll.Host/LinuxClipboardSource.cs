@@ -6,28 +6,60 @@ namespace ContextAll.Host;
 public sealed class LinuxClipboardSource : IClipboardSource
 {
     readonly WaylandClipboard? wayland;
+    readonly X11Clipboard? x11;
 
     public LinuxClipboardSource(WaylandClipboard? wayland)
+        : this(wayland, null)
+    {
+    }
+
+    public LinuxClipboardSource(WaylandClipboard? wayland, X11Clipboard? x11)
     {
         this.wayland = wayland;
-        if (this.wayland is not null)
+        this.x11 = x11;
+        if (this.wayland is { IsOpen: true })
         {
-            this.wayland.PlainText += OnWaylandPlainText;
+            this.wayland.PlainText += OnBackendPlainText;
+            BackendKind = ClipboardBackendKind.Wayland;
+        }
+        else if (this.x11 is { IsOpen: true })
+        {
+            this.x11.PlainText += OnBackendPlainText;
+            BackendKind = ClipboardBackendKind.X11;
+        }
+        else
+        {
+            BackendKind = ClipboardBackendKind.None;
         }
     }
 
-    public static LinuxClipboardSource TryOpen(string? display, string? runtimeDir)
+    public static LinuxClipboardSource TryOpen(string? waylandDisplay, string? runtimeDir, string? x11Display = null)
     {
-        var wl = WaylandClipboard.TryOpen(display, runtimeDir);
-        return new LinuxClipboardSource(wl);
+        var wl = WaylandClipboard.TryOpen(waylandDisplay, runtimeDir);
+        if (wl is { IsOpen: true })
+        {
+            return new LinuxClipboardSource(wl, null);
+        }
+
+        var x11Backend = X11Clipboard.TryOpen(x11Display);
+        return new LinuxClipboardSource(null, x11Backend);
     }
 
-    public bool IsSupported => wayland is { IsOpen: true };
+    public ClipboardBackendKind BackendKind { get; }
+
+    public string BackendName => BackendKind switch
+    {
+        ClipboardBackendKind.Wayland => "wayland",
+        ClipboardBackendKind.X11 => "x11",
+        _ => "unavailable",
+    };
+
+    public bool IsSupported => BackendKind != ClipboardBackendKind.None;
 
     public event Action<string, byte[]>? ClipboardChanged;
     public event Action<string>? PlainText;
 
-    void OnWaylandPlainText(string text)
+    void OnBackendPlainText(string text)
     {
         PlainText?.Invoke(text);
         ClipboardChanged?.Invoke(WaylandClipboard.PlainMime, Encoding.UTF8.GetBytes(text));
@@ -39,14 +71,19 @@ public sealed class LinuxClipboardSource : IClipboardSource
         {
             wayland.SetText(text);
         }
+        else if (x11 is { IsOpen: true })
+        {
+            x11.SetText(text);
+        }
     }
 
     public Task SetClipboardAsync(string mime, byte[] data, CancellationToken ct = default)
     {
-        if (wayland is { IsOpen: true } && (mime == WaylandClipboard.PlainMime || mime.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase)))
+        if (IsSupported && (mime == WaylandClipboard.PlainMime || mime.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase)))
         {
-            wayland.SetText(Encoding.UTF8.GetString(data));
+            SetText(Encoding.UTF8.GetString(data));
         }
+
         return Task.CompletedTask;
     }
 
@@ -63,8 +100,14 @@ public sealed class LinuxClipboardSource : IClipboardSource
     {
         if (wayland is not null)
         {
-            wayland.PlainText -= OnWaylandPlainText;
+            wayland.PlainText -= OnBackendPlainText;
             wayland.Dispose();
+        }
+
+        if (x11 is not null)
+        {
+            x11.PlainText -= OnBackendPlainText;
+            x11.Dispose();
         }
     }
 

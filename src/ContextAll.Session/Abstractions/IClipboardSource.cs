@@ -3,6 +3,7 @@ namespace ContextAll.Session.Abstractions;
 public interface IClipboardSource : IAsyncDisposable, IDisposable
 {
     bool IsSupported { get; }
+    string BackendName => IsSupported ? "wayland" : "unavailable";
     event Action<string, byte[]>? ClipboardChanged;
     event Action<string>? PlainText;
     void SetText(string text);
