@@ -2,6 +2,8 @@ package app.contextall.nativebridge
 
 import android.content.Context
 import android.net.Uri
+import app.contextall.OutboundFile
+import app.contextall.ShellOperator
 import app.contextall.core.DisplayNames
 import app.contextall.core.EndpointValidator
 import app.contextall.core.FrameTypes
@@ -48,7 +50,7 @@ internal class NativeSessionController(
     initialDebugMode: Boolean,
     private val backend: NativeSessionBackend = NativeSessionJni,
     private val onApplyRemoteClipboard: (String) -> Unit = {}
-) {
+) : ShellOperator {
     private val appContext = context.applicationContext
     private val discovery = LanDiscoveryController(appContext, scope, backend)
     private val noBackupDir: File = appContext.noBackupFilesDir ?: File(appContext.filesDir, "no_backup")
@@ -66,13 +68,13 @@ internal class NativeSessionController(
             )
         )
     )
-    val snapshot: StateFlow<SessionSnapshotUi> = _snapshot.asStateFlow()
+    override val snapshot: StateFlow<SessionSnapshotUi> = _snapshot.asStateFlow()
 
     private val _notices = MutableSharedFlow<UiEventNotice>(
         extraBufferCapacity = 32,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
-    val notices: SharedFlow<UiEventNotice> = _notices.asSharedFlow()
+    override val notices: SharedFlow<UiEventNotice> = _notices.asSharedFlow()
 
     private val stagedQueuePaths = LinkedHashMap<String, StagedOutboundFile>()
     private var eventPumpJob: Job? = null
@@ -89,7 +91,7 @@ internal class NativeSessionController(
         }
     }
 
-    fun start(): Boolean {
+    override fun start(): Boolean {
         if (started) return true
         if (!backend.isAvailable) {
             _snapshot.update {
@@ -152,7 +154,7 @@ internal class NativeSessionController(
         return true
     }
 
-    fun stop() {
+    override fun stop() {
         started = false
         eventPumpJob?.cancel()
         eventPumpJob = null
@@ -195,7 +197,9 @@ internal class NativeSessionController(
         }
     }
 
-    fun submitCommand(command: LocalCommand, filePath: String? = null): CommandResult {
+    override fun submitCommand(command: LocalCommand): CommandResult = submitNative(command, null)
+
+    fun submitNative(command: LocalCommand, filePath: String? = null): CommandResult {
         if (!started && !start()) {
             return CommandResult(command.requestId, false, "native-unavailable")
         }
@@ -237,6 +241,28 @@ internal class NativeSessionController(
 
         return result
     }
+
+    override fun sendFiles(deviceId: String, files: List<OutboundFile>) {
+        val uris = files.filterIsInstance<OutboundFile.UriRef>().map { it.uri }
+        if (uris.isNotEmpty()) {
+            sendUriList(deviceId, uris)
+        }
+        files.filterIsInstance<OutboundFile.Named>().forEach { named ->
+            val bytes = named.content
+            if (bytes != null) {
+                sendTextAsStagedFile(deviceId, named.fileName, String(bytes, Charsets.UTF_8))
+            } else {
+                sendPresetSampleFile(deviceId, named.fileName, named.totalBytes)
+            }
+        }
+    }
+
+    override fun connectManual(host: String, port: Int, alias: String): Boolean =
+        connectManualEndpoint(host, port, alias)
+
+    override fun pushClipboard(text: String) = pushLocalPlainClipboard(text)
+
+    override fun scanLan() = triggerDiscoveryScan()
 
     fun sendUriList(deviceId: String, uris: List<Uri>) {
         if (uris.isEmpty()) return
@@ -347,7 +373,7 @@ internal class NativeSessionController(
         }
     }
 
-    fun resetIdentity() {
+    override fun resetIdentity() {
         if (!backend.isAvailable) return
         scope.launch(Dispatchers.IO) {
             discovery.stop()
@@ -392,31 +418,31 @@ internal class NativeSessionController(
         }
     }
 
-    fun removeQueuedUpload(queueId: String) {
+    override fun removeQueuedUpload(queueId: String) {
         stagedQueuePaths.remove(queueId)
         _snapshot.update { cur ->
             cur.copy(queuedUploads = cur.queuedUploads.filterNot { it.queueId == queueId })
         }
     }
 
-    fun clearQueuedUploads() {
+    override fun clearQueuedUploads() {
         stagedQueuePaths.clear()
         _snapshot.update { it.copy(queuedUploads = emptyList()) }
     }
 
-    fun clearCompletedTransfers() {
+    override fun clearCompletedTransfers() {
         _snapshot.update { cur ->
             cur.copy(transfers = cur.transfers.filterNot { it.completed })
         }
     }
 
-    fun clearDebugFrameLogs() {
+    override fun clearDebugFrameLogs() {
         _snapshot.update { cur ->
             cur.copy(debugState = cur.debugState.copy(frameLogs = emptyList()))
         }
     }
 
-    fun setDeveloperUiEnabled(enabled: Boolean) {
+    override fun setDeveloperUiEnabled(enabled: Boolean) {
         _snapshot.update { cur ->
             cur.copy(debugState = cur.debugState.copy(developerUiEnabled = enabled))
         }
@@ -501,7 +527,7 @@ internal class NativeSessionController(
         if (!hasActive) {
             val first = files.first()
             val reqId = nextRequestId()
-            val res = submitCommand(
+            val res = submitNative(
                 LocalCommand(
                     frameType = FrameTypes.SEND_FILE,
                     requestId = reqId,
@@ -548,7 +574,7 @@ internal class NativeSessionController(
         _snapshot.update { it.copy(queuedUploads = it.queuedUploads.filterNot { q -> q.queueId == next.queueId }) }
         if (staged == null || !staged.stagedFile.isFile) return
 
-        val res = submitCommand(
+        val res = submitNative(
             LocalCommand(
                 frameType = FrameTypes.SEND_FILE,
                 requestId = nextRequestId(),

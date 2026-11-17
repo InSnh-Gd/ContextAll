@@ -6,15 +6,15 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.os.Build
-import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.contextall.BuildConfig
+import app.contextall.OutboundFile
+import app.contextall.ShellOperator
 import app.contextall.core.EndpointValidator
 import app.contextall.core.FrameTypes
-import app.contextall.core.InProcessSessionEngine
+import app.contextall.lab.LabSnapshot
 import app.contextall.model.LocalCommand
-import app.contextall.model.OutgoingFileSpec
 import app.contextall.model.SeedDataProfile
 import app.contextall.model.SessionSnapshotUi
 import app.contextall.model.TopTab
@@ -32,9 +32,20 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+private data class ShellChrome(
+    val currentTab: TopTab = TopTab.DEVICES,
+    val selectedDeviceId: String? = null,
+    val darkTheme: Boolean = false,
+    val dynamicColor: Boolean = true,
+    val linkServiceRunning: Boolean = false,
+    val runtimePermissionsGranted: Boolean = false
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ContextAllViewModel(application: Application) : AndroidViewModel(application) {
@@ -61,23 +72,35 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         }
     )
 
-    private val labEngine = InProcessSessionEngine(
-        scope = viewModelScope,
+    private val lab = LabSnapshot(
         initialDisplayName = initialDeviceDisplayName(),
         initialDebugMode = BuildConfig.DEBUG
     )
 
-    private val useLabEngine = MutableStateFlow(!nativeController.isNativeReady)
+    private val useLab = MutableStateFlow(false)
+    private val chrome = MutableStateFlow(ShellChrome())
 
-    val state: StateFlow<SessionSnapshotUi> = useLabEngine
-        .flatMapLatest { useLab ->
-            if (useLab) labEngine.snapshot else nativeController.snapshot
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.Eagerly,
-            initialValue = if (useLabEngine.value) labEngine.snapshot.value else nativeController.snapshot.value
+    private fun operator(): ShellOperator = if (useLab.value) lab else nativeController
+
+    val state: StateFlow<SessionSnapshotUi> = combine(
+        useLab.flatMapLatest { labMode ->
+            if (labMode) lab.snapshot else nativeController.snapshot
+        },
+        chrome
+    ) { snap, ch ->
+        snap.copy(
+            currentTab = ch.currentTab,
+            selectedDeviceId = ch.selectedDeviceId,
+            darkTheme = ch.darkTheme,
+            dynamicColor = ch.dynamicColor,
+            linkServiceRunning = ch.linkServiceRunning,
+            runtimePermissionsGranted = ch.runtimePermissionsGranted
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = nativeController.snapshot.value
+    )
 
     private val _notices = MutableSharedFlow<UiEventNotice>(
         extraBufferCapacity = 32,
@@ -94,33 +117,25 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
             lastAppliedRemoteClipboard = null
             return@OnPrimaryClipChangedListener
         }
-        if (!useLabEngine.value) {
-            nativeController.pushLocalPlainClipboard(text)
+        if (!useLab.value) {
+            nativeController.pushClipboard(text)
         }
     }
 
     init {
         viewModelScope.launch {
-            nativeController.notices.collect { notice ->
-                if (!useLabEngine.value) {
-                    _notices.tryEmit(notice)
-                }
-            }
-        }
-        viewModelScope.launch {
-            labEngine.notices.collect { notice ->
-                if (useLabEngine.value) {
-                    _notices.tryEmit(notice)
-                }
+            useLab.flatMapLatest { labMode ->
+                if (labMode) lab.notices else nativeController.notices
+            }.collect { notice ->
+                _notices.tryEmit(notice)
             }
         }
         clipboardManager?.addPrimaryClipChangedListener(clipChangedListener)
         LinkService.start(application)
         viewModelScope.launch {
             LinkService.isRunning.collect { running ->
-                if (useLabEngine.value) {
-                    labEngine.setLinkServiceState(running)
-                } else {
+                chrome.update { it.copy(linkServiceRunning = running) }
+                if (!useLab.value) {
                     nativeController.setLinkServiceState(running)
                 }
             }
@@ -130,48 +145,29 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     override fun onCleared() {
         clipboardManager?.removePrimaryClipChangedListener(clipChangedListener)
         nativeController.stop()
+        lab.stop()
         super.onCleared()
     }
 
     fun selectTab(tab: TopTab) {
-        val nextSelected = if (tab != TopTab.DEVICES) null else state.value.selectedDeviceId
-        if (useLabEngine.value) {
-            labEngine.updateUiPreferences(tab = tab, selectedDeviceId = nextSelected)
-        } else {
-            nativeController.updateUiPreferences(tab = tab, selectedDeviceId = nextSelected)
-        }
+        val nextSelected = if (tab != TopTab.DEVICES) null else chrome.value.selectedDeviceId
+        chrome.update { it.copy(currentTab = tab, selectedDeviceId = nextSelected) }
     }
 
     fun selectTrustedDevice(deviceId: String?) {
-        if (useLabEngine.value) {
-            labEngine.updateUiPreferences(selectedDeviceId = deviceId)
-        } else {
-            nativeController.updateUiPreferences(selectedDeviceId = deviceId)
-        }
+        chrome.update { it.copy(selectedDeviceId = deviceId) }
     }
 
     fun setDarkTheme(enabled: Boolean) {
-        if (useLabEngine.value) {
-            labEngine.updateUiPreferences(darkTheme = enabled)
-        } else {
-            nativeController.updateUiPreferences(darkTheme = enabled)
-        }
+        chrome.update { it.copy(darkTheme = enabled) }
     }
 
     fun setDynamicColor(enabled: Boolean) {
-        if (useLabEngine.value) {
-            labEngine.updateUiPreferences(dynamicColor = enabled)
-        } else {
-            nativeController.updateUiPreferences(dynamicColor = enabled)
-        }
+        chrome.update { it.copy(dynamicColor = enabled) }
     }
 
     fun toggleLanWifiState() {
-        if (useLabEngine.value) {
-            labEngine.setWifiLanReady(!state.value.wifiLanReady)
-        } else {
-            nativeController.triggerDiscoveryScan()
-        }
+        operator().scanLan()
     }
 
     fun toggleLinkService() {
@@ -184,19 +180,14 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun onPermissionsResult(granted: Boolean) {
-        if (useLabEngine.value) {
-            labEngine.setRuntimePermissionsGranted(granted)
-        } else {
+        chrome.update { it.copy(runtimePermissionsGranted = granted) }
+        if (!useLab.value) {
             nativeController.setRuntimePermissionsGranted(granted)
         }
     }
 
     private fun submitBridgeCommand(command: LocalCommand) {
-        if (useLabEngine.value) {
-            labEngine.submitCommand(command)
-        } else {
-            nativeController.submitCommand(command)
-        }
+        operator().submitCommand(command)
     }
 
     fun startPairing(deviceId: String) {
@@ -211,29 +202,15 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
 
     fun connectManualPeer(host: String, portText: String, alias: String = ""): Boolean {
         val port = EndpointValidator.parseValidPort(portText) ?: -1
-        return if (useLabEngine.value) {
-            labEngine.connectManualEndpoint(rawHost = host, port = port, optionalAlias = alias)
-        } else {
-            nativeController.connectManualEndpoint(rawHost = host, port = port, optionalAlias = alias)
-        }
+        return operator().connectManual(host, port, alias)
     }
 
     fun acceptPairing() {
-        submitBridgeCommand(
-            LocalCommand(
-                frameType = FrameTypes.ACCEPT_PAIRING,
-                requestId = nextRequestId()
-            )
-        )
+        submitBridgeCommand(LocalCommand(frameType = FrameTypes.ACCEPT_PAIRING, requestId = nextRequestId()))
     }
 
     fun rejectPairing() {
-        submitBridgeCommand(
-            LocalCommand(
-                frameType = FrameTypes.REJECT_PAIRING,
-                requestId = nextRequestId()
-            )
-        )
+        submitBridgeCommand(LocalCommand(frameType = FrameTypes.REJECT_PAIRING, requestId = nextRequestId()))
     }
 
     fun setClipboardSync(deviceId: String, enabled: Boolean) {
@@ -269,91 +246,41 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun sendPickedDocument(deviceId: String, uri: Uri) {
-        if (useLabEngine.value) {
-            val spec = resolveUriSpec(uri)
-            sendFilePayload(deviceId = deviceId, fileName = spec.fileName, totalBytes = spec.totalBytes)
-        } else {
-            nativeController.sendUriList(deviceId = deviceId, uris = listOf(uri))
-        }
+        operator().sendFiles(deviceId, listOf(OutboundFile.UriRef(uri)))
+        chrome.update { it.copy(currentTab = TopTab.TRANSFERS, selectedDeviceId = null) }
     }
 
     fun uploadPickedUris(deviceId: String, uris: List<Uri>) {
         if (uris.isEmpty()) return
-        if (useLabEngine.value) {
-            val specs = uris.map { resolveUriSpec(it) }
-            labEngine.enqueueOrSendFiles(deviceId = deviceId, files = specs)
-        } else {
-            nativeController.sendUriList(deviceId = deviceId, uris = uris)
-        }
+        operator().sendFiles(deviceId, uris.map { OutboundFile.UriRef(it) })
+        chrome.update { it.copy(currentTab = TopTab.TRANSFERS, selectedDeviceId = null) }
     }
 
     fun uploadTextAsFile(deviceId: String, fileName: String, content: String) {
-        if (useLabEngine.value) {
-            val totalBytes = content.toByteArray(Charsets.UTF_8).size.toLong()
-            labEngine.enqueueOrSendFiles(
-                deviceId = deviceId,
-                files = listOf(OutgoingFileSpec(fileName = fileName, totalBytes = totalBytes))
-            )
-        } else {
-            nativeController.sendTextAsStagedFile(deviceId = deviceId, fileName = fileName, content = content)
-        }
+        operator().sendFiles(
+            deviceId,
+            listOf(OutboundFile.Named(fileName, content.toByteArray(Charsets.UTF_8).size.toLong(), content.toByteArray(Charsets.UTF_8)))
+        )
+        chrome.update { it.copy(currentTab = TopTab.TRANSFERS, selectedDeviceId = null) }
     }
 
     fun uploadPresetFromTransfers(deviceId: String, fileName: String, totalBytes: Long) {
-        if (useLabEngine.value) {
-            labEngine.enqueueOrSendFiles(
-                deviceId = deviceId,
-                files = listOf(OutgoingFileSpec(fileName = fileName, totalBytes = totalBytes))
-            )
-        } else {
-            nativeController.sendPresetSampleFile(deviceId = deviceId, fileName = fileName, targetSizeBytes = totalBytes)
-        }
-    }
-
-    private fun resolveUriSpec(uri: Uri): OutgoingFileSpec {
-        val resolver = getApplication<Application>().contentResolver
-        var resolvedName = uri.lastPathSegment ?: "document.bin"
-        var resolvedSize = 0L
-
-        try {
-            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)
-                ?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
-                        if (nameIdx >= 0 && !cursor.isNull(nameIdx)) {
-                            resolvedName = cursor.getString(nameIdx)
-                        }
-                        if (sizeIdx >= 0 && !cursor.isNull(sizeIdx)) {
-                            resolvedSize = cursor.getLong(sizeIdx)
-                        }
-                    }
-                }
-        } catch (_: Exception) {
-            resolvedSize = 1_048_576L
-        }
-
-        return OutgoingFileSpec(fileName = resolvedName, totalBytes = resolvedSize)
+        operator().sendFiles(deviceId, listOf(OutboundFile.Named(fileName, totalBytes)))
+        chrome.update { it.copy(currentTab = TopTab.TRANSFERS, selectedDeviceId = null) }
     }
 
     fun sendFilePayload(deviceId: String, fileName: String, totalBytes: Long) {
-        val cmd = LocalCommand(
-            frameType = FrameTypes.SEND_FILE,
-            requestId = nextRequestId(),
-            deviceId = deviceId,
-            fileName = fileName,
-            fileSize = totalBytes
+        val result = operator().submitCommand(
+            LocalCommand(
+                frameType = FrameTypes.SEND_FILE,
+                requestId = nextRequestId(),
+                deviceId = deviceId,
+                fileName = fileName,
+                fileSize = totalBytes
+            )
         )
-        if (useLabEngine.value) {
-            val result = labEngine.submitCommand(cmd)
-            if (result.ok) {
-                labEngine.updateUiPreferences(tab = TopTab.TRANSFERS, selectedDeviceId = null)
-            }
-        } else {
-            val result = nativeController.submitCommand(cmd)
-            if (result.ok) {
-                nativeController.updateUiPreferences(tab = TopTab.TRANSFERS, selectedDeviceId = null)
-            }
+        if (result.ok) {
+            chrome.update { it.copy(currentTab = TopTab.TRANSFERS, selectedDeviceId = null) }
         }
     }
 
@@ -378,8 +305,8 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun togglePauseTransfer(transferId: String) {
-        if (useLabEngine.value) {
-            labEngine.togglePauseTransfer(transferId)
+        if (useLab.value) {
+            lab.togglePauseTransfer(transferId)
         }
     }
 
@@ -394,39 +321,27 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun retryBlockedCommit(transferId: String) {
-        if (useLabEngine.value) {
-            labEngine.retryBlockedCommit(transferId)
+        if (useLab.value) {
+            lab.retryBlockedCommit(transferId)
         }
     }
 
     fun removeQueuedUpload(queueId: String) {
-        if (useLabEngine.value) {
-            labEngine.removeQueuedUpload(queueId)
-        } else {
-            nativeController.removeQueuedUpload(queueId)
-        }
+        operator().removeQueuedUpload(queueId)
     }
 
     fun clearQueuedUploads() {
-        if (useLabEngine.value) {
-            labEngine.clearQueuedUploads()
-        } else {
-            nativeController.clearQueuedUploads()
-        }
+        operator().clearQueuedUploads()
     }
 
     fun resendCompletedTransfer(transferId: String) {
-        if (useLabEngine.value) {
-            labEngine.resendCompletedTransfer(transferId)
+        if (useLab.value) {
+            lab.resendCompletedTransfer(transferId)
         }
     }
 
     fun clearCompletedTransfers() {
-        if (useLabEngine.value) {
-            labEngine.clearCompletedTransfers()
-        } else {
-            nativeController.clearCompletedTransfers()
-        }
+        operator().clearCompletedTransfers()
     }
 
     fun updateLocalDisplayName(newName: String) {
@@ -446,21 +361,13 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         } else {
             ""
         }
-        if (useLabEngine.value) {
-            labEngine.pushLocalPlainClipboard(text)
-        } else {
-            nativeController.pushLocalPlainClipboard(text)
-        }
+        operator().pushClipboard(text)
     }
 
     fun pushCustomClipboardText(text: String) {
         lastAppliedRemoteClipboard = text
         clipboardManager?.setPrimaryClip(ClipData.newPlainText("ContextAll", text))
-        if (useLabEngine.value) {
-            labEngine.pushLocalPlainClipboard(text)
-        } else {
-            nativeController.pushLocalPlainClipboard(text)
-        }
+        operator().pushClipboard(text)
     }
 
     fun copyTextToSystemClipboard(label: String, value: String) {
@@ -468,67 +375,61 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun resetIdentity() {
-        if (useLabEngine.value) {
-            labEngine.resetIdentity()
-        } else {
-            nativeController.resetIdentity()
-        }
+        operator().resetIdentity()
     }
 
     fun triggerLanScan() {
-        if (useLabEngine.value) {
-            labEngine.triggerDiscoveryScan(initialBootSweep = false, discoverNew = true)
-        } else {
-            nativeController.triggerDiscoveryScan()
-        }
+        operator().scanLan()
     }
 
-    // --- Developer Debug & Scenario Lab Actions ---
-
     fun setDeveloperUiEnabled(enabled: Boolean) {
-        if (useLabEngine.value) {
-            labEngine.setDeveloperUiEnabled(enabled, emitNotice = true)
-        } else {
-            nativeController.setDeveloperUiEnabled(enabled)
-        }
+        operator().setDeveloperUiEnabled(enabled)
     }
 
     fun switchSeedProfile(profile: SeedDataProfile) {
         when (profile) {
             SeedDataProfile.DEVELOPER_LAB -> {
                 nativeController.stop()
-                useLabEngine.value = true
-                labEngine.applySeedDataProfile(SeedDataProfile.DEVELOPER_LAB)
-                labEngine.setLinkServiceState(LinkService.isRunning.value)
+                lab.start()
+                useLab.value = true
             }
             SeedDataProfile.CONSUMER -> {
-                if (nativeController.isNativeReady) {
-                    useLabEngine.value = false
-                    if (LinkService.isRunning.value) {
-                        nativeController.start()
-                    }
-                    _notices.tryEmit(UiEventNotice.DebugSeedSwitched(isDeveloperProfile = false))
-                } else {
-                    useLabEngine.value = true
-                    labEngine.applySeedDataProfile(SeedDataProfile.CONSUMER)
+                if (!nativeController.isNativeReady) {
+                    return
                 }
+                lab.stop()
+                useLab.value = false
+                if (LinkService.isRunning.value) {
+                    nativeController.start()
+                }
+                _notices.tryEmit(UiEventNotice.DebugSeedSwitched(isDeveloperProfile = false))
             }
         }
     }
 
-    fun labDiscoverPeer() = labEngine.triggerDiscoveryScan(initialBootSweep = false, discoverNew = true)
+    fun labDiscoverPeer() {
+        if (useLab.value) {
+            lab.scanLan()
+        }
+    }
 
-    fun labInboundPairing() = labEngine.simulateInboundPairingRequest()
+    fun labInboundPairing() {
+        if (useLab.value) {
+            lab.simulateInboundPairingRequest()
+        }
+    }
 
     fun labInboundFile(moveBlocked: Boolean = false) {
-        if (labEngine.simulateInboundFileOffer(simulateMoveBlocked = moveBlocked)) {
-            labEngine.updateUiPreferences(tab = TopTab.TRANSFERS, selectedDeviceId = null)
+        if (!useLab.value) return
+        if (lab.simulateInboundFileOffer(simulateMoveBlocked = moveBlocked)) {
+            chrome.update { it.copy(currentTab = TopTab.TRANSFERS, selectedDeviceId = null) }
         }
     }
 
     fun labRemoteClipboard() {
-        labEngine.simulateRemoteClipboardDelta()
-        val latest = labEngine.snapshot.value.clipboardState.lastSyncedText
+        if (!useLab.value) return
+        lab.simulateRemoteClipboardDelta()
+        val latest = lab.snapshot.value.clipboardState.lastSyncedText
         if (latest.isNotEmpty()) {
             lastAppliedRemoteClipboard = latest
             copyTextToSystemClipboard("ContextAll Remote", latest)
@@ -536,11 +437,15 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun labTogglePeerConnection(deviceId: String? = null) {
-        labEngine.toggleTrustedPeerConnectivity(deviceId)
+        if (useLab.value) {
+            lab.toggleTrustedPeerConnectivity(deviceId)
+        }
     }
 
     fun labTelemetryBurst() {
-        labEngine.simulateTelemetryJitterBurst()
+        if (useLab.value) {
+            lab.simulateTelemetryJitterBurst()
+        }
     }
 
     fun copyDebugFrameLogs() {
@@ -559,11 +464,7 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun clearDebugFrameLogs() {
-        if (useLabEngine.value) {
-            labEngine.clearDebugFrameLogs()
-        } else {
-            nativeController.clearDebugFrameLogs()
-        }
+        operator().clearDebugFrameLogs()
     }
 
     fun openOnboardingGuide() {
@@ -574,11 +475,7 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         uiPrefs.edit().putBoolean(KEY_HAS_SEEN_ONBOARDING, true).apply()
         _showOnboardingGuide.value = false
         if (!state.value.isScanningLan) {
-            if (useLabEngine.value) {
-                labEngine.triggerDiscoveryScan(initialBootSweep = false, discoverNew = false)
-            } else {
-                nativeController.triggerDiscoveryScan()
-            }
+            operator().scanLan()
         }
     }
 

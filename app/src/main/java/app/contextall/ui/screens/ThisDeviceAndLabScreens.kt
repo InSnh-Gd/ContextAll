@@ -10,22 +10,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.ContentPasteGo
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Fingerprint
@@ -33,26 +29,18 @@ import androidx.compose.material.icons.rounded.FolderZip
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyOff
 import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.MoveToInbox
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material.icons.rounded.Password
-import androidx.compose.material.icons.rounded.Radar
 import androidx.compose.material.icons.rounded.Science
-import androidx.compose.material.icons.rounded.SyncProblem
 import androidx.compose.material.icons.rounded.Terminal
-import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -702,177 +690,5 @@ private fun LocalSwitchRow(
             onCheckedChange = onCheckedChange,
             modifier = Modifier.testTag(testTag)
         )
-    }
-}
-
-/**
- * Non-intrusive Android 16 M3 Expressive Scenario Lab Sheet for interactive protocol exercises.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ScenarioLabBottomSheet(
-    onDismiss: () -> Unit,
-    onDiscoverPeer: () -> Unit,
-    onInboundPairing: () -> Unit,
-    onInboundFile: () -> Unit,
-    onInboundBlockedFile: () -> Unit,
-    onRemoteClipboard: () -> Unit,
-    onFlapConnection: () -> Unit
-) {
-    val palette = LocalExpressivePalette.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp)
-                .testTag("scenario_lab_sheet")
-        ) {
-            Text(
-                text = stringResource(R.string.lab_sheet_title),
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(horizontal = 6.dp)
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.lab_sheet_subtitle),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 6.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                LabActionTile(
-                    index = 0,
-                    count = 6,
-                    icon = Icons.Rounded.Radar,
-                    badgeBg = palette.skyIconBg,
-                    badgeFg = palette.skyIconFg,
-                    title = stringResource(R.string.lab_action_discover_peer),
-                    subtitle = stringResource(R.string.lab_action_discover_peer_sub),
-                    testTag = "lab_discover_peer",
-                    onClick = {
-                        onDiscoverPeer()
-                        onDismiss()
-                    }
-                )
-                LabActionTile(
-                    index = 1,
-                    count = 6,
-                    icon = Icons.Rounded.Password,
-                    badgeBg = palette.violetIconBg,
-                    badgeFg = palette.violetIconFg,
-                    title = stringResource(R.string.lab_action_inbound_pair),
-                    subtitle = stringResource(R.string.lab_action_inbound_pair_sub),
-                    testTag = "lab_inbound_pairing",
-                    onClick = {
-                        onDismiss()
-                        onInboundPairing()
-                    }
-                )
-                LabActionTile(
-                    index = 2,
-                    count = 6,
-                    icon = Icons.Rounded.MoveToInbox,
-                    badgeBg = palette.mintIconBg,
-                    badgeFg = palette.mintIconFg,
-                    title = stringResource(R.string.lab_action_inbound_file),
-                    subtitle = stringResource(R.string.lab_action_inbound_file_sub),
-                    testTag = "lab_inbound_file",
-                    onClick = {
-                        onDismiss()
-                        onInboundFile()
-                    }
-                )
-                LabActionTile(
-                    index = 3,
-                    count = 6,
-                    icon = Icons.Rounded.WarningAmber,
-                    badgeBg = MaterialTheme.colorScheme.errorContainer,
-                    badgeFg = MaterialTheme.colorScheme.onErrorContainer,
-                    title = stringResource(R.string.lab_action_inbound_blocked),
-                    subtitle = stringResource(R.string.lab_action_inbound_blocked_sub),
-                    testTag = "lab_inbound_blocked",
-                    onClick = {
-                        onDismiss()
-                        onInboundBlockedFile()
-                    }
-                )
-                LabActionTile(
-                    index = 4,
-                    count = 6,
-                    icon = Icons.Rounded.ContentPasteGo,
-                    badgeBg = palette.amberIconBg,
-                    badgeFg = palette.amberIconFg,
-                    title = stringResource(R.string.lab_action_remote_clipboard),
-                    subtitle = stringResource(R.string.lab_action_remote_clipboard_sub),
-                    testTag = "lab_remote_clipboard",
-                    onClick = {
-                        onDismiss()
-                        onRemoteClipboard()
-                    }
-                )
-                LabActionTile(
-                    index = 5,
-                    count = 6,
-                    icon = Icons.Rounded.SyncProblem,
-                    badgeBg = palette.skyIconBg,
-                    badgeFg = palette.skyIconFg,
-                    title = stringResource(R.string.lab_action_flap_connection),
-                    subtitle = stringResource(R.string.lab_action_flap_connection_sub),
-                    testTag = "lab_flap_connection",
-                    onClick = {
-                        onDismiss()
-                        onFlapConnection()
-                    }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun LabActionTile(
-    index: Int,
-    count: Int,
-    icon: ImageVector,
-    badgeBg: Color,
-    badgeFg: Color,
-    title: String,
-    subtitle: String,
-    testTag: String,
-    onClick: () -> Unit
-) {
-    ExpressiveGroupTile(
-        index = index,
-        count = count,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        onClick = onClick,
-        modifier = Modifier.testTag(testTag)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ExpressiveIconBadge(icon = icon, backgroundColor = badgeBg, iconTint = badgeFg, size = 40.dp)
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
