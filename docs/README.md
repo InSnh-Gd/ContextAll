@@ -17,12 +17,12 @@ capability 的目录名就是文档文件名。
 | `repository-baseline` | [仓库](specs/repository-baseline.md) | `engineering-baseline` |
 | `functional-core` | [决策核心](specs/functional-core.md) | `engineering-baseline` |
 | `verification-gates` | [验证](specs/verification-gates.md) | `engineering-baseline` |
-| `lan-session` | [局域网会话](specs/lan-session.md) | `android-transport` |
-| `clipboard-sync` | [剪贴板同步](specs/clipboard-sync.md) | `session-protocol` |
+| `lan-session` | [局域网会话](specs/lan-session.md) | `windows-daemon`、`codebase-deepening` |
+| `clipboard-sync` | [剪贴板同步](specs/clipboard-sync.md) | `linux-desktop-shell` |
 | `file-transfer` | [文件传输](specs/file-transfer.md) | `session-protocol` |
-| `local-operator` | [本地操作](specs/local-operator.md) | `android-transport` |
+| `local-operator` | [本地操作](specs/local-operator.md) | `windows-daemon`、`codebase-deepening` |
 | `framed-channel` | [成帧通道](specs/framed-channel.md) | `android-transport` |
-| `device-shell` | [图形外壳](specs/device-shell.md) | `session-protocol` |
+| `device-shell` | [图形外壳](specs/device-shell.md) | `linux-desktop-shell`、`android-lab-snapshot`、`codebase-deepening` |
 
 ## 待同步
 
@@ -32,9 +32,13 @@ capability 的目录名就是文档文件名。
 
 - [模块边界](architecture.md)：当前解决方案里各项目的引用关系。
 - [词汇](glossary.md)
-- [ADR 0001](adr/0001-linux-color-scheme.md)：Linux 外观只读桌面门户。
+- [ADR 0001](adr/0001-linux-color-scheme.md)：Linux 外观只读桌面门户（已由 ADR 0007 替代）。
 - [ADR 0002](adr/0002-file-sync-is-a-transfer.md)：文件走传输，剪贴板只放文本。
 - [ADR 0003](adr/0003-shared-effects.md)：共享效果放在一个模块里。
 - [ADR 0004](adr/0004-quic-android-transport.md)：Android 端采用 QUIC 且不设降级传输。
 - [ADR 0005](adr/0005-session-layer-split.md)：会话层与底层效果解耦独立。
 - [ADR 0006](adr/0006-kotlin-compose-android-shell.md)：Android 端采用 Kotlin Compose 外壳并移除旧 .NET UI。
+- [ADR 0007](adr/0007-linux-appearance-and-accent-fallback.md)：Linux 外观采用 MD3E 并支持门户与桌面强调色回退。
+- [ADR 0008](adr/0008-linux-x11-clipboard-fallback.md)：Linux 守护进程剪贴板支持动态加载 libX11 级联回退。
+- [ADR 0009](adr/0009-android-lab-is-canned-snapshots.md)：Android 实验室是罐头快照，native 失败不回退。
+- [ADR 0010](adr/0010-linux-discovery-is-injected.md)：Linux 生产路径注入 `LinuxDiscovery`，`SessionHost` 不再并行跑内建信标。

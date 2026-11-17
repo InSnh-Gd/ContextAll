@@ -14,7 +14,7 @@
 | `ContextAll.App.Desktop` | App、Ipc | Linux 图形入口，在 Linux 上调用 `UseWayland()`。 |
 | `ContextAll.App.Windows` | Ipc | 非打包的 WinUI 3 入口。 |
 | `ContextAll.Native` | Core、Effects、Protocol、Session | Android NativeAOT 动态库（`libcontextall_native.so`），内置 `AndroidMsQuicBackend`（实现 `IPortableQuicBackend` 驱动 `libmsquic.so`），向 Kotlin/JVM 暴露 JNI 入口并以零 OpenSSL 方式协调 `SessionHost`；由 `scripts/build-android-native.sh` 构建并与 `libmsquic.so` 一并打包。 |
-| `app/`（Gradle / Kotlin + Jetpack Compose） | `ContextAll.Native` | 唯一的 Android 应用前端外壳、服务宿主与单元测试（Compose UI、`ContextAllViewModel`、`NativeSessionController` / `NativeSessionJni`、`NativeCryptoHelper`、`LanDiscoveryController`、`MediaStoreTransferSink`、`LinkService`）。 |
+| `app/`（Gradle / Kotlin + Jetpack Compose） | `ContextAll.Native` | 唯一的 Android 应用前端外壳、服务宿主与单元测试（Compose UI、`ContextAllViewModel`、`NativeSessionController` / `NativeSessionJni`、`LabSnapshot` 罐头实验室、`NativeCryptoHelper`、`LanDiscoveryController`、`MediaStoreTransferSink`、`LinkService`）。 |
 
 `ContextAll.Tests.slnf` 是推送前和 GitHub Actions 跑的 .NET 核心套件，包含 `net10.0` 项目（含 `ContextAll.Session` 与 `ContextAll.Native`）及其测试（含 `ContextAll.Native.Tests`），不含 `ContextAll.App.Windows`；`ContextAll.Tests.E2E` 通过 `./scripts/test-e2e.sh --all` 运行；`app/` 通过 `./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` 验证与打包。`ContextAll.Linux.slnf` 仅含 Linux 桌面与共享原生项目，可在未安装 Android / Windows .NET 工作负载的纯 Linux 环境下编译。
 

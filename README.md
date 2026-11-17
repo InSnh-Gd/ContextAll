@@ -21,27 +21,55 @@ Linux、Windows、Android 三个平台的代码在同一个仓库里。目前 Li
 - [.NET SDK 10.0.401](global.json) 或更新的 10.0 功能版本
 - Linux 运行时需要 `libmsquic`（`libmsquic.so.2`）。没有它时 QUIC 监听失败，不会改用 TCP。
 - 图形界面需要 Wayland 会话。`WAYLAND_DISPLAY` 为空时界面退出并返回 1；守护进程和命令行不依赖 Wayland。
-- 构建 Android 端需要 .NET Android 工作负载，构建 Windows 端需要在 Windows 上安装 Windows SDK。
+- 构建 Android 端需要 JDK 21、Android SDK 与 Android NDK（用于 NativeAOT 编译 `libcontextall_native.so`）；构建 Windows 端需要在 Windows 上安装 Windows SDK。
+
+常用环境变量（均可选，未设置时使用系统默认值）：
+
+```sh
+# Linux XDG 运行与存储目录
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+export XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+
+# Wayland 图形界面会话（守护进程和 CLI 不依赖）
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+
+# Android 构建工具链（仅构建与测试 app/ 时需要）
+export JAVA_HOME="/path/to/temurin-21"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
+export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/<version>"
+```
 
 ## 构建与测试
 
 ```sh
 git clone https://github.com/InSnh-Gd/ContextAll.git
 cd ContextAll
+
+# 核心 .NET 单元测试与集成测试
 dotnet test ContextAll.Tests.slnf -c Release
+
+# 全量端到端规格测试
+./scripts/test-e2e.sh --all
+
+# Android Kotlin 单元测试与 Lint（需配置 JDK 21 与 Android SDK）
+./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon
 ```
 
-`ContextAll.Tests.slnf` 包含所有 `net10.0` 项目和测试，CI 和推送前钩子跑的都是这条命令。几份解决方案文件的区别：
+`ContextAll.Tests.slnf` 包含所有 `net10.0` 项目和测试，CI 和推送前钩子跑的都是这套验证命令。几份解决方案文件的区别：
 
 | 文件 | 内容 |
 | --- | --- |
-| `ContextAll.slnx` | 全部项目，包括 Windows 和 Android |
-| `ContextAll.Tests.slnf` | Linux 可构建的项目及测试，不含 Android 和 Windows |
-| `ContextAll.Linux.slnf` | Linux 桌面项目加 Android，没有 Android 工作负载时编不过 |
+| `ContextAll.slnx` | 全部项目，包括 Windows |
+| `ContextAll.Tests.slnf` | Linux 可构建的核心项目及测试，不含 Windows |
+| `ContextAll.Linux.slnf` | Linux 桌面与原生共享项目（含 `ContextAll.Native`），不含 Windows |
 
 `ContextAll.Host.Tests` 里的双守护进程测试会用 `unshare` 建网络命名空间和 veth 设备，需要 `ip`、`ethtool`、`libmsquic`，并允许非特权用户命名空间。CI 里的准备步骤见 [`.github/workflows/test.yml`](.github/workflows/test.yml)。
 
-## 打包与运行（Linux）
+## 打包与运行
+
+### Linux（AppImage 与用户服务）
 
 ```sh
 packaging/appimage/build.sh
@@ -49,13 +77,21 @@ packaging/appimage/build.sh
 
 脚本发布 NativeAOT 的 `ContextAll.Host` 和图形界面，从 `/usr/lib/x86_64-linux-gnu/libmsquic.so.2` 复制 QUIC 库，下载 `appimagetool`，最后生成 `artifacts/ContextAll.AppImage`。
 
-AppImage 不带参数时打开图形界面，参数是 `serve` 时启动守护进程，其他参数交给命令行。把守护进程作为用户服务运行：
+AppImage 不带参数时打开图形界面，参数是 `serve` 时启动守护进程，其他参数交给命令行。直接运行源码也可以通过 `dotnet run --project src/ContextAll.Host -- serve` 启动守护进程。把守护进程作为用户服务运行：
 
 ```sh
 install -Dm755 artifacts/ContextAll.AppImage ~/.local/bin/ContextAll.AppImage
 install -Dm644 packaging/contextall.service ~/.config/systemd/user/contextall.service
 systemctl --user enable --now contextall.service
 ```
+
+### Android（APK）
+
+```sh
+./gradlew :app:assembleDebug --no-daemon
+```
+
+Gradle 构建会自动调用 [`scripts/build-android-native.sh`](scripts/build-android-native.sh) 编译 NativeAOT 动态库 `libcontextall_native.so`，并与 `libmsquic.so` 一同打包进 `app/build/outputs/apk/debug/app-debug.apk`，可通过 `adb install` 安装运行。
 
 ## 命令行
 

@@ -13,3 +13,11 @@
 **Local channel**（本地通道）  
 桌面前端用来联系守护进程的 Unix socket 或命名管道。  
 不叫：IPC、pipe、socket。
+
+**Daemon**（守护进程）  
+在后台持有本机身份、信任列表、局域网会话、剪贴板寄存器与文件传输的常驻宿主。  
+不叫：server、backend、agent。
+
+**Shell**（图形外壳）  
+向操作者展示设备、会话与传输状态，并提交本地操作的图形界面。桌面外壳不直接持有身份或会话。  
+不叫：client app、portal。

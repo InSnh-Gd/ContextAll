@@ -1,6 +1,6 @@
 # Linux 外观只读桌面门户
 
-状态：已接受
+状态：已由 [ADR 0007](0007-linux-appearance-and-accent-fallback.md) 替代
 
 Linux 界面的明暗跟随会话总线上的 `org.freedesktop.portal.Settings`，总线名是 `org.freedesktop.portal.Desktop`，键是 `org.freedesktop.appearance` 的 `color-scheme`。值 `1` 为暗色。值 `0` 和 `2` 为亮色。读不到门户时，界面保持亮色并继续运行。界面不读取强调色。
 
