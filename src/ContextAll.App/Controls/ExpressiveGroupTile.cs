@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
@@ -43,6 +44,12 @@ public class ExpressiveGroupTile : ContentControl
     public static readonly StyledProperty<bool> IsPressedStateProperty =
         AvaloniaProperty.Register<ExpressiveGroupTile, bool>(nameof(IsPressedState), false);
 
+    public static readonly StyledProperty<ICommand?> CommandProperty =
+        AvaloniaProperty.Register<ExpressiveGroupTile, ICommand?>(nameof(Command));
+
+    public static readonly StyledProperty<object?> CommandParameterProperty =
+        AvaloniaProperty.Register<ExpressiveGroupTile, object?>(nameof(CommandParameter));
+
     private MaterialRipple? _ripple;
 
     public ExpressiveGroupTile()
@@ -81,6 +88,18 @@ public class ExpressiveGroupTile : ContentControl
     {
         get => GetValue(IsPressedStateProperty);
         set => SetValue(IsPressedStateProperty, value);
+    }
+
+    public ICommand? Command
+    {
+        get => GetValue(CommandProperty);
+        set => SetValue(CommandProperty, value);
+    }
+
+    public object? CommandParameter
+    {
+        get => GetValue(CommandParameterProperty);
+        set => SetValue(CommandParameterProperty, value);
     }
 
     /// <summary>Compatibility alias over <see cref="ContentControl.Content"/> for code-built views.</summary>
@@ -175,7 +194,7 @@ public class ExpressiveGroupTile : ContentControl
         IsPressedState = false;
         if (IsInteractive && wasPressed)
         {
-            Activated?.Invoke();
+            RaiseActivated();
         }
     }
 
@@ -184,8 +203,19 @@ public class ExpressiveGroupTile : ContentControl
         base.OnKeyDown(e);
         if (IsInteractive && e.Key is Key.Enter or Key.Space)
         {
-            Activated?.Invoke();
+            RaiseActivated();
             e.Handled = true;
+        }
+    }
+
+    private void RaiseActivated()
+    {
+        Activated?.Invoke();
+        var command = Command;
+        var parameter = CommandParameter;
+        if (command is not null && command.CanExecute(parameter))
+        {
+            command.Execute(parameter);
         }
     }
 

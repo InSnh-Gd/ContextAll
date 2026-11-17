@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
@@ -18,6 +19,9 @@ public class ExpressiveSwitch : TemplatedControl
             false,
             defaultBindingMode: Avalonia.Data.BindingMode.TwoWay);
 
+    public static readonly StyledProperty<ICommand?> CommandProperty =
+        AvaloniaProperty.Register<ExpressiveSwitch, ICommand?>(nameof(Command));
+
     public ExpressiveSwitch()
     {
         Focusable = true;
@@ -32,6 +36,12 @@ public class ExpressiveSwitch : TemplatedControl
         set => SetValue(IsCheckedProperty, value);
     }
 
+    public ICommand? Command
+    {
+        get => GetValue(CommandProperty);
+        set => SetValue(CommandProperty, value);
+    }
+
     /// <summary>Glyph rendered inside the switch thumb ("✓" when checked, "✕" otherwise).</summary>
     public string ThumbGlyph => IsChecked ? "✓" : "✕";
 
@@ -40,6 +50,11 @@ public class ExpressiveSwitch : TemplatedControl
     {
         IsChecked = !IsChecked;
         Toggled?.Invoke(IsChecked);
+        var command = Command;
+        if (command is not null && command.CanExecute(IsChecked))
+        {
+            command.Execute(IsChecked);
+        }
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)

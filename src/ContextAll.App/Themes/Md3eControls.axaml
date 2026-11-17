@@ -896,11 +896,16 @@
                           Margin="0,8,0,0">
                 <Button Name="PART_CancelButton"
                         Classes="Text"
+                        CornerRadius="20"
+                        VerticalAlignment="Center"
                         Content="{TemplateBinding CancelActionText}"
                         IsVisible="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=CancelActionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 <Button Name="PART_PrimaryButton"
                         Classes="Filled"
-                        Content="{TemplateBinding PrimaryActionText}" />
+                        CornerRadius="20"
+                        VerticalAlignment="Center"
+                        Content="{TemplateBinding PrimaryActionText}"
+                        IsVisible="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=PrimaryActionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               </StackPanel>
             </StackPanel>
           </Border>
