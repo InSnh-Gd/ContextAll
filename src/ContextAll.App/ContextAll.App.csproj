@@ -9,8 +9,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\packaging\appimage\contextall.png" LogicalName="ContextAll.App.Assets.contextall.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
     <PackageReference Include="CCSWE.Avalonia.Material" Version="12.1.14" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
   </ItemGroup>
 
 </Project>
