@@ -34,3 +34,12 @@ jobs:
       - run: dotnet test ContextAll.Tests.slnf -c Release --nologo
       - run: ./scripts/test-e2e.sh --all
       - run: ./gradlew :app:testDebugUnitTest :app:lintDebug --no-daemon
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test ContextAll.Tests.slnf -c Release --nologo
