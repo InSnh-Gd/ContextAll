@@ -2,7 +2,7 @@ namespace ContextAll.Protocol;
 
 public static class LocalFrameTypes
 {
-    public static bool IsCommand(byte type) => type is >= FrameTypes.StartPairing and <= FrameTypes.CancelTransfer;
+    public static bool IsCommand(byte type) => type is >= FrameTypes.StartPairing and <= FrameTypes.PushClipboardText;
 }
 
 public static class FrameTypes
@@ -38,6 +38,8 @@ public static class FrameTypes
     public const byte AcceptFile = 73;
     public const byte RejectFile = 74;
     public const byte CancelTransfer = 75;
+    public const byte ConnectEndpoint = 76;
+    public const byte PushClipboardText = 77;
 
     public const byte Snapshot = 80;
     public const byte DeviceChanged = 81;

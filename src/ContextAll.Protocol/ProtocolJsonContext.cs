@@ -53,7 +53,14 @@ public sealed record LocalCommandPayload(
     string? DisplayName,
     string? Path,
     bool? Enabled,
-    string? TransferId);
+    string? TransferId,
+    string? Host = null,
+    int? Port = null,
+    string? Alias = null,
+    string? Text = null,
+    int? TotalBytes = null,
+    int? Offset = null,
+    string? ChunkBase64 = null);
 
 public sealed record DeviceSnapshotPayload(
     string DeviceId,
@@ -61,7 +68,9 @@ public sealed record DeviceSnapshotPayload(
     bool Trusted,
     string Presence,
     bool? ClipboardSync,
-    bool? AskBeforeSave);
+    bool? AskBeforeSave,
+    bool? RemoteClipboardSync = null,
+    string? Endpoint = null);
 
 public sealed record PairingSnapshotPayload(
     string DeviceId,
@@ -83,7 +92,8 @@ public sealed record TransferSnapshotPayload(
     string FileName,
     long CompletedSegments,
     long SegmentCount,
-    bool MoveBlocked);
+    bool MoveBlocked,
+    long TotalSize = 0);
 
 public sealed record SnapshotPayload(
     string LocalDisplayName,
@@ -91,7 +101,12 @@ public sealed record SnapshotPayload(
     DeviceSnapshotPayload[] Devices,
     PairingSnapshotPayload? Pairing,
     FilePromptSnapshotPayload[] FilePrompts,
-    TransferSnapshotPayload[] Transfers);
+    TransferSnapshotPayload[] Transfers,
+    string LocalDeviceId = "",
+    string ResolvedDownloadDirectory = "",
+    string[]? LocalAddresses = null,
+    int QuicPort = 0,
+    string ClipboardBackend = "unavailable");
 
 public sealed record DeviceEventPayload(
     string DeviceId,
@@ -99,7 +114,9 @@ public sealed record DeviceEventPayload(
     bool Trusted,
     string Presence,
     bool? ClipboardSync,
-    bool? AskBeforeSave);
+    bool? AskBeforeSave,
+    bool? RemoteClipboardSync = null,
+    string? Endpoint = null);
 
 public sealed record PairingEndedPayload(string DeviceId, string Outcome);
 
@@ -110,7 +127,8 @@ public sealed record TransferProgressPayload(
     string FileName,
     long CompletedSegments,
     long SegmentCount,
-    bool MoveBlocked);
+    bool MoveBlocked,
+    long TotalSize = 0);
 
 public sealed record TransferEndedPayload(string TransferId, string Outcome);
 
