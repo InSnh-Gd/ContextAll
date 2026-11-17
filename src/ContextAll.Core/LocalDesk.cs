@@ -33,24 +33,19 @@ public sealed class LocalDesk
     public Frame Handle(Frame frame)
     {
         var command = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.LocalCommandPayload);
-        if (frame.Type is < 64 or > 75 || command.IsFailure || command.Value is null)
+        if (!LocalFrameTypes.IsCommand(frame.Type) || command.IsFailure || command.Value is null)
         {
             return Result(command.Value?.RequestId ?? "0", false, "invalid");
         }
 
         var body = command.Value;
-        if (!requests.Add(body.RequestId))
+        var admit = LocalOperator.Admit(body.RequestId, requests);
+        if (admit is not null)
         {
-            return Result(body.RequestId, false, "duplicate-request");
+            return Result(body.RequestId, false, admit);
         }
 
-        var error = frame.Type switch
-        {
-            FrameTypes.SendFile when body.Path is null || Directory.Exists(body.Path) => "not-a-file",
-            FrameTypes.SetDownloadDirectory when body.Path is { Length: > 0 } && !Directory.Exists(body.Path) => "invalid-path",
-            FrameTypes.SetDisplayName when body.DisplayName is null || !DisplayNames.IsLegal(body.DisplayName) => "invalid-name",
-            _ => null,
-        };
+        var error = LocalOperator.Validate(frame.Type, body);
         if (error is null && frame.Type == FrameTypes.SetDisplayName && body.DisplayName is not null)
         {
             LocalDisplayName = body.DisplayName;

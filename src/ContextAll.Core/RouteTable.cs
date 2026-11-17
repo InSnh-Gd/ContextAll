@@ -5,6 +5,8 @@ public sealed record OnLinkPrefix(string Address, int PrefixLength)
     public int InterfaceIndex { get; init; }
 
     public bool LinkLocal { get; init; }
+
+    public string InterfaceId { get; init; } = "";
 }
 
 public sealed record RoutePath(string Address, int Port, bool FromDiscovery)
@@ -153,6 +155,32 @@ public sealed class RouteTable
 
     public string? DisplayNameOf(string deviceId) =>
         peers.TryGetValue(deviceId, out var peer) ? peer.DisplayName : null;
+
+    public string? PreferredEndpointOf(string deviceId)
+    {
+        if (!peers.TryGetValue(deviceId, out var peer))
+        {
+            return null;
+        }
+
+        if (peer.SessionAddress is not null)
+        {
+            var matching = peer.Discovery
+                .Concat(peer.Announced)
+                .FirstOrDefault(path => path.Address == peer.SessionAddress);
+            return matching is not null
+                ? FormatEndpoint(peer.SessionAddress, matching.Port)
+                : peer.SessionAddress;
+        }
+
+        var best = DialCandidates(deviceId).FirstOrDefault();
+        return best is null ? null : FormatEndpoint(best.Address, best.Port);
+    }
+
+    public static string FormatEndpoint(string address, int port) =>
+        address.Contains(':') && !address.StartsWith('[')
+            ? $"[{address}]:{port}"
+            : $"{address}:{port}";
 
     static void Upsert(List<RoutePath> paths, string address, int port, long nowMs, bool fromDiscovery)
     {
