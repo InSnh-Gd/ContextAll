@@ -11,6 +11,11 @@ public sealed class TwoDaemonTests
     [Fact(Timeout = 360000)]
     public async Task Two_daemons_copy_text_and_resume_a_partial_file()
     {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
         var (code, text) = await Reexec();
         Assert.True(code == 0 && text.Contains("scenario-ok", StringComparison.Ordinal), text);
     }

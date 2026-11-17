@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using ContextAll.Core;
@@ -156,6 +158,91 @@ public sealed class PlatformSeamsTests
         Assert.True(discovery.IsActive);
 
         await discovery.AnnounceAsync(42461);
+    }
+
+    [Fact]
+    public void Production_linux_discovery_is_linux_discovery_adapter()
+    {
+        using var folder = new TempFolder();
+        var identity = IdentityStore.Start(System.IO.Path.Combine(folder.Path, "identity"));
+        Assert.True(identity.Ok);
+        Assert.NotNull(identity.Material);
+
+        var discovery = LanHost.CreateLinuxDiscovery(identity.Material, "LinuxHost", 42461);
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Null(discovery);
+            return;
+        }
+
+        Assert.IsType<LinuxDiscovery>(discovery);
+    }
+
+    [Fact]
+    public async Task SessionHost_skips_builtin_beacon_when_discovery_is_injected()
+    {
+        using var folder = new TempFolder();
+        var paths = new LinuxHostPaths(
+            identityDirectory: System.IO.Path.Combine(folder.Path, "id"),
+            settingsFile: System.IO.Path.Combine(folder.Path, "config.yaml"),
+            stateDirectory: System.IO.Path.Combine(folder.Path, "state"),
+            transfersDirectory: System.IO.Path.Combine(folder.Path, "transfers"),
+            defaultDownloadDirectory: System.IO.Path.Combine(folder.Path, "downloads"));
+        var identity = IdentityStore.Start(paths.IdentityDirectory);
+        Assert.True(identity.Ok);
+        Assert.NotNull(identity.Material);
+
+        await using var discovery = new RecordingDiscovery();
+        await using var host = new SessionHost(
+            paths,
+            clipboard: null,
+            discovery,
+            transferSink: null,
+            quicPort: NextFreeUdpPort(),
+            preloadedIdentity: identity.Material);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        host.Start(cts.Token);
+        Assert.False(host.UsesBuiltInDiscovery);
+        await discovery.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(discovery.IsActive);
+    }
+
+    static int NextFreeUdpPort()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        if (socket.LocalEndPoint is not IPEndPoint end)
+        {
+            throw new InvalidOperationException("local-endpoint");
+        }
+
+        return end.Port;
+    }
+
+    sealed class RecordingDiscovery : IDiscovery
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool IsActive { get; private set; }
+
+        public event Action<DiscoveredPeer>? PeerDiscovered
+        {
+            add { }
+            remove { }
+        }
+
+        public Task StartAsync(CancellationToken ct = default)
+        {
+            IsActive = true;
+            Started.TrySetResult();
+            return Task.CompletedTask;
+        }
+
+        public Task AnnounceAsync(ushort port, CancellationToken ct = default) => Task.CompletedTask;
+
+        public void Dispose()
+        {
+        }
     }
 
     sealed class TempFolder : IDisposable

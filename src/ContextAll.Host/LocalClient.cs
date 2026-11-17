@@ -1,3 +1,7 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.IO.Pipes;
+using System.Net;
 using System.Net.Sockets;
 using ContextAll.Ipc;
 using ContextAll.Protocol;
@@ -44,6 +48,76 @@ public static class LocalClient
     public static int SendFile(CliIo io, string deviceId, string path) =>
         Command(io, FrameTypes.SendFile, new LocalCommandPayload(RequestId(), deviceId, null, path, null, null));
 
+    public static int Connect(CliIo io, string endpoint, string? alias = null)
+    {
+        if (!TryParseEndpoint(endpoint, out var host, out var port))
+        {
+            io.Error.WriteLine("invalid-endpoint");
+            return 1;
+        }
+
+        var trimmedAlias = string.IsNullOrWhiteSpace(alias) ? null : alias.Trim();
+        return Command(
+            io,
+            FrameTypes.ConnectEndpoint,
+            new LocalCommandPayload(RequestId(), null, null, null, null, null, Host: host, Port: port, Alias: trimmedAlias),
+            timeoutMs: 10_000);
+    }
+
+    public static bool TryParseEndpoint(string raw, out string host, out int port)
+    {
+        host = "";
+        port = 0;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var trimmed = raw.Trim();
+        string hostPart;
+        string portPart;
+        if (trimmed.StartsWith('['))
+        {
+            var closeBracket = trimmed.IndexOf(']');
+            if (closeBracket <= 1 || closeBracket + 2 > trimmed.Length || trimmed[closeBracket + 1] != ':')
+            {
+                return false;
+            }
+
+            hostPart = trimmed[1..closeBracket];
+            portPart = trimmed[(closeBracket + 2)..];
+        }
+        else
+        {
+            var lastColon = trimmed.LastIndexOf(':');
+            if (lastColon <= 0 || lastColon == trimmed.Length - 1)
+            {
+                return false;
+            }
+
+            if (trimmed.IndexOf(':') != lastColon)
+            {
+                return false;
+            }
+
+            hostPart = trimmed[..lastColon];
+            portPart = trimmed[(lastColon + 1)..];
+        }
+
+        if (!int.TryParse(portPart, NumberStyles.None, CultureInfo.InvariantCulture, out port) || port is < 1 or > 65535)
+        {
+            return false;
+        }
+
+        host = hostPart.Trim();
+        if (host.Length == 0 || host.Any(ch => char.IsWhiteSpace(ch) || char.IsControl(ch)))
+        {
+            return false;
+        }
+
+        return IPAddress.TryParse(host, out _) || Uri.CheckHostName(host) != UriHostNameType.Unknown;
+    }
+
     static int Switch(CliIo io, byte type, string deviceId, string flag)
     {
         var enabled = flag switch
@@ -61,9 +135,9 @@ public static class LocalClient
         return Command(io, type, new LocalCommandPayload(RequestId(), deviceId, null, null, enabled, null));
     }
 
-    static int Command(CliIo io, byte type, LocalCommandPayload payload)
+    static int Command(CliIo io, byte type, LocalCommandPayload payload, int timeoutMs = 3000)
     {
-        if (!TryOpen(io, out var stream))
+        if (!TryOpen(io, out var stream, timeoutMs))
         {
             return 1;
         }
@@ -90,9 +164,14 @@ public static class LocalClient
                 }
 
                 var result = ControlJson.Decode(reply.Payload.Span, ProtocolJsonContext.Default.CommandResultPayload).Value;
-                if (result is null || !result.Ok)
+                if (result is null || result.RequestId != payload.RequestId)
                 {
-                    io.Error.WriteLine(result?.Error ?? "invalid");
+                    continue;
+                }
+
+                if (!result.Ok)
+                {
+                    io.Error.WriteLine(result.Error ?? "invalid");
                     return 1;
                 }
 
@@ -101,9 +180,14 @@ public static class LocalClient
         }
     }
 
-    static bool TryOpen(CliIo io, out NetworkStream stream)
+    static bool TryOpen(CliIo io, [NotNullWhen(true)] out Stream? stream, int timeoutMs = 3000)
     {
-        stream = null!;
+        stream = null;
+        if (OperatingSystem.IsWindows())
+        {
+            return TryOpenPipe(io, out stream, timeoutMs);
+        }
+
         if (string.IsNullOrEmpty(io.RuntimeDirectory))
         {
             io.Error.WriteLine("The daemon is not running.");
@@ -118,14 +202,32 @@ public static class LocalClient
         }
 
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        socket.ReceiveTimeout = 3000;
-        socket.SendTimeout = 3000;
+        socket.ReceiveTimeout = timeoutMs;
+        socket.SendTimeout = timeoutMs;
         socket.Connect(new UnixDomainSocketEndPoint(socketPath));
         stream = new NetworkStream(socket, ownsSocket: true);
         return true;
     }
 
-    static Frame Read(NetworkStream stream)
+    static bool TryOpenPipe(CliIo io, [NotNullWhen(true)] out Stream? stream, int timeoutMs)
+    {
+        stream = null;
+        var pipe = new NamedPipeClientStream(".", DaemonProcess.PipeName(LocalChannelClient.CurrentUserSid()), PipeDirection.InOut);
+        try
+        {
+            pipe.Connect(timeoutMs);
+            stream = pipe;
+            return true;
+        }
+        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+        {
+            pipe.Dispose();
+            io.Error.WriteLine("The daemon is not running.");
+            return false;
+        }
+    }
+
+    static Frame Read(Stream stream)
     {
         var buffer = new byte[FrameLimits.HeaderBytes + FrameLimits.MaxPayloadBytes];
         var filled = 0;

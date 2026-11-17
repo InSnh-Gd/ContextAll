@@ -24,7 +24,10 @@ public sealed class IdentityAndDaemonTests
         Assert.True(started.Ok);
         Assert.True(File.Exists(Path.Combine(directory, "device.key")));
         Assert.True(File.Exists(Path.Combine(directory, "device.spki")));
-        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(directory, "device.key")));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(directory, "device.key")));
+        }
 
         var key = File.ReadAllBytes(Path.Combine(directory, "device.key"));
         File.Delete(Path.Combine(directory, "device.spki"));
@@ -202,10 +205,13 @@ public sealed class IdentityAndDaemonTests
         }, cts.Token);
         await listening.Task;
         var socketPath = LocalChannelClient.LinuxSocket(root);
-        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(socketPath));
-        Assert.Equal(
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
-            File.GetUnixFileMode(Path.GetDirectoryName(socketPath)!));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(socketPath));
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                File.GetUnixFileMode(Path.GetDirectoryName(socketPath)!));
+        }
 
         using var client = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         client.Connect(new UnixDomainSocketEndPoint(socketPath));
@@ -250,7 +256,7 @@ public sealed class IdentityAndDaemonTests
         var goodReader = new SocketFrames(good);
         Assert.Equal(FrameTypes.Snapshot, goodReader.Next().Type);
 
-        bad.Send(FrameCodec.Encode(CommandPayload("ab"), 76, 0, 0, 0).Value!);
+        bad.Send(FrameCodec.Encode(CommandPayload("ab"), 78, 0, 0, 0).Value!);
         Assert.True(WaitForClose(bad, 3000));
 
         good.Send(FrameCodec.Encode(CommandPayload("cd"), FrameTypes.SetDisplayName, 0, 0, 0).Value!);
@@ -305,19 +311,21 @@ public sealed class IdentityAndDaemonTests
     [Fact]
     public async Task A_windows_pipe_decodes_a_client_frame_and_a_second_serve_exits()
     {
+        var root = Temp();
+        var sid = "wd" + Guid.NewGuid().ToString("N");
         using var cts = new CancellationTokenSource();
         var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var serve = DaemonProcess.ServePipe("user-1", _ =>
+        var serve = DaemonProcess.ServePipe(sid, () => LanHost.CreateIsolated(root), _ =>
         {
             listening.TrySetResult();
             return Task.Delay(Timeout.Infinite, cts.Token);
         }, cts.Token);
-        await listening.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        using var client = new NamedPipeClientStream(".", DaemonProcess.PipeName("user-1"), PipeDirection.InOut, PipeOptions.Asynchronous);
-        await client.ConnectAsync(3000);
+        await listening.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        using var client = new NamedPipeClientStream(".", DaemonProcess.PipeName(sid), PipeDirection.InOut, PipeOptions.Asynchronous);
+        await client.ConnectAsync(5000);
         var snapshot = await ReadStream(client);
         Assert.Equal(FrameTypes.Snapshot, snapshot.Type);
-        Assert.Equal(1, await DaemonProcess.ServePipe("user-1", null, CancellationToken.None));
+        Assert.Equal(1, await DaemonProcess.ServePipe(sid, () => LanHost.CreateIsolated(root + "-b"), null, CancellationToken.None));
         cts.Cancel();
         await serve;
     }
@@ -443,6 +451,11 @@ public sealed class IdentityAndDaemonTests
     [Fact]
     public void The_appimage_launcher_sends_serve_to_the_host_and_other_args_to_the_cli()
     {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
         var root = Temp();
         var source = Path.Combine(RepoRoot(), "packaging/appimage/AppRun");
         var launcher = Path.Combine(root, "AppRun");

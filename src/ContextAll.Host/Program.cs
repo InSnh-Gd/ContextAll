@@ -16,7 +16,9 @@ public static class Program
             Out = Console.Out,
             Error = Console.Error,
             IsTerminal = !Console.IsInputRedirected,
-            RuntimeDirectory = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
+            RuntimeDirectory = OperatingSystem.IsWindows()
+                ? null
+                : Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
         };
         return await CliApp.Run(args, io).ConfigureAwait(false);
     }

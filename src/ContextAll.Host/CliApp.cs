@@ -16,7 +16,7 @@ public sealed record CliIo
 
 public static class CliMenu
 {
-    public static readonly string[] Actions = ["List devices", "Pair", "Clipboard", "Ask before save", "Send file"];
+    public static readonly string[] Actions = ["List devices", "Pair", "Connect endpoint", "Clipboard", "Ask before save", "Send file"];
 
     public static bool ShouldOpen(IReadOnlyList<string> args, bool stdinIsTerminal) =>
         args.Count == 0 && stdinIsTerminal;
@@ -33,7 +33,7 @@ public static class CliApp
 
         if (args is ["serve"])
         {
-            return await DaemonProcess.Serve(io.RuntimeDirectory, null, CancellationToken.None).ConfigureAwait(false);
+            return await DaemonProcess.ServeDefault(io.RuntimeDirectory, null, CancellationToken.None).ConfigureAwait(false);
         }
 
         var root = new RootCommand("ContextAll");
@@ -47,6 +47,16 @@ public static class CliApp
         var pair = new Command("pair", "Start pairing");
         pair.Arguments.Add(pairId);
         pair.SetAction(result => LocalClient.Pair(io, result.GetValue(pairId) ?? ""));
+        var connectEndpoint = new Argument<string>("endpoint");
+        var connectAlias = new Argument<string>("alias")
+        {
+            Arity = ArgumentArity.ZeroOrOne,
+            DefaultValueFactory = _ => "",
+        };
+        var connect = new Command("connect", "Connect directly to a peer endpoint");
+        connect.Arguments.Add(connectEndpoint);
+        connect.Arguments.Add(connectAlias);
+        connect.SetAction(result => LocalClient.Connect(io, result.GetValue(connectEndpoint) ?? "", result.GetValue(connectAlias)));
         var clipboardId = new Argument<string>("device-id");
         var clipboardFlag = new Argument<string>("switch");
         var clipboard = new Command("clipboard", "Set clipboard sync");
@@ -72,16 +82,21 @@ public static class CliApp
         reset.Options.Add(yes);
         var identity = new Command("identity", "Identity");
         identity.Subcommands.Add(reset);
-        reset.SetAction(result => IdentityReset.Run(
-            LinuxPaths.IdentityDirectory(null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
-            LinuxPaths.SettingsFile(null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
-            Path.Combine(LinuxPaths.StateDirectory(null, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)), "transfers"),
-            io.IsTerminal,
-            result.GetValue(yes),
-            operatorSaidYes: false));
+        reset.SetAction(result =>
+        {
+            var paths = HostPaths.ForThisPlatform();
+            return IdentityReset.Run(
+                paths.IdentityDirectory,
+                paths.SettingsFile,
+                paths.TransfersDirectory,
+                io.IsTerminal,
+                result.GetValue(yes),
+                operatorSaidYes: false);
+        });
         root.Subcommands.Add(serve);
         root.Subcommands.Add(device);
         root.Subcommands.Add(pair);
+        root.Subcommands.Add(connect);
         root.Subcommands.Add(clipboard);
         root.Subcommands.Add(ask);
         root.Subcommands.Add(file);

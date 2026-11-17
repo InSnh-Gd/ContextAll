@@ -13,6 +13,8 @@ public sealed class FrontClient
 
     public HashSet<string> Requests { get; } = [];
 
+    internal PendingClipboardPush? PendingPush { get; set; }
+
     public void Post(Frame frame)
     {
         var bytes = FrameMessages.Encode(frame);
@@ -39,4 +41,11 @@ public sealed class FrontClient
     }
 
     public void Complete() => outgoing.Writer.TryComplete();
+}
+
+internal sealed class PendingClipboardPush
+{
+    public required byte[] Buffer { get; init; }
+
+    public int Received { get; set; }
 }

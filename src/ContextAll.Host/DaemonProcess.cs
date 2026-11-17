@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Net.Sockets;
+using System.Runtime.Versioning;
 using ContextAll.Core;
 using ContextAll.Ipc;
 using ContextAll.Protocol;
@@ -10,7 +11,32 @@ public static class DaemonProcess
 {
     public static int Starts { get; private set; }
 
-    public static async Task<int> Serve(string? runtimeDirectory, Func<CancellationToken, Task>? onListening, CancellationToken cancellationToken)
+    public static Task<int> Serve(string? runtimeDirectory, Func<CancellationToken, Task>? onListening, CancellationToken cancellationToken) =>
+        Serve(runtimeDirectory, LanHost.TryCreate, onListening, cancellationToken);
+
+    public static Task<int> ServeDefault(string? runtimeDirectory, Func<CancellationToken, Task>? onListening, CancellationToken cancellationToken) =>
+        ServeDefault(runtimeDirectory, LanHost.TryCreate, onListening, cancellationToken);
+
+    internal static Task<int> ServeDefault(
+        string? runtimeDirectory,
+        Func<LanHost?> hostFactory,
+        Func<CancellationToken, Task>? onListening,
+        CancellationToken cancellationToken,
+        bool? windows = null,
+        string? userSid = null)
+    {
+        var server = ChannelServers.ForPlatform(
+            windows ?? OperatingSystem.IsWindows(),
+            runtimeDirectory,
+            userSid ?? LocalChannelClient.CurrentUserSid());
+        return server.ServeAsync(hostFactory, onListening, cancellationToken);
+    }
+
+    internal static async Task<int> Serve(
+        string? runtimeDirectory,
+        Func<LanHost?> hostFactory,
+        Func<CancellationToken, Task>? onListening,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(runtimeDirectory) || (File.Exists(runtimeDirectory) && !Directory.Exists(runtimeDirectory)))
         {
@@ -33,7 +59,7 @@ public static class DaemonProcess
             File.Delete(socketPath);
         }
 
-        var host = LanHost.TryCreate();
+        var host = hostFactory();
         if (host is null)
         {
             return 1;
@@ -67,33 +93,33 @@ public static class DaemonProcess
         return 0;
     }
 
-    public static async Task<int> ServePipe(string userSid, Func<CancellationToken, Task>? onListening, CancellationToken cancellationToken)
+    public static Task<int> ServePipe(string userSid, Func<CancellationToken, Task>? onListening, CancellationToken cancellationToken) =>
+        ServePipe(userSid, LanHost.TryCreate, onListening, cancellationToken);
+
+    internal static async Task<int> ServePipe(
+        string userSid,
+        Func<LanHost?> hostFactory,
+        Func<CancellationToken, Task>? onListening,
+        CancellationToken cancellationToken)
     {
-        NamedPipeServerStream listener;
-        try
-        {
-            listener = new NamedPipeServerStream(
-                PipeName(userSid),
-                PipeDirection.InOut,
-                1,
-                PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous);
-        }
-        catch (IOException)
-        {
-            return 1;
-        }
-        catch (UnauthorizedAccessException)
+        using var claimed = PipeInstance.TryClaim(userSid);
+        if (claimed is null)
         {
             return 1;
         }
 
-        using (listener)
+        var host = hostFactory();
+        if (host is null)
+        {
+            return 1;
+        }
+
+        try
         {
             Starts++;
+            host.Start(cancellationToken);
             ServiceNotify.Ready();
-            var desk = new DeskFront();
-            var accepting = AcceptPipes(listener, desk, cancellationToken);
+            var accepting = AcceptPipes(userSid, host, cancellationToken);
             await WaitForStop(onListening, cancellationToken).ConfigureAwait(false);
             try
             {
@@ -103,6 +129,10 @@ public static class DaemonProcess
             {
                 // The caller stopped the daemon.
             }
+        }
+        finally
+        {
+            host.Dispose();
         }
 
         return 0;
@@ -150,28 +180,80 @@ public static class DaemonProcess
         }
     }
 
-    static async Task AcceptPipes(NamedPipeServerStream listener, DeskFront desk, CancellationToken cancellationToken)
+    static async Task AcceptPipes(string userSid, LanHost host, CancellationToken cancellationToken)
     {
+        var pipeName = PipeName(userSid);
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                await listener.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-                await Pump(listener, desk.Snapshot, desk.Command, _ => { }, _ => { }, cancellationToken).ConfigureAwait(false);
-                if (listener.IsConnected)
+                NamedPipeServerStream listener;
+                try
                 {
-                    listener.Disconnect();
+                    listener = CreatePipeListener(pipeName, userSid);
                 }
+                catch (IOException)
+                {
+                    await Task.Delay(50, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return;
+                }
+
+                try
+                {
+                    await listener.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    await listener.DisposeAsync().ConfigureAwait(false);
+                    return;
+                }
+                catch (IOException)
+                {
+                    await listener.DisposeAsync().ConfigureAwait(false);
+                    continue;
+                }
+
+                _ = PumpOwned(listener, host.Snapshot, host.Command, host.Join, host.Leave, cancellationToken);
             }
         }
         catch (OperationCanceledException)
         {
             // The caller stopped the daemon.
         }
-        catch (IOException)
+    }
+
+    static NamedPipeServerStream CreatePipeListener(string pipeName, string userSid)
+    {
+        if (OperatingSystem.IsWindows())
         {
-            // The front end left.
+            return CreateWindowsPipe(pipeName, userSid);
         }
+
+        return new NamedPipeServerStream(
+            pipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous);
+    }
+
+    [SupportedOSPlatform("windows")]
+    static NamedPipeServerStream CreateWindowsPipe(string pipeName, string userSid)
+    {
+        var security = PipeAcl.CurrentUserOnly(userSid);
+        return NamedPipeServerStreamAcl.Create(
+            pipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous,
+            inBufferSize: 0,
+            outBufferSize: 0,
+            pipeSecurity: security);
     }
 
     static async Task PumpOwned(
@@ -257,29 +339,6 @@ public static class DaemonProcess
             {
                 // The caller stopped the daemon.
             }
-        }
-    }
-
-    sealed class DeskFront
-    {
-        readonly LocalDesk desk = new();
-
-        public Frame Snapshot() => desk.SnapshotFrame();
-
-        public void Command(FrontClient client, Frame frame)
-        {
-            if (!LocalFrameTypes.IsCommand(frame.Type))
-            {
-                return;
-            }
-
-            Frame result;
-            lock (desk)
-            {
-                result = desk.Handle(frame);
-            }
-
-            client.Post(result);
         }
     }
 
