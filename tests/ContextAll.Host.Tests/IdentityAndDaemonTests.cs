@@ -312,7 +312,7 @@ public sealed class IdentityAndDaemonTests
     public async Task A_windows_pipe_decodes_a_client_frame_and_a_second_serve_exits()
     {
         var root = Temp();
-        var sid = "wd" + Guid.NewGuid().ToString("N");
+        var sid = OperatingSystem.IsWindows() ? LocalChannelClient.CurrentUserSid() : "wd" + Guid.NewGuid().ToString("N");
         using var cts = new CancellationTokenSource();
         var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var serve = DaemonProcess.ServePipe(sid, () => LanHost.CreateIsolated(root), _ =>
@@ -413,7 +413,7 @@ public sealed class IdentityAndDaemonTests
         }
     }
 
-    [Fact]
+    [LinuxFact]
     public async Task Serve_reports_ready_without_a_wayland_display()
     {
         var wayland = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
@@ -445,6 +445,17 @@ public sealed class IdentityAndDaemonTests
         {
             Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", wayland);
             Environment.SetEnvironmentVariable("NOTIFY_SOCKET", notify);
+        }
+    }
+
+    sealed class LinuxFactAttribute : FactAttribute
+    {
+        public LinuxFactAttribute()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Skip = "systemd readiness requires Linux Unix datagram sockets.";
+            }
         }
     }
 
