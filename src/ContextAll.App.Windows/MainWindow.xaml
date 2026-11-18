@@ -3,5 +3,34 @@
     x:Class="ContextAll.App.Windows.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ListView x:Name="Devices" />
+    <Grid Padding="20" RowSpacing="12" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Text="剪贴板历史" Style="{StaticResource TitleTextBlockStyle}" />
+            <CheckBox Content="置顶" Checked="OnPinChanged" Unchecked="OnPinChanged" />
+        </StackPanel>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
+            <ToggleSwitch x:Name="HistoryEnabled" Header="保留历史" />
+            <NumberBox x:Name="RetentionDays" Header="保留天数" Minimum="1" Maximum="30" Value="7" />
+            <Button Content="保存" Click="OnSave" VerticalAlignment="Bottom" />
+        </StackPanel>
+        <TextBlock Grid.Row="2" x:Name="Status" />
+        <Expander Grid.Row="3" Header="共享组" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <StackPanel Spacing="6">
+                <TextBlock x:Name="GroupStatus" TextWrapping="Wrap" />
+                <TextBox x:Name="GroupDevice" PlaceholderText="已配对设备 ID" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="创建" Tag="create" Click="OnGroupCommand" />
+                    <Button Content="加入" Tag="join" Click="OnGroupCommand" />
+                    <Button Content="邀请" Tag="invite" Click="OnGroupCommand" />
+                    <Button Content="移除" Tag="remove" Click="OnGroupCommand" />
+                    <Button Content="退出" Tag="leave" Click="OnGroupCommand" />
+                </StackPanel>
+            </StackPanel>
+        </Expander>
+        <ListView Grid.Row="4" x:Name="HistoryEntries" SelectionMode="None" />
+        <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="8">
+            <Button Content="刷新" Click="OnRefresh" />
+            <Button x:Name="More" Content="更早" Click="OnMore" IsEnabled="False" />
+        </StackPanel>
+    </Grid>
 </Window>
