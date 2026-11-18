@@ -135,7 +135,7 @@ public sealed class NativeSessionBridge : IDisposable
             _ = SettingsStore.Start(createdPaths.SettingsFile, safeName);
 
             var digest = DeviceIds.Digest(identityMaterial.Spki);
-            var clip = new BridgeClipboardSource(OnHostClipboardText);
+            var clip = new BridgeClipboardSource(OnHostClipboardText, OnHostClipboardAttachment, Path.Combine(filesDirectory, "clipboard-shared"));
             var disc = new BridgeDiscovery(
                 identityMaterial.DeviceId,
                 digest,
@@ -260,6 +260,17 @@ public sealed class NativeSessionBridge : IDisposable
         }
 
         var body = decodedPayload.Value;
+        if (roundTripped.Type == FrameTypes.ConfirmClipboardWrite)
+        {
+            lock (sync)
+            {
+                if (body.TransferId is not { } writeId || body.Enabled is not bool accepted || clipboard is null)
+                    return EncodeCommandResult(body.RequestId, false, "invalid-clipboard-confirmation");
+                var confirmed = clipboard.Confirm(writeId, accepted);
+                return EncodeCommandResult(body.RequestId, confirmed, confirmed ? null : "unknown-clipboard-write");
+            }
+        }
+
         SessionHost? engine;
         lock (sync)
         {
@@ -276,14 +287,22 @@ public sealed class NativeSessionBridge : IDisposable
             }
         }
 
-        string? error;
+        CommandResultPayload result;
         lock (engine.Gate)
         {
-            error = engine.Apply(body, roundTripped.Type);
+            if (engine.ClipboardHistoryCommand(body, roundTripped.Type) is { } historyResult)
+            {
+                result = historyResult;
+            }
+            else
+            {
+                var error = engine.Apply(body, roundTripped.Type);
+                result = new CommandResultPayload(body.RequestId, error is null, error);
+            }
         }
 
         engine.FlushClipboard();
-        return EncodeCommandResult(body.RequestId, error is null, error);
+        return EncodeCommandResult(result);
     }
 
     public string ConnectEndpoint(string hostAddress, int port, string? alias)
@@ -463,7 +482,7 @@ public sealed class NativeSessionBridge : IDisposable
         EnqueueEvent(Encoding.UTF8.GetString(buffer.WrittenSpan));
     }
 
-    void OnHostClipboardText(string text)
+    void OnHostClipboardText(string text, string? writeId)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer))
@@ -471,6 +490,24 @@ public sealed class NativeSessionBridge : IDisposable
             writer.WriteStartObject();
             writer.WriteString("kind", "clipboard");
             writer.WriteString("text", text);
+            if (writeId is not null) writer.WriteString("writeId", writeId);
+            writer.WriteEndObject();
+        }
+
+        EnqueueEvent(Encoding.UTF8.GetString(buffer.WrittenSpan));
+    }
+
+    void OnHostClipboardAttachment(string mime, string name, string path, string writeId)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("kind", "clipboardAttachment");
+            writer.WriteString("mime", mime);
+            writer.WriteString("name", name);
+            writer.WriteString("path", path);
+            writer.WriteString("writeId", writeId);
             writer.WriteEndObject();
         }
 
@@ -618,9 +655,12 @@ public sealed class NativeSessionBridge : IDisposable
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    static string EncodeCommandResult(string requestId, bool ok, string? error)
+    static string EncodeCommandResult(string requestId, bool ok, string? error) =>
+        EncodeCommandResult(new CommandResultPayload(requestId, ok, error));
+
+    static string EncodeCommandResult(CommandResultPayload result)
     {
-        var bytes = ControlJson.Encode(new CommandResultPayload(requestId, ok, error), ProtocolJsonContext.Default.CommandResultPayload);
+        var bytes = ControlJson.Encode(result, ProtocolJsonContext.Default.CommandResultPayload);
         return bytes.Value is { Length: > 0 } utf8 ? Encoding.UTF8.GetString(utf8) : """{"requestId":"0","ok":false,"error":"encode"}""";
     }
 
@@ -746,8 +786,10 @@ public sealed class NativeSessionBridge : IDisposable
         public string DefaultDownloadDirectory { get; }
     }
 
-    sealed class BridgeClipboardSource(Action<string> onApplyText) : IClipboardSource
+    sealed class BridgeClipboardSource(Action<string, string?> onApplyText, Action<string, string, string, string> onAttachment, string directory) : IClipboardSource
     {
+        readonly ClipboardFileCache files = new(directory);
+        readonly System.Collections.Concurrent.ConcurrentDictionary<string, TaskCompletionSource<bool>> writes = new();
         public bool IsSupported => true;
         public event Action<string, byte[]>? ClipboardChanged;
         public event Action<string>? PlainText;
@@ -758,7 +800,43 @@ public sealed class NativeSessionBridge : IDisposable
             ClipboardChanged?.Invoke("text/plain;charset=utf-8", Encoding.UTF8.GetBytes(text));
         }
 
-        public void SetText(string text) => onApplyText(text);
+        public void SetText(string text) => onApplyText(text, null);
+
+        public ValueTask<bool> ApplyTextAsync(string text, CancellationToken ct = default) =>
+            ApplyAsync(writeId => onApplyText(text, writeId), ct);
+
+        public ValueTask<bool> ApplyAttachmentAsync(ClipboardAttachment attachment, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            var path = attachment.PublishFile(files.Directory);
+            files.Remember(attachment);
+            return ApplyAsync(writeId => onAttachment(attachment.Mime, attachment.Name, path, writeId), ct);
+        }
+
+        public bool Confirm(string id, bool accepted) => writes.TryRemove(id, out var write) && write.TrySetResult(accepted);
+
+        async ValueTask<bool> ApplyAsync(Action<string> publish, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var id = Guid.NewGuid().ToString("N");
+            var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            writes[id] = completion;
+            try
+            {
+                publish(id);
+                return await completion.Task.WaitAsync(TimeSpan.FromSeconds(3), ct).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+            finally
+            {
+                writes.TryRemove(id, out _);
+            }
+        }
+
+        public void CleanAttachmentCache(int retentionDays) => files.Cleanup(retentionDays);
 
         public Task SetClipboardAsync(string mime, byte[] data, CancellationToken ct = default)
         {
@@ -770,6 +848,7 @@ public sealed class NativeSessionBridge : IDisposable
 
         public void Dispose()
         {
+            foreach (var write in writes.Values) write.TrySetResult(false);
         }
     }
 
