@@ -47,6 +47,22 @@ internal partial class ShellJsonContext : JsonSerializerContext;
 
 public static class ShellPreferencesStore
 {
+    public static string WindowsPreferencesPath(string localAppData)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(localAppData);
+        return Path.Combine(localAppData, "ContextAll", "shell.json");
+    }
+
+    public static string ForThisPlatform()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return WindowsPreferencesPath(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        }
+
+        return PreferencesPath(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"));
+    }
+
     public static string PreferencesPath(string? configHome, string? userHome = null)
     {
         if (!string.IsNullOrWhiteSpace(configHome))

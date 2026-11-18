@@ -124,6 +124,9 @@ public sealed class DevicesViewModel : ViewModelBase
     public bool HasTrustedDevices => TrustedDevices.Count > 0;
     public bool HasDiscoveredDevices => DiscoveredDevices.Count > 0;
     public bool HasAnyDevices => _state.Devices.Count > 0;
+    public bool DiscoveringFirstDevice => IsLanReady && !HasAnyDevices && PairingPrompt is null;
+    public bool DiscoveringMoreDevices => IsLanReady && HasAnyDevices;
+    public bool ShowSelectionHint => HasAnyDevices && !HasSelectedDevice;
 
     public const long PairingPromptTimeoutMs = 60_000;
 
@@ -165,6 +168,68 @@ public sealed class DevicesViewModel : ViewModelBase
         : _state.LocalAddresses.Count > 0
             ? "运行中"
             : "待命";
+
+    public bool LanStatusIsError => !_state.Connected;
+
+    public bool LanStatusIsReady => IsLanReady;
+
+    public BadgeTone LanStatusTone => !_state.Connected
+        ? BadgeTone.Error
+        : IsLanReady ? BadgeTone.Primary : BadgeTone.Secondary;
+
+    public string PairingCodeText
+    {
+        get
+        {
+            var code = PairingPrompt?.Code;
+            return string.IsNullOrWhiteSpace(code)
+                ? string.Empty
+                : new string(code.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        }
+    }
+
+    public IReadOnlyList<PairingDigitGroup> PairingDigitGroups
+    {
+        get
+        {
+            var raw = PairingCodeText;
+            if (raw.Length == 0)
+            {
+                return [];
+            }
+
+            var groups = new List<PairingDigitGroup>();
+            for (var start = 0; start < raw.Length; start += 3)
+            {
+                var slice = raw[start..Math.Min(raw.Length, start + 3)];
+                groups.Add(new PairingDigitGroup
+                {
+                    Digits = slice.Select(c => c.ToString()).ToArray(),
+                });
+            }
+
+            return groups;
+        }
+    }
+
+    public string PairingPeerLabel => PairingPrompt is { } prompt
+        ? $"{prompt.DisplayName}（{ShellFormatting.ShortId(prompt.DeviceId)}）请求配对"
+        : string.Empty;
+
+    public string PairingCountdownText =>
+        $"请在 {PairingRemainingSeconds} 秒内完成确认";
+
+    public double PairingProgressMaximum
+    {
+        get
+        {
+            var remaining = PairingPrompt?.RemainingMilliseconds ?? 0;
+            return Math.Max(PairingPromptTimeoutMs, remaining);
+        }
+    }
+
+    public double PairingProgressValue =>
+        Math.Clamp(PairingPrompt?.RemainingMilliseconds ?? 0, 0, PairingProgressMaximum);
 
     public int MutualClipboardPeerCount => TrustedDevices.Count(d =>
         IsConnectedPresence(d.Presence) && d.ClipboardSync == true && d.RemoteClipboardSync == true);
@@ -337,6 +402,8 @@ public sealed class DevicesViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasTrustedDevices));
         OnPropertyChanged(nameof(HasDiscoveredDevices));
         OnPropertyChanged(nameof(HasAnyDevices));
+        OnPropertyChanged(nameof(DiscoveringFirstDevice));
+        OnPropertyChanged(nameof(DiscoveringMoreDevices));
         OnPropertyChanged(nameof(SelectedDeviceId));
         OnPropertyChanged(nameof(ConfirmingUnpairDeviceId));
         OnPropertyChanged(nameof(PairingPrompt));
@@ -350,6 +417,15 @@ public sealed class DevicesViewModel : ViewModelBase
         OnPropertyChanged(nameof(LanStatusTitle));
         OnPropertyChanged(nameof(LanStatusSubtitle));
         OnPropertyChanged(nameof(LanStatusPill));
+        OnPropertyChanged(nameof(LanStatusIsError));
+        OnPropertyChanged(nameof(LanStatusIsReady));
+        OnPropertyChanged(nameof(LanStatusTone));
+        OnPropertyChanged(nameof(PairingCodeText));
+        OnPropertyChanged(nameof(PairingDigitGroups));
+        OnPropertyChanged(nameof(PairingPeerLabel));
+        OnPropertyChanged(nameof(PairingCountdownText));
+        OnPropertyChanged(nameof(PairingProgressMaximum));
+        OnPropertyChanged(nameof(PairingProgressValue));
         OnPropertyChanged(nameof(MutualClipboardPeerCount));
         OnPropertyChanged(nameof(LocalClipboardEnabledCount));
         OnPropertyChanged(nameof(ClipboardQuickSummary));
@@ -473,6 +549,7 @@ public sealed class DevicesViewModel : ViewModelBase
 
     private void NotifyLayoutProperties()
     {
+        OnPropertyChanged(nameof(ShowSelectionHint));
         OnPropertyChanged(nameof(SelectedDevice));
         OnPropertyChanged(nameof(HasSelectedDevice));
         OnPropertyChanged(nameof(SelectedDeviceTrusted));

@@ -23,3 +23,13 @@
 状态文件是 `$XDG_STATE_HOME/contextall/clipboard.json`，未设置时用 `~/.local/state/contextall/clipboard.json`。字段有文本、时钟、版本向量、上次发出或应用的时钟、`appliedText` 和序号。没有重复窗口字段。写入用临时文件、刷新、再改名，文件模式 `0600`。
 
 文件缺失时照常开始监听，窗口为空。重启后剪贴板文本和文件里的文本相同，序号不变。文本既不等于已存文本也不等于 `appliedText` 时，序号加一，这是一次新的本地变更。
+
+## Android 后台自动采集
+
+Android 10+ 只有持有焦点或充当默认输入法才能读剪贴板；`READ_CLIPBOARD_IN_BACKGROUND` 是 `signature|role`，普通安装无法获得。为在界面后台采集，Android 侧可选地采用 KDE 风格的机制（ADR 0012），默认关闭，只在本机 `SharedPreferences` 持久化。
+
+前台服务 `LinkService` 持有日志监视器，逐行读取 `logcat`，把系统对本机记下的「剪贴板访问被拒」当作变化信号。只认 `Denying clipboard access to <包名>` 且包名匹配本机的一行（纯函数 `ClipboardDenialSignal`，测试：`ClipboardDenialSignalTest`），其它行忽略。同一信号进入 `ClipboardSignalWindow` 的冷却窗口（默认 600ms），窗口内忽略、超时后放行、切换开关时 `reset()` 清空（测试：`ClipboardSignalWindowTest`）。
+
+开关开启且去重窗口通过时，`ClipboardAutoCapture` 短暂打开透明 `ClipboardCaptureActivity`，等它真正取得窗口焦点才读一次当前剪贴板，非空文本发布到进程内 `ClipboardCaptureBus`，读后即 `finishAndRemoveTask()`。`ContextAllViewModel` 收集总线并走现有推送路径，复用非空与「最近一次远端应用文本」的防回声判断；它不注册输入法。
+
+「正在采集」（`capturing`）只有在三者同时成立时才是真：开关开启、`logcat` 流已经起来、且本机持有 `READ_LOGS`。`README_LOGS` 是 `development` 权限，普通安装拿不到系统拒绝日志时会如实显示「未生效」而不是「正在采集」。

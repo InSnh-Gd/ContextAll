@@ -24,7 +24,7 @@ public sealed class App : Application
     public void ApplyAppearanceOverrides(AppearanceModeOverride? mode, AccentSourceOverride? accent)
     {
         _appearance ??= new LinuxAppearanceCoordinator(
-            new DesktopLinuxAppearanceSource(),
+            DesktopPlatform.Current.CreateAppearanceSource(),
             variant => RequestedThemeVariant = variant,
             Resources,
             RunOnUiThread,
@@ -49,8 +49,14 @@ public sealed class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var icon = TryLoadAppIcon();
-            var preferencesPath = ShellPreferencesStore.PreferencesPath(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"));
+            var platform = DesktopPlatform.Current;
+            var preferencesPath = platform.ResolvePreferencesPath();
             var initialPrefs = ShellPreferencesStore.Load(preferencesPath);
+            if (!File.Exists(preferencesPath) && platform.PreferNativeTitleBar)
+            {
+                initialPrefs = initialPrefs with { UseNativeTitleBar = true };
+            }
+
             var materialTheme = Styles.OfType<MaterialTheme>().FirstOrDefault();
 
             var window = new MainWindow(initialPrefs, preferencesPath)
@@ -60,7 +66,7 @@ public sealed class App : Application
             desktop.MainWindow = window;
 
             _appearance = new LinuxAppearanceCoordinator(
-                new DesktopLinuxAppearanceSource(),
+                platform.CreateAppearanceSource(),
                 variant => RequestedThemeVariant = variant,
                 Resources,
                 RunOnUiThread,

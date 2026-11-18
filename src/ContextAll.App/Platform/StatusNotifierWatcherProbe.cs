@@ -15,6 +15,13 @@ public static class TrayClosePolicy
         trayEnabledInPreferences && watcherAvailable;
 }
 
+/// <summary>Windows NotifyIcon / Avalonia TrayIcon is always present, unlike Linux StatusNotifierWatcher.</summary>
+public sealed class AlwaysAvailableStatusNotifierProbe : IStatusNotifierProbe
+{
+    public Task<bool> IsWatcherAvailableAsync(CancellationToken ct = default) =>
+        Task.FromResult(true);
+}
+
 /// <summary>Queries the session D-Bus daemon for StatusNotifierWatcher ownership.</summary>
 public sealed class DbusStatusNotifierProbe : IStatusNotifierProbe
 {

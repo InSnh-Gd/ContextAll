@@ -33,6 +33,11 @@ public sealed class DeviceListItem
     public bool HasEndpoint => !string.IsNullOrWhiteSpace(Device.Endpoint);
 }
 
+public sealed class PairingDigitGroup
+{
+    public required IReadOnlyList<string> Digits { get; init; }
+}
+
 public sealed class DeviceHistoryItem
 {
     public required string Title { get; init; }

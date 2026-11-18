@@ -18,11 +18,12 @@ capability 的目录名就是文档文件名。
 | `functional-core` | [决策核心](specs/functional-core.md) | `engineering-baseline` |
 | `verification-gates` | [验证](specs/verification-gates.md) | `engineering-baseline` |
 | `lan-session` | [局域网会话](specs/lan-session.md) | `windows-daemon`、`codebase-deepening` |
-| `clipboard-sync` | [剪贴板同步](specs/clipboard-sync.md) | `linux-desktop-shell` |
+| `clipboard-sync` | [剪贴板同步](specs/clipboard-sync.md) | `linux-desktop-shell`、`android-kde-clipboard-auto-capture` |
 | `file-transfer` | [文件传输](specs/file-transfer.md) | `session-protocol` |
 | `local-operator` | [本地操作](specs/local-operator.md) | `windows-daemon`、`codebase-deepening` |
 | `framed-channel` | [成帧通道](specs/framed-channel.md) | `android-transport` |
-| `device-shell` | [图形外壳](specs/device-shell.md) | `linux-desktop-shell`、`android-lab-snapshot`、`codebase-deepening` |
+| `device-shell` | [图形外壳](specs/device-shell.md) | `linux-desktop-shell`、`android-lab-snapshot`、`codebase-deepening`、`polish-desktop-md3e-layout` |
+| `md3e-ui` | [Linux MD3E 外壳](specs/md3e-ui.md) | `md3e-ui-overhaul`、`polish-desktop-md3e-layout` |
 
 ## 待同步
 
@@ -42,3 +43,4 @@ capability 的目录名就是文档文件名。
 - [ADR 0008](adr/0008-linux-x11-clipboard-fallback.md)：Linux 守护进程剪贴板支持动态加载 libX11 级联回退。
 - [ADR 0009](adr/0009-android-lab-is-canned-snapshots.md)：Android 实验室是罐头快照，native 失败不回退。
 - [ADR 0010](adr/0010-linux-discovery-is-injected.md)：Linux 生产路径注入 `LinuxDiscovery`，`SessionHost` 不再并行跑内建信标。
+- [ADR 0011](adr/0011-shared-avalonia-desktop-shell.md)：Windows 图形外壳与 Linux 共用 Avalonia，不再使用 WinUI 3。

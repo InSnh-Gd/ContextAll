@@ -445,6 +445,7 @@ public sealed class TransfersViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(TextDraftUtf8Bytes));
                 OnPropertyChanged(nameof(TextDraftSegmentCount));
+                OnPropertyChanged(nameof(TextDraftPreviewText));
             }
         }
     }
@@ -452,11 +453,22 @@ public sealed class TransfersViewModel : ViewModelBase
     public bool TextDialogFromClipboard
     {
         get => _textDialogFromClipboard;
-        private set => SetField(ref _textDialogFromClipboard, value);
+        private set
+        {
+            if (SetField(ref _textDialogFromClipboard, value))
+            {
+                OnPropertyChanged(nameof(TextDialogTitle));
+            }
+        }
     }
 
     public int TextDraftUtf8Bytes => Encoding.UTF8.GetByteCount(_textContentDraft);
     public long TextDraftSegmentCount => ComputeSegmentCount(TextDraftUtf8Bytes);
+
+    public string TextDraftPreviewText =>
+        $"UTF-8 大小：{ShellFormatting.Bytes(TextDraftUtf8Bytes)}（{TextDraftUtf8Bytes:N0} B） · 共 {TextDraftSegmentCount} 个 64 KiB 分块";
+
+    public string TextDialogTitle => TextDialogFromClipboard ? "剪贴板内容存为文件发送" : "作为文本文件发送";
 
     public string? NoticeMessage
     {

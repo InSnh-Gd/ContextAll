@@ -33,6 +33,7 @@ public static class Program
         }
 
         await using var instance = acquisition.Instance;
+        DesktopPlatform.Current = LinuxDesktopPlatform.Instance;
         await LinuxCursorEnvironment.ApplyAsync().ConfigureAwait(false);
         return Build(selection.Backend).StartWithClassicDesktopLifetime(args);
     }

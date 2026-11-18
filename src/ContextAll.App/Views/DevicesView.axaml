@@ -50,19 +50,50 @@
               <TextBlock Text="核对 6 位配对码"
                          Classes="LabelMediumEmphasized"
                          Foreground="{DynamicResource OnPrimaryContainer}" />
-              <TextBlock x:Name="PairingPeerLabel"
+              <TextBlock Text="{Binding PairingPeerLabel}"
                          Classes="TitleSmall"
                          Foreground="{DynamicResource OnPrimaryContainer}"
                          TextWrapping="Wrap" />
-              <StackPanel x:Name="PairingCodeBoxesPanel"
-                          Orientation="Horizontal"
-                          Spacing="10"
-                          HorizontalAlignment="Left" />
+              <ItemsControl ItemsSource="{Binding PairingDigitGroups}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="10" />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PairingDigitGroup">
+                    <ItemsControl ItemsSource="{Binding Digits}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" Spacing="4" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Width="34"
+                                  Height="42"
+                                  CornerRadius="12"
+                                  Background="{DynamicResource Surface}"
+                                  BorderBrush="{DynamicResource OutlineVariant}"
+                                  BorderThickness="1">
+                            <TextBlock Text="{Binding}"
+                                       Classes="TitleLargeEmphasized MonoTabular"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource Primary}" />
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
               <StackPanel Spacing="4">
-                <c:LinearWavyProgressIndicator x:Name="PairingProgressBar"
+                <c:LinearWavyProgressIndicator Maximum="{Binding PairingProgressMaximum}"
+                                               Value="{Binding PairingProgressValue}"
                                                IndicatorBrush="{DynamicResource Primary}"
                                                TrackBrush="{DynamicResource SurfaceContainerHighest}" />
-                <TextBlock x:Name="PairingCountdownLabel"
+                <TextBlock Text="{Binding PairingCountdownText}"
                            Classes="BodySmall MonoTabular"
                            Foreground="{DynamicResource OnPrimaryContainer}" />
               </StackPanel>
@@ -93,7 +124,7 @@
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
                   <c:ExpressiveIconBadge x:Name="LanStatusIconBadge"
                                          Grid.Column="0"
-                                         Tone="Primary"
+                                         Tone="{Binding LanStatusTone}"
                                          ContainerSize="40"
                                          IconSize="20"
                                          IconGeometry="{DynamicResource Material_IconWifi}"
@@ -110,46 +141,16 @@
                   </StackPanel>
                   <Border x:Name="LanStatusPillBorder"
                           Grid.Column="2"
+                          Classes="StatusPill"
+                          Classes.Error="{Binding LanStatusIsError}"
+                          Classes.Ready="{Binding LanStatusIsReady}"
                           CornerRadius="16"
                           Padding="10,4"
-                          VerticalAlignment="Center"
-                          Background="{DynamicResource PrimaryContainer}">
+                          VerticalAlignment="Center">
                     <TextBlock x:Name="LanStatusPillText"
                                Text="{Binding LanStatusPill}"
-                               Classes="LabelSmallEmphasized"
-                               Foreground="{DynamicResource OnPrimaryContainer}" />
+                               Classes="LabelSmallEmphasized" />
                   </Border>
-                </Grid>
-              </c:ExpressiveGroupTile>
-
-              <c:ExpressiveGroupTile x:Name="ClipboardQuickCard"
-                                     Position="Single"
-                                     IsInteractive="True"
-                                     Padding="14,12">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                  <c:ExpressiveIconBadge Grid.Column="0"
-                                         Tone="Secondary"
-                                         ContainerSize="38"
-                                         IconSize="18"
-                                         IconGeometry="{DynamicResource Material_IconContentPaste}"
-                                         VerticalAlignment="Center" />
-                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="跨设备剪贴板"
-                               Classes="TitleSmall"
-                               Foreground="{DynamicResource OnSurface}" />
-                    <TextBlock Text="{Binding ClipboardQuickSummary}"
-                               Classes="BodySmall"
-                               Foreground="{DynamicResource OnSurfaceVariant}"
-                               TextWrapping="Wrap" />
-                  </StackPanel>
-                  <Button x:Name="QuickClipboardOpenButton"
-                          Grid.Column="2"
-                          Classes="FilledTonal"
-                          Content="推送文本"
-                          CornerRadius="20"
-                          Padding="12,6"
-                          VerticalAlignment="Center"
-                          Click="OnGlobalPushClipboardClicked" />
                 </Grid>
               </c:ExpressiveGroupTile>
 
@@ -185,12 +186,13 @@
                                                    IconSize="20"
                                                    VerticalAlignment="Center" />
                             <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
+                              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <TextBlock Text="{Binding Device.DisplayName}"
                                            Classes="TitleSmall"
                                            TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding Device.DisplayName}"
                                            VerticalAlignment="Center" />
-                                <Border CornerRadius="12"
+                                <Border Grid.Column="1" CornerRadius="12"
                                         Padding="8,2"
                                         VerticalAlignment="Center"
                                         Background="{DynamicResource SecondaryContainer}">
@@ -198,7 +200,7 @@
                                              Classes="LabelSmallEmphasized"
                                              Foreground="{DynamicResource OnSecondaryContainer}" />
                                 </Border>
-                              </StackPanel>
+                              </Grid>
                               <WrapPanel Orientation="Horizontal" IsVisible="{Binding IsTrusted}">
                                 <Border CornerRadius="10"
                                         Padding="8,2"
@@ -226,6 +228,8 @@
                               </WrapPanel>
                               <TextBlock Text="{Binding Device.Endpoint}"
                                          Classes="BodySmall MonoTabular"
+                                         TextTrimming="CharacterEllipsis"
+                                         ToolTip.Tip="{Binding Device.Endpoint}"
                                          IsVisible="{Binding HasEndpoint}" />
                               <TextBlock Text="{Binding Subtitle}"
                                          Classes="BodySmall MonoTabular"
@@ -274,12 +278,13 @@
                                                    IconSize="20"
                                                    VerticalAlignment="Center" />
                             <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
-                              <StackPanel Orientation="Horizontal" Spacing="8">
+                              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                 <TextBlock Text="{Binding Device.DisplayName}"
                                            Classes="TitleSmall"
                                            TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding Device.DisplayName}"
                                            VerticalAlignment="Center" />
-                                <Border CornerRadius="12"
+                                <Border Grid.Column="1" CornerRadius="12"
                                         Padding="8,2"
                                         VerticalAlignment="Center"
                                         Background="{DynamicResource SecondaryContainer}">
@@ -287,9 +292,11 @@
                                              Classes="LabelSmallEmphasized"
                                              Foreground="{DynamicResource OnSecondaryContainer}" />
                                 </Border>
-                              </StackPanel>
+                              </Grid>
                               <TextBlock Text="{Binding Subtitle}"
-                                         Classes="BodySmall MonoTabular" />
+                                         Classes="BodySmall MonoTabular"
+                                         TextTrimming="CharacterEllipsis"
+                                         ToolTip.Tip="{Binding Subtitle}" />
                             </StackPanel>
                             <Button Grid.Column="2"
                                     Classes="Outlined"
@@ -308,7 +315,7 @@
 
                 <!-- 3.A unified organic empty state when neither group has devices -->
                 <StackPanel x:Name="EmptyStatePanel"
-                            IsVisible="{Binding !HasAnyDevices}"
+                            IsVisible="{Binding DiscoveringFirstDevice}"
                             Spacing="14"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
@@ -322,15 +329,16 @@
                              Classes="TitleMediumEmphasized"
                              Foreground="{DynamicResource OnSurface}"
                              HorizontalAlignment="Center" />
-                  <TextBlock Text="请确保另一台设备已打开 ContextAll，并连在同一局域网下。"
+                  <TextBlock IsVisible="{Binding !ShowDetailPane}" Text="在同一局域网的另一台设备上打开 ContextAll。配对时请核对两端显示的 6 位配对码。"
                              Classes="BodySmall"
                              Foreground="{DynamicResource OnSurfaceVariant}"
                              TextWrapping="Wrap"
                              TextAlignment="Center"
                              MaxWidth="260" />
                   <c:ContainedLoadingIndicator x:Name="EmptyLoadingIndicator"
-                                               IsActive="True"
+                                               IsActive="{Binding DiscoveringFirstDevice}"
                                                HorizontalAlignment="Center" />
+                  <Button IsVisible="{Binding !ShowDetailPane}" Classes="FilledTonal" Content="手动连接" HorizontalAlignment="Center" Click="OnManualConnectClicked" />
                 </StackPanel>
               </Panel>
             </StackPanel>
@@ -340,9 +348,9 @@
           <StackPanel Grid.Row="3"
                       Orientation="Horizontal"
                       Spacing="10"
-                      IsVisible="{Binding HasAnyDevices}"
+                      IsVisible="{Binding DiscoveringMoreDevices}"
                       VerticalAlignment="Center">
-            <c:ContainedLoadingIndicator Width="28" Height="28" IsActive="True" />
+            <c:ContainedLoadingIndicator Width="28" Height="28" IsActive="{Binding DiscoveringMoreDevices}" />
             <TextBlock Text="正在搜索同一局域网下的其他设备…"
                        Classes="BodySmall"
                        Foreground="{DynamicResource OnSurfaceVariant}"
@@ -360,11 +368,16 @@
               BorderThickness="1"
               Padding="22">
         <Panel>
+          <StackPanel Spacing="12" VerticalAlignment="Center" MaxWidth="360" IsVisible="{Binding DiscoveringFirstDevice}">
+            <TextBlock Text="连接第一台设备" Classes="TitleMediumEmphasized" />
+            <TextBlock Text="将两台设备连到同一局域网，并在另一台设备上打开 ContextAll。选择发现的设备后，核对两端显示的 6 位配对码，再确认配对。" Classes="BodyMedium" TextWrapping="Wrap" />
+            <Button Classes="FilledTonal" Content="手动连接" HorizontalAlignment="Left" Click="OnManualConnectClicked" />
+          </StackPanel>
           <StackPanel x:Name="EmptyDetailPlaceholder"
                       Spacing="12"
                       HorizontalAlignment="Center"
                       VerticalAlignment="Center"
-                      IsVisible="{Binding !HasSelectedDevice}">
+                      IsVisible="{Binding ShowSelectionHint}">
             <c:ExpressiveIconBadge Tone="Secondary"
                                    ContainerSize="56"
                                    IconSize="26"

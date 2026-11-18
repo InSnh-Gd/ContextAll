@@ -44,7 +44,8 @@ public sealed class ThisDeviceViewModel : ViewModelBase
         HostProcessorCount = Environment.ProcessorCount;
         DisplayServerLabel = ResolveDisplayServerLabel(
             Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"),
-            Environment.GetEnvironmentVariable("DISPLAY"));
+            Environment.GetEnvironmentVariable("DISPLAY"),
+            OperatingSystem.IsWindows());
 
         _client.StateChanged += next => DispatchToUi(() => ApplyState(next));
     }
@@ -68,7 +69,15 @@ public sealed class ThisDeviceViewModel : ViewModelBase
     public bool TrayEnabled => _preferences.TrayEnabled;
     public bool UseNativeTitleBar => _preferences.UseNativeTitleBar;
     public AppearanceModeOverride AppearanceModeOverride => _preferences.EffectiveAppearanceMode;
+    public bool IsAppearanceFollowSystem => AppearanceModeOverride == AppearanceModeOverride.FollowSystem;
+    public bool IsAppearanceLight => AppearanceModeOverride == AppearanceModeOverride.Light;
+    public bool IsAppearanceDark => AppearanceModeOverride == AppearanceModeOverride.Dark;
     public AccentSourceOverride AccentSourceOverride => _preferences.EffectiveAccentSource;
+    public bool IsAccentFollowSystem => AccentSourceOverride == AccentSourceOverride.FollowSystem;
+    public bool IsAccentBrandBlue => AccentSourceOverride == AccentSourceOverride.BrandBlue;
+    public bool IsAccentForestTeal => AccentSourceOverride == AccentSourceOverride.ForestTeal;
+    public bool IsAccentSunsetTerracotta => AccentSourceOverride == AccentSourceOverride.SunsetTerracotta;
+    public bool IsAccentVioletIndigo => AccentSourceOverride == AccentSourceOverride.VioletIndigo;
     public bool IsRunningFromAppImage => _daemon.IsRunningFromAppImage;
     public string AutostartActionLabel => IsRunningFromAppImage ? "安装 AppImage 并启用开机自启" : "启用 systemd 用户开机自启";
 
@@ -155,6 +164,8 @@ public sealed class ThisDeviceViewModel : ViewModelBase
         private set => SetField(ref _statusIsError, value);
     }
 
+    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
+
     public void ApplyState(LocalShellState state)
     {
         _state = state;
@@ -184,8 +195,7 @@ public sealed class ThisDeviceViewModel : ViewModelBase
         _preferences = prefs;
         OnPropertyChanged(nameof(TrayEnabled));
         OnPropertyChanged(nameof(UseNativeTitleBar));
-        OnPropertyChanged(nameof(AppearanceModeOverride));
-        OnPropertyChanged(nameof(AccentSourceOverride));
+        NotifyAppearanceOverrides();
     }
 
     public void SetAppearanceModeOverride(AppearanceModeOverride mode)
@@ -271,6 +281,9 @@ public sealed class ThisDeviceViewModel : ViewModelBase
         DiagnosticsCopiedFeedback = "已复制到剪贴板";
         SetStatus("已复制本机与版本信息到剪贴板。", isError: false);
     }
+
+    public void NotifyDeviceIdCopied() =>
+        SetStatus("已复制设备编号。", isError: false);
 
     public async Task<bool> SaveDisplayNameAsync(CancellationToken ct = default)
     {
@@ -368,20 +381,8 @@ public sealed class ThisDeviceViewModel : ViewModelBase
         return $"v{version.Major}.{version.Minor}.{build}";
     }
 
-    private static string ResolveDisplayServerLabel(string? waylandDisplay, string? x11Display)
-    {
-        if (!string.IsNullOrWhiteSpace(waylandDisplay))
-        {
-            return $"Wayland ({waylandDisplay})";
-        }
-
-        if (!string.IsNullOrWhiteSpace(x11Display))
-        {
-            return $"X11 ({x11Display})";
-        }
-
-        return "未检测到图形显示会话";
-    }
+    public static string ResolveDisplayServerLabel(string? waylandDisplay, string? x11Display, bool isWindows = false) =>
+        DisplayServerLabels.Resolve(waylandDisplay, x11Display, isWindows);
 
     private void UpdatePreferences(ShellPreferences next)
     {
@@ -389,14 +390,28 @@ public sealed class ThisDeviceViewModel : ViewModelBase
         _savePreferences(next);
         OnPropertyChanged(nameof(TrayEnabled));
         OnPropertyChanged(nameof(UseNativeTitleBar));
-        OnPropertyChanged(nameof(AppearanceModeOverride));
-        OnPropertyChanged(nameof(AccentSourceOverride));
+        NotifyAppearanceOverrides();
         PreferencesChanged?.Invoke(next);
+    }
+
+    private void NotifyAppearanceOverrides()
+    {
+        OnPropertyChanged(nameof(AppearanceModeOverride));
+        OnPropertyChanged(nameof(IsAppearanceFollowSystem));
+        OnPropertyChanged(nameof(IsAppearanceLight));
+        OnPropertyChanged(nameof(IsAppearanceDark));
+        OnPropertyChanged(nameof(AccentSourceOverride));
+        OnPropertyChanged(nameof(IsAccentFollowSystem));
+        OnPropertyChanged(nameof(IsAccentBrandBlue));
+        OnPropertyChanged(nameof(IsAccentForestTeal));
+        OnPropertyChanged(nameof(IsAccentSunsetTerracotta));
+        OnPropertyChanged(nameof(IsAccentVioletIndigo));
     }
 
     private void SetStatus(string? message, bool isError)
     {
         StatusMessage = message;
         StatusIsError = isError;
+        OnPropertyChanged(nameof(HasStatusMessage));
     }
 }

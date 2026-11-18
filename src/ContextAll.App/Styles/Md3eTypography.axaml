@@ -116,4 +116,62 @@
     <Setter Property="FontFamily" Value="{DynamicResource Md3MonospaceFontFamily}" />
     <Setter Property="FontFeatures" Value="tnum" />
   </Style>
+
+  <Style Selector="TextBox.MonoTabular">
+    <Setter Property="FontFamily" Value="{DynamicResource Md3MonospaceFontFamily}" />
+    <Setter Property="FontFeatures" Value="tnum" />
+  </Style>
+
+  <Style Selector="Border.StatusPill">
+    <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+  </Style>
+  <Style Selector="Border.StatusPill TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+  </Style>
+  <Style Selector="Border.StatusPill.Error">
+    <Setter Property="Background" Value="{DynamicResource ErrorContainer}" />
+  </Style>
+  <Style Selector="Border.StatusPill.Error TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnErrorContainer}" />
+  </Style>
+  <Style Selector="Border.StatusPill.Ready">
+    <Setter Property="Background" Value="{DynamicResource PrimaryContainer}" />
+  </Style>
+  <Style Selector="Border.StatusPill.Ready TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnPrimaryContainer}" />
+  </Style>
+  <Style Selector="Border.StatusPill.Muted">
+    <Setter Property="Background" Value="{DynamicResource SurfaceContainerHighest}" />
+  </Style>
+  <Style Selector="Border.StatusPill.Muted TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnSurfaceVariant}" />
+  </Style>
+
+  <Style Selector="Border.GuideDot">
+    <Setter Property="Background" Value="{DynamicResource SurfaceContainerHighest}" />
+  </Style>
+  <Style Selector="Border.GuideDot.Active">
+    <Setter Property="Background" Value="{DynamicResource Primary}" />
+  </Style>
+
+  <Style Selector="Button.FilledTonal.GroupSelected">
+    <Setter Property="Background" Value="{DynamicResource Primary}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnPrimary}" />
+  </Style>
+  <Style Selector="Button.FilledTonal.GroupSelected /template/ Border#PART_StateLayer">
+    <Setter Property="Background" Value="{DynamicResource OnPrimary}" />
+  </Style>
+
+  <Style Selector="TextBox.Filled">
+    <Setter Property="MinHeight" Value="56" />
+    <Setter Property="Padding" Value="16,8" />
+    <Setter Property="CornerRadius" Value="4,4,0,0" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceContainerHighest}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource OnSurfaceVariant}" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+  </Style>
+  <Style Selector="TextBox.Filled:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource Primary}" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+  </Style>
 </Styles>

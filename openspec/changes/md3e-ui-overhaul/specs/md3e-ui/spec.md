@@ -8,11 +8,11 @@
 ### Requirement: Compiled AXAML Views and TemplatedControls
 All five shell views (`ShellRootView`, `DevicesView`, `ConnectionView`, `TransfersView`, `ThisDeviceView`) SHALL be authored as compiled `.axaml` (`x:DataType`) without imperative C# `LocalValue` visual overrides, and custom MD3E controls SHALL be implemented as `TemplatedControl`s styled via `Themes/*.axaml`.
 
-### Requirement: FerroUI Motion, Ripple, Wavy Progress, and Morphing Loader
-`ContextAll.App` SHALL provide dual-track `MotionScheme.Expressive` damped spring physics (`SpringSolver` with velocity handoff and `ReducedMotion`), bounded/unbounded `MaterialRipple`, `LinearWavyProgressIndicator`, and 7-polygon `ContainedLoadingIndicator`.
+### Requirement: FerroUI Motion, Ripple, Wavy Progress, Morphing Loader, and Shared-Axis Section Transitions
+`ContextAll.App` SHALL provide dual-track `MotionScheme.Expressive` damped spring physics (`SpringSolver` with velocity handoff and `ReducedMotion`), bounded/unbounded `MaterialRipple`, `LinearWavyProgressIndicator`, and 7-polygon `ContainedLoadingIndicator`. Peer section changes among 设备 / 连接 / 传输 / 本机 SHALL play an MD3E shared-axis X transition (30dp `DefaultSpatial` slide plus `DefaultEffects`/`FastEffects` opacity); `ReducedMotion` SHALL snap immediately.
 
 ### Requirement: Dual-Sheet Workspace, Clean Header with Real Brand Logo, and Real-IPC Device Alignment
-The shell SHALL use a borderless `SurfaceContainer` frame and `48dp` `IntegratedHeaderBar` showing the real `ContextAllLogo` + section title (without center telemetry pill), wrapping `28dp` rounded inner sheets (`g1-expressive-studio` and `g2-split-workbench` for `>= 840`; drill-in + `HorizontalFloatingToolbar` for `< 840`), global + detail broadcast-clarified clipboard push (`1.A`), real peer `DeviceSnapshotPayload` + `LocalShellState.History` details (`2.A`), and dynamic Trusted/Discovered grouping with a unified organic empty state (`3.A`).
+The shell SHALL use a borderless `SurfaceContainer` frame and `48dp` `IntegratedHeaderBar` showing the real `ContextAllLogo` + section title (without center telemetry pill), wrapping `28dp` rounded inner sheets (`g1-expressive-studio` and `g2-split-workbench` for `>= 840` with a fixed `96dp` `WideNavigationRail` and no expand/collapse toggle; drill-in + `HorizontalFloatingToolbar` for `< 840`), global + detail broadcast-clarified clipboard push (`1.A`), real peer `DeviceSnapshotPayload` + `LocalShellState.History` details (`2.A`), and dynamic Trusted/Discovered grouping with a unified organic empty state (`3.A`).
 
 ### Requirement: Lightweight Appearance Override Persistence
 `ShellPreferences` in `shell.json` (`0600`) SHALL support optional nullable `AppearanceModeOverride` (`FollowSystem`/`Light`/`Dark`) and `AccentSourceOverride` (`FollowSystem`/`BrandBlue`/preset), defaulting to following desktop Portal/GNOME/KDE settings while maintaining full backward compatibility.

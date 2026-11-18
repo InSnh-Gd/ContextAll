@@ -12,6 +12,22 @@ namespace ContextAll.App.Tests;
 public sealed class ThisDeviceTrayAndInstallTests
 {
     [Fact]
+    public void NotifyDeviceIdCopied_sets_non_error_status()
+    {
+        var vm = new ThisDeviceViewModel(
+            new FakeLocalDaemonClient(),
+            new FakeDaemonController(),
+            new ShellPreferences(),
+            _ => { });
+
+        vm.NotifyDeviceIdCopied();
+
+        Assert.Equal("已复制设备编号。", vm.StatusMessage);
+        Assert.False(vm.StatusIsError);
+        Assert.True(vm.HasStatusMessage);
+    }
+
+    [Fact]
     public void TrayClosePolicy_exits_when_no_watcher_even_if_tray_preference_is_enabled()
     {
         Assert.False(TrayClosePolicy.ShouldHideToTray(trayEnabledInPreferences: true, watcherAvailable: false));

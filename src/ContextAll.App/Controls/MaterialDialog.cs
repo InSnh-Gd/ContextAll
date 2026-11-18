@@ -199,6 +199,18 @@ public class MaterialDialog : TemplatedControl
             UpdateOpenState();
             ApplyDefaultFocus();
         }
+        else if (change.Property == BodyContentProperty)
+        {
+            if (change.OldValue is Control oldBody)
+            {
+                LogicalChildren.Remove(oldBody);
+            }
+
+            if (change.NewValue is Control newBody)
+            {
+                LogicalChildren.Add(newBody);
+            }
+        }
     }
 
     private void OnScrimPointerPressed(object? sender, PointerPressedEventArgs e) => InvokeScrimDismiss();

@@ -144,6 +144,31 @@ public sealed class Md3eMotionAndGeometryTests
     }
 
     [Fact]
+    public void ExpressiveSharedAxis_slides_forward_from_the_end_and_backward_from_the_start()
+    {
+        Assert.Equal(1, ExpressiveSharedAxis.Direction(ShellSection.Devices, ShellSection.Connection));
+        Assert.Equal(1, ExpressiveSharedAxis.Direction(ShellSection.Devices, ShellSection.ThisDevice));
+        Assert.Equal(-1, ExpressiveSharedAxis.Direction(ShellSection.Transfers, ShellSection.Connection));
+        Assert.Equal(0, ExpressiveSharedAxis.Direction(ShellSection.Devices, ShellSection.Devices));
+
+        var start = ExpressiveSharedAxis.Interpolate(direction: 1, spatialProgress: 0.0, incomingOpacity: 0.0, outgoingOpacity: 1.0);
+        Assert.Equal(ExpressiveSharedAxis.SlideDistance, start.IncomingOffset, 1e-9);
+        Assert.Equal(0.0, start.OutgoingOffset, 1e-9);
+        Assert.Equal(0.0, start.IncomingOpacity, 1e-9);
+        Assert.Equal(1.0, start.OutgoingOpacity, 1e-9);
+
+        var mid = ExpressiveSharedAxis.Interpolate(direction: 1, spatialProgress: 0.5, incomingOpacity: 0.4, outgoingOpacity: 0.6);
+        Assert.Equal(ExpressiveSharedAxis.SlideDistance * 0.5, mid.IncomingOffset, 1e-9);
+        Assert.Equal(-ExpressiveSharedAxis.SlideDistance * 0.5, mid.OutgoingOffset, 1e-9);
+
+        var end = ExpressiveSharedAxis.Interpolate(direction: -1, spatialProgress: 1.0, incomingOpacity: 1.0, outgoingOpacity: 0.0);
+        Assert.Equal(0.0, end.IncomingOffset, 1e-9);
+        Assert.Equal(ExpressiveSharedAxis.SlideDistance, end.OutgoingOffset, 1e-9);
+        Assert.Equal(1.0, end.IncomingOpacity, 1e-9);
+        Assert.Equal(0.0, end.OutgoingOpacity, 1e-9);
+    }
+
+    [Fact]
     public void MotionFrameDriver_does_not_inflate_submillisecond_frames_and_all_7_polygons_are_symmetric()
     {
         Assert.Equal(0.0, MotionFrameDriver.ComputeDeltaSeconds(TimeSpan.Zero));

@@ -5,7 +5,7 @@
 
 ContextAll 让同一局域网里的设备共享剪贴板，并把文件发给已信任的对端。设备之间直接走 QUIC，字节不经过云端中继。
 
-Linux、Windows、Android 三个平台的代码在同一个仓库里。目前 Linux 桌面端最完整：守护进程、命令行和 Avalonia 图形界面都已实现并有测试。Windows（WinUI 3）和 Android 端是图形外壳，还在开发中。
+Linux、Windows、Android 三个平台的代码在同一个仓库里。Linux 与 Windows 桌面共用一份 Avalonia MD3E 外壳（`ContextAll.App`）；Windows 入口是 Win32，不再使用 WinUI 3。Android 端是 Kotlin Compose 外壳。
 
 ## 功能
 
@@ -21,7 +21,7 @@ Linux、Windows、Android 三个平台的代码在同一个仓库里。目前 Li
 - [.NET SDK 10.0.401](global.json) 或更新的 10.0 功能版本
 - Linux 运行时需要 `libmsquic`（`libmsquic.so.2`）。没有它时 QUIC 监听失败，不会改用 TCP。
 - 图形界面需要 Wayland 会话。`WAYLAND_DISPLAY` 为空时界面退出并返回 1；守护进程和命令行不依赖 Wayland。
-- 构建 Android 端需要 JDK 21、Android SDK 与 Android NDK（用于 NativeAOT 编译 `libcontextall_native.so`）；构建 Windows 端需要在 Windows 上安装 Windows SDK。
+- 构建 Android 端需要 JDK 21、Android SDK 与 Android NDK（用于 NativeAOT 编译 `libcontextall_native.so`）。Windows 图形入口 `ContextAll.App.Windows` 目标 `net10.0`，在 Linux 上即可编译，不需要 Windows SDK；运行仍在 Windows 上。
 
 常用环境变量（均可选，未设置时使用系统默认值）：
 
@@ -124,9 +124,9 @@ src/
   ContextAll.Effects       执行效果，QUIC 链路
   ContextAll.Ipc           前端连接守护进程的本地通道客户端
   ContextAll.Host          守护进程和命令行（NativeAOT）
-  ContextAll.App           Linux Avalonia 视图
+  ContextAll.App           Linux/Windows 共用 Avalonia 视图
   ContextAll.App.Desktop   Linux 图形入口
-  ContextAll.App.Windows   WinUI 3 程序
+  ContextAll.App.Windows   Avalonia Win32 入口
   ContextAll.Native        Android NativeAOT JNI 引擎与 libmsquic 后端
 app/                       Android Kotlin Jetpack Compose 应用与 Gradle 构建
 scripts/                   E2E、NativeAOT 构建与 git 钩子脚本

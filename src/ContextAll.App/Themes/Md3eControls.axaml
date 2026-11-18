@@ -4,9 +4,9 @@
 
   <ControlTheme x:Key="{x:Type c:ExpressiveGroupTile}" TargetType="c:ExpressiveGroupTile">
     <Setter Property="Background" Value="{DynamicResource SurfaceContainerLow}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource OutlineVariant}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="Padding" Value="16,14" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="18,16" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Stretch" />
     <Setter Property="Transitions">
@@ -42,7 +42,44 @@
     </Style>
     <Style Selector="^:selected">
       <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Primary}" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="Md3eFilledTonalIconButtonTheme" TargetType="Button">
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="MinWidth" Value="40" />
+    <Setter Property="MinHeight" Value="40" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="PART_Root"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                ClipToBounds="True">
+          <Panel>
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center" />
+            <Border Name="PART_HoverLayer"
+                    Background="{DynamicResource OnSurfaceHover}"
+                    IsVisible="False"
+                    IsHitTestVisible="False" />
+          </Panel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#PART_HoverLayer">
+      <Setter Property="IsVisible" Value="True" />
     </Style>
   </ControlTheme>
 
@@ -50,9 +87,7 @@
     <Setter Property="Template">
       <ControlTemplate>
         <Border Background="Transparent">
-          <StackPanel Name="PART_ItemsPanel"
-                      Orientation="Horizontal"
-                      Spacing="{TemplateBinding Spacing}" />
+          <WrapPanel Name="PART_ItemsPanel" ItemSpacing="{TemplateBinding Spacing}" LineSpacing="{TemplateBinding Spacing}" />
         </Border>
       </ControlTemplate>
     </Setter>
@@ -237,44 +272,6 @@
     </Setter>
   </ControlTheme>
 
-  <ControlTheme x:Key="Md3eRailIconToggleTheme" TargetType="Button">
-    <Setter Property="Width" Value="44" />
-    <Setter Property="Height" Value="44" />
-    <Setter Property="MinWidth" Value="44" />
-    <Setter Property="MinHeight" Value="44" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="CornerRadius" Value="22" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="HorizontalContentAlignment" Value="Center" />
-    <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="Template">
-      <ControlTemplate>
-        <Border Name="PART_Root"
-                Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="{TemplateBinding CornerRadius}"
-                ClipToBounds="True">
-          <Panel>
-            <Border Name="PART_HoverLayer"
-                    Background="{DynamicResource OnSurfaceHover}"
-                    IsVisible="False" />
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              Padding="{TemplateBinding Padding}"
-                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
-                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
-          </Panel>
-        </Border>
-      </ControlTemplate>
-    </Setter>
-    <Style Selector="^:pointerover /template/ Border#PART_HoverLayer">
-      <Setter Property="IsVisible" Value="True" />
-    </Style>
-  </ControlTheme>
-
   <ControlTheme x:Key="Md3eRailFabTheme" TargetType="Button">
     <Setter Property="MinWidth" Value="56" />
     <Setter Property="Height" Value="56" />
@@ -383,72 +380,31 @@
   <ControlTheme x:Key="{x:Type c:WideNavigationRail}" TargetType="c:WideNavigationRail">
     <Setter Property="Background" Value="{DynamicResource SurfaceContainerLow}" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <DoubleTransition Property="Width" Duration="0:0:0.22" />
-      </Transitions>
-    </Setter>
     <Setter Property="Template">
       <ControlTemplate>
         <Border Background="{TemplateBinding Background}"
                 BorderBrush="{TemplateBinding BorderBrush}"
                 BorderThickness="{TemplateBinding BorderThickness}"
                 Padding="0,14">
-          <Grid RowDefinitions="Auto,Auto,*,Auto">
-            <StackPanel Grid.Row="0" Spacing="12" Margin="20,0" HorizontalAlignment="Stretch">
-              <Grid ColumnDefinitions="56,*" Height="44" HorizontalAlignment="Stretch">
-                <Button Name="PART_ToggleButton"
-                        Grid.Column="0"
-                        Theme="{StaticResource Md3eRailIconToggleTheme}"
+          <Grid RowDefinitions="Auto,*,Auto">
+            <Button Name="PART_FabButton"
+                    Grid.Row="0"
+                    Theme="{StaticResource Md3eRailFabTheme}"
+                    HorizontalAlignment="Left"
+                    Margin="20,0"
+                    Background="{DynamicResource PrimaryContainer}"
+                    Foreground="{DynamicResource OnPrimaryContainer}"
+                    ToolTip.Tip="{TemplateBinding FabText}">
+              <PathIcon Name="PART_FabIcon"
+                        Width="22"
+                        Height="22"
+                        Data="{DynamicResource Material_IconSend}"
+                        Foreground="{DynamicResource OnPrimaryContainer}"
                         HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        ToolTip.Tip="展开或收起导航栏">
-                  <PathIcon Name="PART_ToggleIcon"
-                            Width="20"
-                            Height="20"
-                            Data="{DynamicResource Material_IconMenu}"
-                            Foreground="{DynamicResource OnSurface}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
-                </Button>
-                <TextBlock Name="PART_BrandText"
-                           Grid.Column="1"
-                           Text="导航"
-                           Classes="TitleSmall"
-                           Foreground="{DynamicResource OnSurface}"
-                           Margin="12,0,0,0"
-                           VerticalAlignment="Center"
-                           IsVisible="False" />
-              </Grid>
+                        VerticalAlignment="Center" />
+            </Button>
 
-              <Button Name="PART_FabButton"
-                      Theme="{StaticResource Md3eRailFabTheme}"
-                      HorizontalAlignment="Left"
-                      Background="{DynamicResource PrimaryContainer}"
-                      Foreground="{DynamicResource OnPrimaryContainer}">
-                <Grid ColumnDefinitions="56,Auto" Height="56">
-                  <PathIcon Name="PART_FabIcon"
-                            Grid.Column="0"
-                            Width="22"
-                            Height="22"
-                            Data="{DynamicResource Material_IconSend}"
-                            Foreground="{DynamicResource OnPrimaryContainer}"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center" />
-                  <TextBlock Name="PART_FabLabel"
-                             Grid.Column="1"
-                             Text="{TemplateBinding FabText}"
-                             Classes="LabelLarge"
-                             FontWeight="SemiBold"
-                             Foreground="{DynamicResource OnPrimaryContainer}"
-                             Margin="12,0,20,0"
-                             VerticalAlignment="Center"
-                             IsVisible="False" />
-                </Grid>
-              </Button>
-            </StackPanel>
-
-            <StackPanel Grid.Row="2" Spacing="8" VerticalAlignment="Top" Margin="20,18,20,0">
+            <StackPanel Grid.Row="1" Spacing="8" VerticalAlignment="Top" Margin="20,18,20,0">
               <StackPanel.Styles>
                 <Style Selector="Button.RailNavItem:pointerover Border.RailNavHover">
                   <Setter Property="IsVisible" Value="True" />
@@ -637,7 +593,7 @@
             </StackPanel>
 
             <Border Name="PART_DaemonPill"
-                    Grid.Row="3"
+                    Grid.Row="2"
                     CornerRadius="16"
                     Padding="10,6"
                     Margin="8,0"
@@ -659,29 +615,6 @@
         </Border>
       </ControlTemplate>
     </Setter>
-
-    <Style Selector="^:expanded /template/ TextBlock#PART_BrandText">
-      <Setter Property="IsVisible" Value="True" />
-    </Style>
-    <Style Selector="^:expanded /template/ TextBlock#PART_FabLabel">
-      <Setter Property="IsVisible" Value="True" />
-    </Style>
-    <Style Selector="^:expanded /template/ Border#PART_NavDevicesPill, ^:expanded /template/ Border#PART_NavConnectionPill, ^:expanded /template/ Border#PART_NavTransfersPill, ^:expanded /template/ Border#PART_NavThisDevicePill">
-      <Setter Property="(Grid.ColumnSpan)" Value="2" />
-      <Setter Property="Height" Value="48" />
-      <Setter Property="CornerRadius" Value="24" />
-    </Style>
-    <Style Selector="^:expanded /template/ TextBlock#PART_NavDevicesLabel, ^:expanded /template/ TextBlock#PART_NavConnectionLabel, ^:expanded /template/ TextBlock#PART_NavTransfersLabel, ^:expanded /template/ TextBlock#PART_NavThisDeviceLabel">
-      <Setter Property="(Grid.Row)" Value="0" />
-      <Setter Property="(Grid.Column)" Value="1" />
-      <Setter Property="Margin" Value="12,0,16,0" />
-      <Setter Property="HorizontalAlignment" Value="Left" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-    <Style Selector="^:expanded /template/ Border#PART_DaemonPill">
-      <Setter Property="Margin" Value="20,0" />
-      <Setter Property="HorizontalAlignment" Value="Left" />
-    </Style>
 
     <Style Selector="^:daemon-connected /template/ Border#PART_DaemonPill">
       <Setter Property="Background" Value="{DynamicResource SecondaryContainer}" />
@@ -735,19 +668,6 @@
     <Style Selector="^:thisdevice /template/ TextBlock#PART_NavThisDeviceLabel">
       <Setter Property="Foreground" Value="{DynamicResource OnSurface}" />
       <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-
-    <Style Selector="^:expanded:devices /template/ TextBlock#PART_NavDevicesLabel">
-      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
-    </Style>
-    <Style Selector="^:expanded:connection /template/ TextBlock#PART_NavConnectionLabel">
-      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
-    </Style>
-    <Style Selector="^:expanded:transfers /template/ TextBlock#PART_NavTransfersLabel">
-      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
-    </Style>
-    <Style Selector="^:expanded:thisdevice /template/ TextBlock#PART_NavThisDeviceLabel">
-      <Setter Property="Foreground" Value="{DynamicResource OnSecondaryContainer}" />
     </Style>
   </ControlTheme>
 
@@ -952,6 +872,38 @@
             </Button>
           </Grid>
         </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type c:ContextAllLogo}" TargetType="c:ContextAllLogo">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform"
+                 Width="{TemplateBinding LogoSize}"
+                 Height="{TemplateBinding LogoSize}">
+          <Border Width="108"
+                  Height="108"
+                  CornerRadius="26"
+                  ClipToBounds="True">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#003547" Offset="0" />
+                <GradientStop Color="#006684" Offset="1" />
+              </LinearGradientBrush>
+            </Border.Background>
+            <Canvas Width="108" Height="108">
+              <Path Fill="#E0F7FF"
+                    Data="{x:Static c:ContextAllLogo.LeftDevicePathData}" />
+              <Path Fill="#70D2FF"
+                    Data="{x:Static c:ContextAllLogo.RightDevicePathData}" />
+              <Path Fill="#003547"
+                    Data="{x:Static c:ContextAllLogo.BadgeCirclePathData}" />
+              <Path Fill="White"
+                    Data="{x:Static c:ContextAllLogo.ArrowPathData}" />
+            </Canvas>
+          </Border>
+        </Viewbox>
       </ControlTemplate>
     </Setter>
   </ControlTheme>

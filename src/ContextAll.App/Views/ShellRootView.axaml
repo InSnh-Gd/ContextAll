@@ -22,7 +22,6 @@
                                 Grid.Column="0"
                                 DaemonStatusLabel="{Binding DaemonStatusLabel}"
                                 IsDaemonConnected="{Binding Connected}"
-                                IsExpanded="{Binding IsRailExpanded, Mode=TwoWay}"
                                 IsVisible="{Binding IsWideLayout}" />
 
           <Grid Grid.Column="1" RowDefinitions="Auto,*,Auto" Margin="18,14,18,16">
@@ -80,13 +79,16 @@
               </StackPanel>
             </Border>
 
-            <!-- Active section slot -->
-            <Grid Grid.Row="1">
-              <ContentControl x:Name="DevicesSlot" />
-              <ContentControl x:Name="ConnectionSlot" />
-              <ContentControl x:Name="TransfersSlot" />
-              <ContentControl x:Name="ThisDeviceSlot" />
-            </Grid>
+            <!-- Active section slot with MD3E shared-axis X transition -->
+            <c:SectionTransitionHost x:Name="SectionHost"
+                                     Grid.Row="1"
+                                     ClipToBounds="True"
+                                     SelectedSection="{Binding SelectedSection}">
+              <ContentControl x:Name="DevicesSlot" c:SectionTransitionHost.Section="Devices" />
+              <ContentControl x:Name="ConnectionSlot" c:SectionTransitionHost.Section="Connection" />
+              <ContentControl x:Name="TransfersSlot" c:SectionTransitionHost.Section="Transfers" />
+              <ContentControl x:Name="ThisDeviceSlot" c:SectionTransitionHost.Section="ThisDevice" />
+            </c:SectionTransitionHost>
 
             <!-- Narrow (< 840dp) bottom HorizontalFloatingToolbar -->
             <c:HorizontalFloatingToolbar x:Name="FloatingToolbarControl"

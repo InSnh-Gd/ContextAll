@@ -251,6 +251,8 @@ data class SessionSnapshotUi(
     val runtimePermissionsGranted: Boolean = false,
     val darkTheme: Boolean = false,
     val dynamicColor: Boolean = true,
+    val autoCaptureEnabled: Boolean = false,
+    val autoCaptureCapturing: Boolean = false,
     val currentTab: TopTab = TopTab.DEVICES,
     val selectedDeviceId: String? = null,
     val devices: List<PeerDeviceSnapshot> = emptyList(),

@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
-using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using ContextAll.App.Controls;
@@ -23,21 +22,11 @@ public partial class DevicesView : UserControl
     private Border? _listPane;
     private Border? _detailPane;
     private ExpressiveGroupTile? _lanStatusBannerTile;
-    private ExpressiveIconBadge? _lanStatusIconBadge;
-    private Border? _lanStatusPillBorder;
-    private TextBlock? _lanStatusPillText;
-    private ExpressiveGroupTile? _clipboardQuickCard;
-    private Border? _pairingBanner;
-    private TextBlock? _pairingPeerLabel;
-    private StackPanel? _pairingCodeBoxesPanel;
-    private LinearWavyProgressIndicator? _pairingProgressBar;
-    private TextBlock? _pairingCountdownLabel;
     private StackPanel? _emptyStatePanel;
     private MaterialDialog _unpairDialog = new();
     private MaterialDialog _clipboardDialog = new();
     private readonly TextBox _clipboardInput;
     private readonly TextBlock _clipboardCounterLabel;
-    private string _displayedPairingCode = string.Empty;
 
     public DevicesView()
         : this(new DevicesViewModel(IdleLocalChannel.Shared))
@@ -73,10 +62,6 @@ public partial class DevicesView : UserControl
         {
             _lanStatusBannerTile.Activated += () => NavigateToConnectionRequested?.Invoke();
         }
-        if (_clipboardQuickCard is not null)
-        {
-            _clipboardQuickCard.Activated += () => _vm.OpenClipboardModal();
-        }
 
         Md3eResourceLookup.TrackThemeChanges(this, RefreshAll);
         _vm.PropertyChanged += (_, _) => RefreshAll();
@@ -87,8 +72,8 @@ public partial class DevicesView : UserControl
 
     public bool IsListPaneVisible => _vm.ShowListPane;
     public bool IsDetailPaneVisible => _vm.ShowDetailPane;
-    public bool IsPairingBannerVisible => _pairingBanner?.IsVisible ?? false;
-    public string DisplayedPairingCode => _displayedPairingCode;
+    public bool IsPairingBannerVisible => _vm.PairingPrompt is not null;
+    public string DisplayedPairingCode => _vm.PairingCodeText;
     public bool IsClipboardModalVisible => _clipboardDialog.IsOpen;
     public bool IsEmptyStateVisible => _emptyStatePanel?.IsVisible ?? false;
     public MaterialDialog ClipboardDialog => _clipboardDialog;
@@ -99,15 +84,6 @@ public partial class DevicesView : UserControl
         _listPane = this.FindControl<Border>("ListPane");
         _detailPane = this.FindControl<Border>("DetailPane");
         _lanStatusBannerTile = this.FindControl<ExpressiveGroupTile>("LanStatusBannerTile");
-        _lanStatusIconBadge = this.FindControl<ExpressiveIconBadge>("LanStatusIconBadge");
-        _lanStatusPillBorder = this.FindControl<Border>("LanStatusPillBorder");
-        _lanStatusPillText = this.FindControl<TextBlock>("LanStatusPillText");
-        _clipboardQuickCard = this.FindControl<ExpressiveGroupTile>("ClipboardQuickCard");
-        _pairingBanner = this.FindControl<Border>("PairingBanner");
-        _pairingPeerLabel = this.FindControl<TextBlock>("PairingPeerLabel");
-        _pairingCodeBoxesPanel = this.FindControl<StackPanel>("PairingCodeBoxesPanel");
-        _pairingProgressBar = this.FindControl<LinearWavyProgressIndicator>("PairingProgressBar");
-        _pairingCountdownLabel = this.FindControl<TextBlock>("PairingCountdownLabel");
         _emptyStatePanel = this.FindControl<StackPanel>("EmptyStatePanel");
 
         if (this.FindControl<MaterialDialog>("UnpairDialogControl") is { } unpair)
@@ -137,6 +113,9 @@ public partial class DevicesView : UserControl
     private void OnGlobalPushClipboardClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         _vm.OpenClipboardModal();
 
+    private void OnManualConnectClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        NavigateToConnectionRequested?.Invoke();
+
     private async void OnAcceptPairingClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         await _vm.AcceptPairingAsync();
 
@@ -146,39 +125,7 @@ public partial class DevicesView : UserControl
     private void RefreshAll()
     {
         ApplyResponsiveColumns();
-        UpdateLanStatusBanner();
-        UpdatePairingBanner();
         UpdateModals();
-    }
-
-    private void UpdateLanStatusBanner()
-    {
-        var tone = !_vm.IsServiceConnected
-            ? BadgeTone.Error
-            : _vm.IsLanReady ? BadgeTone.Primary : BadgeTone.Secondary;
-
-        if (_lanStatusIconBadge is not null)
-        {
-            _lanStatusIconBadge.Tone = tone;
-        }
-
-        if (_lanStatusPillBorder is not null && _lanStatusPillText is not null)
-        {
-            var (bg, fg) = tone switch
-            {
-                BadgeTone.Error => (
-                    Md3eResourceLookup.ResolveBrush(this, "ErrorContainer", static p => p.ErrorContainer),
-                    Md3eResourceLookup.ResolveBrush(this, "OnErrorContainer", static p => p.OnErrorContainer)),
-                BadgeTone.Primary => (
-                    Md3eResourceLookup.ResolveBrush(this, "PrimaryContainer", static p => p.PrimaryContainer),
-                    Md3eResourceLookup.ResolveBrush(this, "OnPrimaryContainer", static p => p.OnPrimaryContainer)),
-                _ => (
-                    Md3eResourceLookup.ResolveBrush(this, "SecondaryContainer", static p => p.SecondaryContainer),
-                    Md3eResourceLookup.ResolveBrush(this, "OnSecondaryContainer", static p => p.OnSecondaryContainer)),
-            };
-            _lanStatusPillBorder.Background = bg;
-            _lanStatusPillText.Foreground = fg;
-        }
     }
 
     private void ApplyResponsiveColumns()
@@ -205,88 +152,6 @@ public partial class DevicesView : UserControl
             _dualSheetGrid.ColumnDefinitions[1].Width = showDetail
                 ? new GridLength(1, GridUnitType.Star)
                 : new GridLength(0);
-        }
-    }
-
-    private void UpdatePairingBanner()
-    {
-        var prompt = _vm.PairingPrompt;
-        if (_pairingBanner is not null)
-        {
-            _pairingBanner.IsVisible = prompt is not null;
-        }
-
-        if (prompt is null)
-        {
-            _displayedPairingCode = string.Empty;
-            _pairingCodeBoxesPanel?.Children.Clear();
-            return;
-        }
-
-        if (_pairingPeerLabel is not null)
-        {
-            _pairingPeerLabel.Text = $"{prompt.DisplayName}（{ShellFormatting.ShortId(prompt.DeviceId)}）请求配对";
-        }
-
-        var rawChars = prompt.Code.Where(c => !char.IsWhiteSpace(c)).ToArray();
-        _displayedPairingCode = new string(rawChars);
-
-        if (_pairingCodeBoxesPanel is not null)
-        {
-            _pairingCodeBoxesPanel.Children.Clear();
-            var boxBg = Md3eResourceLookup.ResolveBrush(this, "Surface", static p => p.Surface);
-            var boxBorder = Md3eResourceLookup.ResolveBrush(this, "OutlineVariant", static p => p.OutlineVariant);
-            var boxFg = Md3eResourceLookup.ResolveBrush(this, "Primary", static p => p.Primary);
-
-            var groupSize = 3;
-            for (var start = 0; start < rawChars.Length; start += groupSize)
-            {
-                var triplet = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 4,
-                };
-                var end = Math.Min(rawChars.Length, start + groupSize);
-                for (var idx = start; idx < end; idx++)
-                {
-                    var digitText = new TextBlock
-                    {
-                        Text = rawChars[idx].ToString(),
-                        Foreground = boxFg,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                    };
-                    digitText.Classes.Add("TitleLargeEmphasized");
-                    digitText.Classes.Add("MonoTabular");
-
-                    triplet.Children.Add(new Border
-                    {
-                        Width = 34,
-                        Height = 42,
-                        CornerRadius = new CornerRadius(12),
-                        Background = boxBg,
-                        BorderBrush = boxBorder,
-                        BorderThickness = new Thickness(1),
-                        Child = digitText,
-                    });
-                }
-
-                _pairingCodeBoxesPanel.Children.Add(triplet);
-            }
-        }
-
-        if (_pairingProgressBar is not null)
-        {
-            var maxMs = Math.Max((double)DevicesViewModel.PairingPromptTimeoutMs, prompt.RemainingMilliseconds);
-            _pairingProgressBar.Maximum = maxMs;
-            _pairingProgressBar.Value = Math.Clamp(prompt.RemainingMilliseconds, 0.0, maxMs);
-            _pairingProgressBar.IndicatorBrush = Md3eResourceLookup.ResolveBrush(this, "Primary", static p => p.Primary);
-            _pairingProgressBar.TrackBrush = Md3eResourceLookup.ResolveBrush(this, "SurfaceContainerHighest", static p => p.SurfaceContainerHighest);
-        }
-
-        if (_pairingCountdownLabel is not null)
-        {
-            _pairingCountdownLabel.Text = $"请在 {_vm.PairingRemainingSeconds} 秒内完成确认";
         }
     }
 

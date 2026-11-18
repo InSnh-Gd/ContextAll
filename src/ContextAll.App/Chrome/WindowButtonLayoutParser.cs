@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 
 namespace ContextAll.App.Chrome;
 
@@ -22,29 +25,146 @@ public sealed record WindowButtonLayout(
         [WindowActionButton.Minimize, WindowActionButton.Maximize, WindowActionButton.Close]);
 }
 
+public enum TitleBarStatus
+{
+    Application,
+    Pending,
+    System,
+    Fallback,
+}
+
 /// <summary>Computed window chrome state for CSD vs native SSD and corner geometry.</summary>
 public sealed record ChromeMode(
     WindowDecorations Decorations,
     bool ShowIntegratedHeader,
-    CornerRadius OuterCornerRadius);
+    CornerRadius OuterCornerRadius,
+    Thickness ChromeBorderThickness,
+    TitleBarStatus TitleBarStatus);
 
 /// <summary>Computes Avalonia window decorations and rounded vs square corner geometry.</summary>
 public static class ChromeModeState
 {
     public const double NormalCornerRadius = 16.0;
 
-    public static ChromeMode Compute(bool useNativeTitleBar, WindowState windowState, bool isTiled = false)
+    public static ChromeMode Compute(
+        bool useNativeTitleBar,
+        WindowState windowState,
+        bool isTiled = false,
+        bool systemTitleBarActive = false,
+        bool nativeDecorationsSettled = true)
     {
-        if (useNativeTitleBar)
+        if (useNativeTitleBar && systemTitleBarActive)
         {
-            return new ChromeMode(WindowDecorations.Full, false, new CornerRadius(0));
+            return new ChromeMode(WindowDecorations.Full, false, new CornerRadius(0), new Thickness(0), TitleBarStatus.System);
         }
 
         var squareCorners = isTiled || windowState is WindowState.Maximized or WindowState.FullScreen;
         return new ChromeMode(
             WindowDecorations.BorderOnly,
             true,
-            squareCorners ? new CornerRadius(0) : new CornerRadius(NormalCornerRadius));
+            squareCorners ? new CornerRadius(0) : new CornerRadius(NormalCornerRadius),
+            new Thickness(1),
+            !useNativeTitleBar ? TitleBarStatus.Application
+                : nativeDecorationsSettled ? TitleBarStatus.Fallback : TitleBarStatus.Pending);
+    }
+
+    /// <summary>
+    /// True when the platform is about to paint its own caption instead of the window manager.
+    /// Linux native title bar must not fall through to that Win32-style overlay.
+    /// </summary>
+    public static bool PlatformPaintsManagedCaption(object? platformImpl)
+    {
+        if (platformImpl is null)
+        {
+            return false;
+        }
+
+        var type = platformImpl.GetType();
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        if (type.GetProperty("NeedsManagedDecorations", flags)?.GetValue(platformImpl) is true)
+        {
+            return true;
+        }
+
+        var requested = type.GetProperty("RequestedDrawnDecorations", flags)?.GetValue(platformImpl);
+        if (requested is null)
+        {
+            return false;
+        }
+
+        const int titleBarBit = 4;
+        try
+        {
+            return (Convert.ToInt32(requested, CultureInfo.InvariantCulture) & titleBarBit) != 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// True when Avalonia has inserted its managed caption overlay into the window visual tree.
+    /// </summary>
+    public static bool VisualTreeHasManagedCaption(Visual? root)
+    {
+        if (root is null)
+        {
+            return false;
+        }
+
+        foreach (var visual in root.GetVisualDescendants())
+        {
+            var name = visual.GetType().Name;
+            if (name is "WindowDrawnDecorations" or "CaptionButtons")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Subscribes to the platform's drawn-decorations request callback when the member is available.
+    /// </summary>
+    public static bool TrySubscribeDrawnDecorationsChanged(object? platformImpl, Action callback)
+    {
+        if (platformImpl is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var type = platformImpl.GetType();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            var evt = type.GetEvent("DrawnDecorationsRequestChanged", flags);
+            if (evt is not null)
+            {
+                evt.AddEventHandler(platformImpl, callback);
+                return true;
+            }
+
+            var prop = type.GetProperty("DrawnDecorationsRequestChanged", flags);
+            if (prop is null || !prop.CanRead || !prop.CanWrite)
+            {
+                return false;
+            }
+
+            if (prop.GetValue(platformImpl) is not Action existing)
+            {
+                prop.SetValue(platformImpl, callback);
+                return true;
+            }
+
+            prop.SetValue(platformImpl, existing + callback);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }
 

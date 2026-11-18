@@ -11,6 +11,8 @@ import androidx.lifecycle.viewModelScope
 import app.contextall.BuildConfig
 import app.contextall.OutboundFile
 import app.contextall.ShellOperator
+import app.contextall.clipboard.ClipboardAutoCapture
+import app.contextall.clipboard.ClipboardCaptureBus
 import app.contextall.core.EndpointValidator
 import app.contextall.core.FrameTypes
 import app.contextall.lab.LabSnapshot
@@ -44,7 +46,9 @@ private data class ShellChrome(
     val darkTheme: Boolean = false,
     val dynamicColor: Boolean = true,
     val linkServiceRunning: Boolean = false,
-    val runtimePermissionsGranted: Boolean = false
+    val runtimePermissionsGranted: Boolean = false,
+    val autoCaptureEnabled: Boolean = false,
+    val autoCaptureCapturing: Boolean = false
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -94,7 +98,9 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
             darkTheme = ch.darkTheme,
             dynamicColor = ch.dynamicColor,
             linkServiceRunning = ch.linkServiceRunning,
-            runtimePermissionsGranted = ch.runtimePermissionsGranted
+            runtimePermissionsGranted = ch.runtimePermissionsGranted,
+            autoCaptureEnabled = ch.autoCaptureEnabled,
+            autoCaptureCapturing = ch.autoCaptureCapturing
         )
     }.stateIn(
         scope = viewModelScope,
@@ -132,6 +138,28 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         }
         clipboardManager?.addPrimaryClipChangedListener(clipChangedListener)
         LinkService.start(application)
+        ClipboardAutoCapture.setEnabled(application, ClipboardAutoCapture.enabled.value)
+        viewModelScope.launch {
+            ClipboardAutoCapture.enabled.collect { enabled ->
+                chrome.update { it.copy(autoCaptureEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            ClipboardAutoCapture.capturing.collect { capturing ->
+                chrome.update { it.copy(autoCaptureCapturing = capturing) }
+            }
+        }
+        viewModelScope.launch {
+            ClipboardCaptureBus.captures.collect { text ->
+                if (text.isEmpty() || text == lastAppliedRemoteClipboard) {
+                    lastAppliedRemoteClipboard = null
+                    return@collect
+                }
+                if (!useLab.value) {
+                    nativeController.pushClipboard(text)
+                }
+            }
+        }
         viewModelScope.launch {
             LinkService.isRunning.collect { running ->
                 chrome.update { it.copy(linkServiceRunning = running) }
@@ -164,6 +192,11 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setDynamicColor(enabled: Boolean) {
         chrome.update { it.copy(dynamicColor = enabled) }
+    }
+
+    fun setAutoCaptureEnabled(enabled: Boolean) {
+        ClipboardAutoCapture.setEnabled(getApplication(), enabled)
+        chrome.update { it.copy(autoCaptureEnabled = enabled) }
     }
 
     fun toggleLanWifiState() {

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 
 namespace ContextAll.App.Controls;
 
@@ -28,6 +29,15 @@ public class ExpressiveGroupTile : ContentControl
     public const double InnerMorphRadius = 12.0;
     public const double SingleHoverRadius = 22.0;
     public const double PressedRadius = 12.0;
+
+    public static readonly StyledProperty<double> GroupOuterRadiusProperty =
+        AvaloniaProperty.Register<ExpressiveGroupTile, double>(nameof(GroupOuterRadius), OuterRadius);
+
+    public double GroupOuterRadius
+    {
+        get => GetValue(GroupOuterRadiusProperty);
+        set => SetValue(GroupOuterRadiusProperty, value);
+    }
 
     public static readonly StyledProperty<GroupPosition> PositionProperty =
         AvaloniaProperty.Register<ExpressiveGroupTile, GroupPosition>(nameof(Position), GroupPosition.Single);
@@ -109,13 +119,30 @@ public class ExpressiveGroupTile : ContentControl
         set => Content = value;
     }
 
+    /// <summary>
+    /// True when the pointer source is a nested interactive control that should consume the click.
+    /// </summary>
+    public static bool IsNestedInteractiveControl(object? source)
+    {
+        for (var visual = source as Visual; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Button or ExpressiveSwitch or ExpressiveButtonGroup or TextBox)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Computes the positional and interactive M3E corner radii for a grouped item.</summary>
     public static CornerRadius ComputeCornerRadius(
         GroupPosition position,
         bool isHovered,
         bool isPressed,
         bool isSelected,
-        bool isInteractive = true)
+        bool isInteractive = true,
+        double outerRadius = OuterRadius)
     {
         if (isInteractive && isPressed)
         {
@@ -124,7 +151,7 @@ public class ExpressiveGroupTile : ContentControl
 
         if (isSelected)
         {
-            return new CornerRadius(OuterRadius);
+            return new CornerRadius(outerRadius);
         }
 
         var morph = isInteractive && isHovered;
@@ -132,10 +159,10 @@ public class ExpressiveGroupTile : ContentControl
 
         return position switch
         {
-            GroupPosition.First => new CornerRadius(OuterRadius, OuterRadius, inner, inner),
+            GroupPosition.First => new CornerRadius(outerRadius, outerRadius, inner, inner),
             GroupPosition.Middle => new CornerRadius(inner),
-            GroupPosition.Last => new CornerRadius(inner, inner, OuterRadius, OuterRadius),
-            _ => new CornerRadius(morph ? SingleHoverRadius : OuterRadius),
+            GroupPosition.Last => new CornerRadius(inner, inner, outerRadius, outerRadius),
+            _ => new CornerRadius(morph ? SingleHoverRadius : outerRadius),
         };
     }
 
@@ -152,7 +179,7 @@ public class ExpressiveGroupTile : ContentControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == PositionProperty ||
+        if (change.Property == GroupOuterRadiusProperty || change.Property == PositionProperty ||
             change.Property == IsInteractiveProperty ||
             change.Property == IsSelectedProperty ||
             change.Property == IsHoveredStateProperty ||
@@ -181,7 +208,9 @@ public class ExpressiveGroupTile : ContentControl
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (IsInteractive && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (IsInteractive &&
+            e.GetCurrentPoint(this).Properties.IsLeftButtonPressed &&
+            !IsNestedInteractiveControl(e.Source))
         {
             IsPressedState = true;
         }
@@ -192,7 +221,7 @@ public class ExpressiveGroupTile : ContentControl
         base.OnPointerReleased(e);
         var wasPressed = IsPressedState;
         IsPressedState = false;
-        if (IsInteractive && wasPressed)
+        if (IsInteractive && wasPressed && !IsNestedInteractiveControl(e.Source))
         {
             RaiseActivated();
         }
@@ -225,6 +254,6 @@ public class ExpressiveGroupTile : ContentControl
         PseudoClasses.Set(":selected", IsSelected);
         PseudoClasses.Set(":hovered", IsHoveredState);
         PseudoClasses.Set(":pressed", IsPressedState);
-        CornerRadius = ComputeCornerRadius(Position, IsHoveredState, IsPressedState, IsSelected, IsInteractive);
+        CornerRadius = ComputeCornerRadius(Position, IsHoveredState, IsPressedState, IsSelected, IsInteractive, GroupOuterRadius);
     }
 }

@@ -15,7 +15,7 @@ scripts/enable-hooks                                # sets core.hooksPath to .gi
 packaging/appimage/build.sh                         # builds artifacts/ContextAll.AppImage
 ```
 
-On Linux build `ContextAll.Tests.slnf` or `ContextAll.Linux.slnf`. Neither includes `ContextAll.App.Windows` (Windows only via `ContextAll.slnx`) or requires any `.NET Android` workload.
+On Linux build `ContextAll.Tests.slnf` or `ContextAll.Linux.slnf`. Neither includes `ContextAll.App.Windows` (also in `ContextAll.slnx`; `net10.0` Avalonia Win32, no Windows SDK required to compile) or requires any `.NET Android` workload.
 
 `TwoDaemonTests` in `ContextAll.Host.Tests` re-executes the test assembly under `unshare -Urn` with a veth pair, so it needs unprivileged user namespaces, `ip`, `ethtool`, and `libmsquic.so.2`. See `.github/workflows/test.yml` for the setup. The test project has a custom `Program.Main` for that re-exec (`two-daemon` argument).
 
@@ -28,7 +28,7 @@ Functional core, imperative shell:
 - `ContextAll.Effects`: `SharedEffects.Run` awaits each effect delegate in order and stops at the first failure. Also owns `QuicLink` (ALPN `contextall`, port 42461, one bidirectional stream; no TCP fallback when QUIC is unsupported). Shared by the desktop daemon and Android (ADR 0003).
 - `ContextAll.Host`: NativeAOT daemon + CLI (System.CommandLine, Spectre.Console menu, YamlDotNet with static generator). `serve` listens on `$XDG_RUNTIME_DIR/contextall/daemon.sock`; other commands are clients of that socket. Wayland clipboard is spoken directly (`WaylandWire.cs`), not through a library.
 - `ContextAll.Ipc`: front-end client for the local channel (Unix socket on Linux, named pipe on Windows). Front ends only reference Ipc, never Core.
-- `ContextAll.App` / `.App.Desktop`: Avalonia 12 UI, `UseWayland()`. `.App.Windows`: unpackaged WinUI 3.
+- `ContextAll.App` / `.App.Desktop`: Avalonia 12 MD3E UI shared by Linux (`UseWayland()` / `UseX11()`) and Windows. `.App.Windows`: Avalonia Win32 host (`net10.0`, no WinUI).
 - `ContextAll.Native` + `app/`: Android runs Kotlin Jetpack Compose (`app/`) bridging via `NativeSessionController` / `NativeSessionJni` to NativeAOT `libcontextall_native.so` (`SessionHost` + `AndroidMsQuicBackend` + `libmsquic.so`), with no local channel.
 
 Frame types 64+ are local commands/events (replies are type 96); receiving one over QUIC closes the session.

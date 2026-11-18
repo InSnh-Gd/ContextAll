@@ -22,9 +22,12 @@ public sealed partial class MainWindow : Window
     private bool _watcherAvailable;
     private bool _forceQuit;
     private bool _isDisposed;
+    private bool _nativeDecorationsSettled;
+    private bool _negotiatingNative;
+    private bool _drawnDecorationsHooked;
 
     public MainWindow()
-        : this(new ShellPreferences(), ShellPreferencesStore.PreferencesPath(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME")))
+        : this(new ShellPreferences(), DesktopPlatform.Current.ResolvePreferencesPath())
     {
     }
 
@@ -32,9 +35,10 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
+        var platform = DesktopPlatform.Current;
         _preferences = initialPreferences;
         _preferencesPath = preferencesPath;
-        _watcherProbe = new DbusStatusNotifierProbe();
+        _watcherProbe = platform.CreateTrayProbe();
         _daemonClient = new LocalDaemonConnection();
 
         Width = Math.Max(ShellLayout.MinimumWidth, _preferences.WindowWidth);
@@ -44,7 +48,7 @@ public sealed partial class MainWindow : Window
 
         _shellVm = new ShellViewModel(
             _daemonClient,
-            new LinuxDaemonController(),
+            platform.CreateDaemonController(),
             _preferences,
             SavePreferences,
             work => Dispatcher.UIThread.Post(work));
@@ -59,9 +63,11 @@ public sealed partial class MainWindow : Window
         _shellVm.PreferencesChanged += OnPreferencesChanged;
 
         SizeChanged += (_, e) => ApplyWidth(e.NewSize.Width);
+        WindowDecorationsTheme = null;
+
         PropertyChanged += (_, e) =>
         {
-            if (e.Property == WindowStateProperty)
+            if (e.Property == WindowStateProperty || e.Property == WindowDecorationMarginProperty)
             {
                 ApplyChromeMode();
             }
@@ -70,7 +76,7 @@ public sealed partial class MainWindow : Window
         ApplyChromeMode();
         ApplyWidth(Width);
 
-        Opened += (_, _) => _ = InitializeRuntimeAsync();
+        Opened += (_, _) => _ = OnOpenedAsync();
     }
 
     public event Action<bool>? TrayAvailabilityUpdated;
@@ -118,6 +124,69 @@ public sealed partial class MainWindow : Window
 
         PersistWindowDimensions();
         _ = DisposeClientAsync();
+    }
+
+    private async Task OnOpenedAsync()
+    {
+        HookDrawnDecorationsRequests();
+        if (_preferences.UseNativeTitleBar)
+        {
+            await NegotiateNativeTitleBarAsync();
+        }
+        else
+        {
+            _nativeDecorationsSettled = true;
+            ApplyChromeMode();
+        }
+
+        await InitializeRuntimeAsync();
+    }
+
+    private async Task NegotiateNativeTitleBarAsync()
+    {
+        if (_negotiatingNative)
+        {
+            return;
+        }
+
+        _negotiatingNative = true;
+        _nativeDecorationsSettled = false;
+        ApplyChromeMode();
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+        _nativeDecorationsSettled = true;
+        _negotiatingNative = false;
+        ApplyChromeMode();
+    }
+
+    private void HookDrawnDecorationsRequests()
+    {
+        if (_drawnDecorationsHooked || PlatformImpl is not { } impl)
+        {
+            return;
+        }
+
+        _drawnDecorationsHooked = ChromeModeState.TrySubscribeDrawnDecorationsChanged(
+            impl,
+            OnDrawnDecorationsRequestChanged);
+    }
+
+    private void OnDrawnDecorationsRequestChanged()
+    {
+        if (PaintsManagedCaption())
+        {
+            _negotiatingNative = false;
+            _nativeDecorationsSettled = true;
+            ApplyChromeMode();
+            return;
+        }
+
+        if (_negotiatingNative)
+        {
+            return;
+        }
+
+        _nativeDecorationsSettled = true;
+        ApplyChromeMode();
     }
 
     private async Task InitializeRuntimeAsync()
@@ -168,15 +237,23 @@ public sealed partial class MainWindow : Window
 
     private void OnPreferencesChanged(ShellPreferences next)
     {
+        var nativeToggledOn = next.UseNativeTitleBar && !_preferences.UseNativeTitleBar;
         _preferences = next;
-        ApplyChromeMode();
+        if (nativeToggledOn)
+        {
+            _ = NegotiateNativeTitleBarAsync();
+        }
+        else
+        {
+            ApplyChromeMode();
+        }
+
         (Application.Current as App)?.ApplyAppearanceOverrides(next.AppearanceModeOverride, next.AccentSourceOverride);
         _ = RefreshTrayWatcherAsync();
     }
 
     private void SavePreferences(ShellPreferences next)
     {
-        _preferences = next;
         ShellPreferencesStore.Save(_preferencesPath, next);
     }
 
@@ -187,22 +264,36 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SavePreferences(_preferences with
+        _preferences = _preferences with
         {
             WindowWidth = Bounds.Width,
             WindowHeight = Bounds.Height,
-        });
+        };
+        SavePreferences(_preferences);
     }
+
+    private bool PaintsManagedCaption() =>
+        ChromeModeState.PlatformPaintsManagedCaption(PlatformImpl)
+        || ChromeModeState.VisualTreeHasManagedCaption(this);
 
     private void ApplyChromeMode()
     {
-        var chrome = ChromeModeState.Compute(_preferences.UseNativeTitleBar, WindowState);
-        WindowDecorations = chrome.Decorations;
+        var wantNative = _preferences.UseNativeTitleBar;
+        var managedCaption = PaintsManagedCaption();
+        var systemTitleBarActive = wantNative && _nativeDecorationsSettled && !managedCaption;
+        var chrome = ChromeModeState.Compute(wantNative, WindowState,
+            systemTitleBarActive: systemTitleBarActive, nativeDecorationsSettled: _nativeDecorationsSettled);
+
+        WindowDecorationsTheme = null;
         ExtendClientAreaToDecorationsHint = false;
+        WindowDecorations = wantNative && (systemTitleBarActive || !_nativeDecorationsSettled)
+            ? WindowDecorations.Full
+            : WindowDecorations.BorderOnly;
         TransparencyLevelHint = chrome.ShowIntegratedHeader
             ? [WindowTransparencyLevel.Transparent]
             : [];
         Background = chrome.ShowIntegratedHeader ? Brushes.Transparent : null;
+        Padding = systemTitleBarActive ? WindowDecorationMargin : default;
         _rootView.ApplyChrome(chrome);
     }
 

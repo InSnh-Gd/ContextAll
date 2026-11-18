@@ -1,7 +1,9 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using ContextAll.App.Chrome;
 using ContextAll.App.Controls;
@@ -109,8 +111,7 @@ public sealed class Md3eControlsAndChromeTests
         var rail = new WideNavigationRail();
         var dock = new ExpressiveFloatingNavDock();
         Assert.Equal(WideNavigationRail.CompactWidth, rail.Width);
-        rail.IsExpanded = true;
-        Assert.Equal(WideNavigationRail.ExpandedWidth, rail.Width);
+        Assert.Null(typeof(WideNavigationRail).GetProperty("IsExpanded"));
 
         ShellSection? dockPicked = null;
         dock.SectionSelected += s => dockPicked = s;
@@ -167,6 +168,7 @@ public sealed class Md3eControlsAndChromeTests
         Assert.Equal(WindowDecorations.BorderOnly, csdNormal.Decorations);
         Assert.True(csdNormal.ShowIntegratedHeader);
         Assert.Equal(new CornerRadius(ChromeModeState.NormalCornerRadius), csdNormal.OuterCornerRadius);
+        Assert.Equal(new Thickness(1), csdNormal.ChromeBorderThickness);
 
         var csdMaximized = ChromeModeState.Compute(useNativeTitleBar: false, WindowState.Maximized);
         Assert.Equal(WindowDecorations.BorderOnly, csdMaximized.Decorations);
@@ -176,10 +178,53 @@ public sealed class Md3eControlsAndChromeTests
         var csdTiled = ChromeModeState.Compute(useNativeTitleBar: false, WindowState.Normal, isTiled: true);
         Assert.Equal(new CornerRadius(0), csdTiled.OuterCornerRadius);
 
-        var ssd = ChromeModeState.Compute(useNativeTitleBar: true, WindowState.Normal);
+        var ssd = ChromeModeState.Compute(
+            useNativeTitleBar: true,
+            WindowState.Normal,
+            systemTitleBarActive: true);
         Assert.Equal(WindowDecorations.Full, ssd.Decorations);
         Assert.False(ssd.ShowIntegratedHeader);
         Assert.Equal(new CornerRadius(0), ssd.OuterCornerRadius);
+        Assert.Equal(new Thickness(0), ssd.ChromeBorderThickness);
+
+        var nativeWithoutSystemBar = ChromeModeState.Compute(useNativeTitleBar: true, WindowState.Normal);
+        Assert.Equal(WindowDecorations.BorderOnly, nativeWithoutSystemBar.Decorations);
+        Assert.True(nativeWithoutSystemBar.ShowIntegratedHeader);
+        Assert.Equal(new Thickness(1), nativeWithoutSystemBar.ChromeBorderThickness);
+
+        Assert.False(ChromeModeState.PlatformPaintsManagedCaption(platformImpl: null));
+        Assert.True(ChromeModeState.PlatformPaintsManagedCaption(new FakeManagedCaptionPlatform { NeedsManagedDecorations = true }));
+        Assert.True(ChromeModeState.PlatformPaintsManagedCaption(new FakeManagedCaptionPlatform { RequestedDrawnDecorations = FakeDrawnParts.TitleBar }));
+        Assert.False(ChromeModeState.PlatformPaintsManagedCaption(new FakeManagedCaptionPlatform()));
+        Assert.False(ChromeModeState.VisualTreeHasManagedCaption(root: null));
+
+        var subscribed = 0;
+        var host = new FakeDrawnDecorationsHost();
+        Assert.True(ChromeModeState.TrySubscribeDrawnDecorationsChanged(host, () => subscribed++));
+        host.Raise();
+        Assert.Equal(1, subscribed);
+        Assert.False(ChromeModeState.TrySubscribeDrawnDecorationsChanged(platformImpl: null, () => { }));
+    }
+
+    [Flags]
+    private enum FakeDrawnParts
+    {
+        None = 0,
+        TitleBar = 4,
+    }
+
+    private sealed class FakeManagedCaptionPlatform
+    {
+        public bool NeedsManagedDecorations { get; set; }
+
+        public FakeDrawnParts RequestedDrawnDecorations { get; set; }
+    }
+
+    private sealed class FakeDrawnDecorationsHost
+    {
+        public event Action? DrawnDecorationsRequestChanged;
+
+        public void Raise() => DrawnDecorationsRequestChanged?.Invoke();
     }
 
     [Fact]
@@ -194,6 +239,10 @@ public sealed class Md3eControlsAndChromeTests
 
             Assert.IsAssignableFrom<TemplatedControl>(tile);
             Assert.False(tile.IsSet(TemplatedControl.BackgroundProperty));
+            Assert.Equal(new Thickness(0), tile.BorderThickness);
+            Assert.True(ExpressiveGroupTile.IsNestedInteractiveControl(new Button()));
+            Assert.True(ExpressiveGroupTile.IsNestedInteractiveControl(new ExpressiveSwitch()));
+            Assert.False(ExpressiveGroupTile.IsNestedInteractiveControl(new TextBlock()));
             Assert.IsAssignableFrom<TemplatedControl>(new ExpressiveSwitch());
             Assert.IsAssignableFrom<TemplatedControl>(new ExpressiveIconBadge());
             Assert.IsAssignableFrom<TemplatedControl>(new ExpressiveButtonGroup());
@@ -218,11 +267,13 @@ public sealed class Md3eControlsAndChromeTests
         });
 
     [Fact]
-    public void WideNavigationRail_collapses_and_expands_between_96_and_224_with_extended_fab() =>
+    public void WideNavigationRail_stays_compact_with_fab_and_has_no_expand_toggle() =>
         AvaloniaUiTestHost.RunOnUiThread(() =>
         {
             Assert.Equal(96.0, WideNavigationRail.CompactWidth);
-            Assert.Equal(224.0, WideNavigationRail.ExpandedWidth);
+            Assert.Null(typeof(WideNavigationRail).GetField(
+                "ExpandedWidth",
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance));
 
             var rail = new WideNavigationRail
             {
@@ -237,8 +288,12 @@ public sealed class Md3eControlsAndChromeTests
             rail.TriggerFab();
             Assert.Equal(1, fabTriggered);
 
-            rail.IsExpanded = true;
-            Assert.Equal(224.0, rail.Width);
+            var host = new Window { Width = 300, Height = 720, Content = rail };
+            host.Measure(new Size(300, 720));
+            host.Arrange(new Rect(0, 0, 300, 720));
+            Assert.DoesNotContain(
+                rail.GetVisualDescendants().OfType<Button>(),
+                b => b.Name == "PART_ToggleButton");
         });
 
     [Fact]
@@ -361,20 +416,37 @@ public sealed class Md3eControlsAndChromeTests
             var host = new Window { Width = 300, Height = 600 };
             var rail = new WideNavigationRail();
             host.Content = rail;
-            rail.Measure(new Size(224, 600));
-            rail.Arrange(new Rect(0, 0, 224, 600));
+            rail.Measure(new Size(WideNavigationRail.CompactWidth, 600));
+            rail.Arrange(new Rect(0, 0, WideNavigationRail.CompactWidth, 600));
             rail.ApplyTemplate();
 
             Assert.Equal(new Thickness(0), rail.BorderThickness);
-
-            var logo = new ContextAllLogo();
-            var shapes = logo.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().ToArray();
-            Assert.Equal(4, shapes.Length);
-            Assert.All(shapes, p => Assert.NotNull(p.Data));
         });
 
     [Fact]
-    public void WideNavigationRail_aligns_all_icons_on_single_48dp_vertical_axis_in_collapsed_and_expanded_states_and_resolves_all_four_section_icons() =>
+    public void ContextAllLogo_is_templated_control_and_apply_template_yields_four_android_paths() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var logo = new ContextAllLogo();
+            Assert.IsAssignableFrom<TemplatedControl>(logo);
+
+            var window = AvaloniaUiTestHost.ShowAndLayout(logo, 64, 64);
+            try
+            {
+                logo.ApplyTemplate();
+                AvaloniaUiTestHost.Layout(window, 64, 64);
+                var shapes = logo.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().ToArray();
+                Assert.Equal(4, shapes.Length);
+                Assert.All(shapes, p => Assert.NotNull(p.Data));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+    [Fact]
+    public void WideNavigationRail_aligns_all_icons_on_single_48dp_vertical_axis_and_resolves_all_four_section_icons() =>
         AvaloniaUiTestHost.RunOnUiThread(() =>
         {
             var rail = new WideNavigationRail
@@ -396,7 +468,6 @@ public sealed class Md3eControlsAndChromeTests
 
             var iconNames = new[]
             {
-                "PART_ToggleIcon",
                 "PART_FabIcon",
                 "PART_NavDevicesIcon",
                 "PART_NavConnectionIcon",
@@ -418,24 +489,15 @@ public sealed class Md3eControlsAndChromeTests
                 Assert.InRange(center.Value.X, 47.0, 49.0);
             }
 
-            rail.Transitions = null;
-            rail.IsExpanded = true;
-            host.UpdateLayout();
-            rail.Measure(new Size(WideNavigationRail.ExpandedWidth, 720));
-            rail.Arrange(new Rect(0, 0, WideNavigationRail.ExpandedWidth, 720));
-
-            foreach (var name in iconNames)
-            {
-                var icon = iconsByName[name];
-                var center = icon.TranslatePoint(new Point(icon.Bounds.Width / 2.0, icon.Bounds.Height / 2.0), rail);
-                Assert.NotNull(center);
-                Assert.InRange(center.Value.X, 47.0, 49.0);
-            }
+            Assert.DoesNotContain(
+                rail.GetVisualDescendants().OfType<Button>(),
+                b => b.Name == "PART_ToggleButton");
+            Assert.DoesNotContain(
+                rail.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Name is "PART_BrandText" or "PART_FabLabel");
 
             var labelNames = new[]
             {
-                "PART_BrandText",
-                "PART_FabLabel",
                 "PART_NavDevicesLabel",
                 "PART_NavConnectionLabel",
                 "PART_NavTransfersLabel",
@@ -450,12 +512,7 @@ public sealed class Md3eControlsAndChromeTests
             foreach (var name in labelNames)
             {
                 Assert.True(labelsByName.TryGetValue(name, out var label), $"Missing label {name}");
-                Assert.True(label!.IsVisible, $"Expected {name} visible when expanded");
-                var origin = label.TranslatePoint(new Point(0, 0), rail);
-                Assert.NotNull(origin);
-                Assert.True(
-                    origin.Value.X is >= 87.0 and <= 89.0,
-                    $"Expected expanded label '{name}' X in [87, 89], got {origin.Value.X:F2} (rail.Width={rail.Width:F1}, rail.Bounds.Width={rail.Bounds.Width:F1})");
+                Assert.True(label.IsVisible, $"Expected compact label {name} visible");
             }
 
             ShellSection? railPicked = null;
@@ -473,7 +530,7 @@ public sealed class Md3eControlsAndChromeTests
         });
 
     [Fact]
-    public void WideNavigationRail_nav_pills_are_never_clipped_by_outer_button_and_expand_into_single_unified_capsule() =>
+    public void WideNavigationRail_nav_pills_are_never_clipped_by_outer_button() =>
         AvaloniaUiTestHost.RunOnUiThread(() =>
         {
             var rail = new WideNavigationRail
@@ -538,19 +595,6 @@ public sealed class Md3eControlsAndChromeTests
                 Assert.Equal(new CornerRadius(16), pill.CornerRadius);
             }
 
-            rail.IsExpanded = true;
-            host.UpdateLayout();
-            rail.Measure(new Size(WideNavigationRail.ExpandedWidth, 720));
-            rail.Arrange(new Rect(0, 0, WideNavigationRail.ExpandedWidth, 720));
-
-            foreach (var pillName in pills)
-            {
-                var pill = bordersByName[pillName];
-                Assert.True(pill.Bounds.Width >= 180.0, $"Expected expanded {pillName} to span full nav row (>= 180dp), got {pill.Bounds.Width:F1}");
-                Assert.InRange(pill.Bounds.Height, 46.0, 50.0);
-                Assert.Equal(new CornerRadius(24), pill.CornerRadius);
-            }
-
             var toolbar = new HorizontalFloatingToolbar();
             var dockHost = new Window { Width = 520, Height = 200, Content = toolbar };
             dockHost.Measure(new Size(520, 200));
@@ -559,5 +603,127 @@ public sealed class Md3eControlsAndChromeTests
             {
                 Assert.InRange(dockBtn.Bounds.Height, 38.0, 44.0);
             }
+        });
+
+    [Fact]
+    public void SectionTransitionHost_plays_shared_axis_spring_and_snaps_when_reduced_motion() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var devices = new Border { Name = "DevicesPane", Width = 400, Height = 240 };
+            var connection = new Border { Name = "ConnectionPane", Width = 400, Height = 240 };
+            var transfers = new Border { Name = "TransfersPane", Width = 400, Height = 240 };
+            SectionTransitionHost.SetSection(devices, ShellSection.Devices);
+            SectionTransitionHost.SetSection(connection, ShellSection.Connection);
+            SectionTransitionHost.SetSection(transfers, ShellSection.Transfers);
+
+            var host = new SectionTransitionHost
+            {
+                Width = 400,
+                Height = 240,
+                SelectedSection = ShellSection.Devices,
+            };
+            host.Children.Add(devices);
+            host.Children.Add(connection);
+            host.Children.Add(transfers);
+
+            Assert.True(devices.IsVisible);
+            Assert.False(connection.IsVisible);
+            Assert.False(host.IsTransitioning);
+
+            host.SelectedSection = ShellSection.Connection;
+            Assert.True(host.IsTransitioning);
+            host.AdvanceTime(1.0 / 60.0);
+            var forward = host.Snapshot();
+            Assert.True(forward.IncomingOffset > 0.0);
+            Assert.True(forward.OutgoingOffset < 0.0);
+            Assert.True(forward.IncomingOpacity < 1.0);
+            Assert.True(connection.IsVisible);
+            Assert.True(devices.IsVisible);
+            Assert.True(connection.IsHitTestVisible);
+            Assert.False(devices.IsHitTestVisible);
+
+            host.AdvanceTime(1.0);
+            Assert.False(host.IsTransitioning);
+            Assert.True(connection.IsVisible);
+            Assert.False(devices.IsVisible);
+            Assert.Equal(1.0, connection.Opacity);
+            Assert.True(connection.IsHitTestVisible);
+
+            host.SelectedSection = ShellSection.Devices;
+            host.AdvanceTime(1.0 / 60.0);
+            var backward = host.Snapshot();
+            Assert.True(backward.IncomingOffset < 0.0);
+            Assert.True(backward.OutgoingOffset > 0.0);
+            host.AdvanceTime(1.0);
+            Assert.True(devices.IsVisible);
+            Assert.False(connection.IsVisible);
+
+            host.ReducedMotion = true;
+            host.SelectedSection = ShellSection.Transfers;
+            Assert.False(host.IsTransitioning);
+            Assert.True(transfers.IsVisible);
+            Assert.False(devices.IsVisible);
+            Assert.Equal(1.0, transfers.Opacity);
+        });
+
+    [Fact]
+    public void SectionTransitionHost_caches_section_bitmaps_and_skips_layout_rounding_during_shared_axis() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var devices = new Border { Width = 400, Height = 240 };
+            var connection = new Border { Width = 400, Height = 240 };
+            SectionTransitionHost.SetSection(devices, ShellSection.Devices);
+            SectionTransitionHost.SetSection(connection, ShellSection.Connection);
+
+            var host = new SectionTransitionHost
+            {
+                Width = 400,
+                Height = 240,
+                SelectedSection = ShellSection.Devices,
+            };
+            host.Children.Add(devices);
+            host.Children.Add(connection);
+
+            Assert.False(host.UseLayoutRounding);
+            Assert.IsType<BitmapCache>(devices.CacheMode);
+
+            host.SelectedSection = ShellSection.Connection;
+            Assert.True(host.IsTransitioning);
+            Assert.False(devices.UseLayoutRounding);
+            Assert.False(connection.UseLayoutRounding);
+            Assert.IsType<BitmapCache>(devices.CacheMode);
+            Assert.IsType<BitmapCache>(connection.CacheMode);
+
+            host.AdvanceTime(1.0);
+            Assert.False(host.IsTransitioning);
+            Assert.True(devices.UseLayoutRounding);
+            Assert.True(connection.UseLayoutRounding);
+            Assert.Null(devices.CacheMode);
+            Assert.IsType<BitmapCache>(connection.CacheMode);
+        });
+
+    [Fact]
+    public void SectionTransitionHost_hides_inactive_children_when_section_is_assigned_after_attach() =>
+        AvaloniaUiTestHost.RunOnUiThread(() =>
+        {
+            var devices = new Border();
+            var connection = new Border();
+            var transfers = new Border();
+            var thisDevice = new Border();
+            var host = new SectionTransitionHost { SelectedSection = ShellSection.Devices };
+            host.Children.Add(devices);
+            host.Children.Add(connection);
+            host.Children.Add(transfers);
+            host.Children.Add(thisDevice);
+
+            SectionTransitionHost.SetSection(devices, ShellSection.Devices);
+            SectionTransitionHost.SetSection(connection, ShellSection.Connection);
+            SectionTransitionHost.SetSection(transfers, ShellSection.Transfers);
+            SectionTransitionHost.SetSection(thisDevice, ShellSection.ThisDevice);
+
+            Assert.True(devices.IsVisible);
+            Assert.False(connection.IsVisible);
+            Assert.False(transfers.IsVisible);
+            Assert.False(thisDevice.IsVisible);
         });
 }

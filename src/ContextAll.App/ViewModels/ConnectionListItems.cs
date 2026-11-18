@@ -7,6 +7,8 @@ public sealed class EndpointRowItem
 {
     public required string Endpoint { get; init; }
 
+    public required GroupPosition Position { get; init; }
+
     public required ICommand CopyCommand { get; init; }
 }
 
@@ -34,4 +36,13 @@ public sealed class LanPresetItem
     public required string Preset { get; init; }
 
     public required ICommand ApplyCommand { get; init; }
+}
+
+public sealed record GuideStepItem(string Tag, string Title, string Description);
+
+public sealed class GuideDotItem
+{
+    public bool IsActive { get; init; }
+
+    public double DotWidth => IsActive ? 24 : 8;
 }

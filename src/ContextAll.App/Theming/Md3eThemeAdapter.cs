@@ -22,15 +22,16 @@ public static class Md3eThemeAdapter
 
         var brandFont = new FontFamily(snapshot.BrandFontFamily);
         var plainFont = new FontFamily(snapshot.PlainFontFamily);
-        var monoFont = new FontFamily(snapshot.MonospaceFontFamily);
-
-        resources["BrandFontFamily"] = brandFont;
-        resources["BodyFontFamily"] = plainFont;
-        resources["Md3BrandFontFamily"] = brandFont;
-        resources["Md3PlainFontFamily"] = plainFont;
-        resources["Md3UiFontFamily"] = new FontFamily(snapshot.UiFontFamily);
-        resources["Md3MonospaceFontFamily"] = monoFont;
-        resources["ContentControlThemeFontFamily"] = plainFont;
+        var activeResources = new ResourceDictionary
+        {
+            ["BrandFontFamily"] = brandFont,
+            ["BodyFontFamily"] = plainFont,
+            ["Md3BrandFontFamily"] = brandFont,
+            ["Md3PlainFontFamily"] = plainFont,
+            ["Md3UiFontFamily"] = new FontFamily(snapshot.UiFontFamily),
+            ["Md3MonospaceFontFamily"] = new FontFamily(snapshot.MonospaceFontFamily),
+            ["ContentControlThemeFontFamily"] = plainFont,
+        };
 
         var lightDict = CreateVariantDictionary(lightPalette);
         var darkDict = CreateVariantDictionary(darkPalette);
@@ -40,36 +41,54 @@ public static class Md3eThemeAdapter
 
         if (materialTheme is not null)
         {
-            ApplyToMaterialTheme(materialTheme, brandFont, plainFont, lightPalette, darkPalette);
+            ApplyToMaterialTheme(materialTheme, brandFont, plainFont, lightDict, darkDict);
         }
 
         // Mirror active variant tokens at root dictionary level for backwards-compatible lookups.
-        var activePalette = snapshot.Variant == ThemeVariant.Dark ? darkPalette : lightPalette;
-        activePalette.ApplyTo(resources, uiFontFamily: null);
-        resources["ContentControlThemeFontFamily"] = plainFont;
-        PopulateDictionary(resources, activePalette);
+        var activeDict = snapshot.Variant == ThemeVariant.Dark ? darkDict : lightDict;
+        activeResources.SetItems(activeDict);
+        SetItems(resources, activeResources);
+    }
+
+    internal static bool TryApplyActiveVariant(IResourceDictionary resources, ThemeVariant variant)
+    {
+        var key = variant == ThemeVariant.Dark ? ThemeVariant.Dark : ThemeVariant.Light;
+        if (!resources.ThemeDictionaries.TryGetValue(key, out var provider) || provider is not ResourceDictionary active)
+        {
+            return false;
+        }
+
+        SetItems(resources, active);
+        return true;
     }
 
     private static void ApplyToMaterialTheme(
         MaterialTheme materialTheme,
         FontFamily brandFont,
         FontFamily plainFont,
-        Md3ePalette lightPalette,
-        Md3ePalette darkPalette)
+        ResourceDictionary lightDict,
+        ResourceDictionary darkDict)
     {
-        materialTheme.Resources["BrandFontFamily"] = brandFont;
-        materialTheme.Resources["BodyFontFamily"] = plainFont;
-        materialTheme.Resources["ContentControlThemeFontFamily"] = plainFont;
-        materialTheme.Resources.ThemeDictionaries[ThemeVariant.Light] = CreateVariantDictionary(lightPalette);
-        materialTheme.Resources.ThemeDictionaries[ThemeVariant.Dark] = CreateVariantDictionary(darkPalette);
+        SetItems(materialTheme.Resources, new ResourceDictionary
+        {
+            ["BrandFontFamily"] = brandFont,
+            ["BodyFontFamily"] = plainFont,
+            ["ContentControlThemeFontFamily"] = plainFont,
+        });
+        var materialLight = new ResourceDictionary();
+        materialLight.SetItems(lightDict);
+        var materialDark = new ResourceDictionary();
+        materialDark.SetItems(darkDict);
+        materialTheme.Resources.ThemeDictionaries[ThemeVariant.Light] = materialLight;
+        materialTheme.Resources.ThemeDictionaries[ThemeVariant.Dark] = materialDark;
 
-        UpdateColorMergedDictionaries(materialTheme.Resources, lightPalette, darkPalette);
+        UpdateColorMergedDictionaries(materialTheme.Resources, lightDict, darkDict);
     }
 
     private static void UpdateColorMergedDictionaries(
         IResourceDictionary root,
-        Md3ePalette lightPalette,
-        Md3ePalette darkPalette)
+        ResourceDictionary lightResources,
+        ResourceDictionary darkResources)
     {
         foreach (var merged in root.MergedDictionaries)
         {
@@ -85,18 +104,33 @@ public static class Md3eThemeAdapter
                     existingLight is IResourceDictionary lightDict &&
                     lightDict.ContainsKey("Primary"))
                 {
-                    PopulateDictionary(lightDict, lightPalette);
+                    SetItems(lightDict, lightResources);
                 }
 
                 if (child.ThemeDictionaries.TryGetValue(ThemeVariant.Dark, out var existingDark) &&
                     existingDark is IResourceDictionary darkDict &&
                     darkDict.ContainsKey("Primary"))
                 {
-                    PopulateDictionary(darkDict, darkPalette);
+                    SetItems(darkDict, darkResources);
                 }
             }
 
-            UpdateColorMergedDictionaries(child, lightPalette, darkPalette);
+            UpdateColorMergedDictionaries(child, lightResources, darkResources);
+        }
+    }
+
+    private static void SetItems(IResourceDictionary target, ResourceDictionary values)
+    {
+        if (target is ResourceDictionary dictionary)
+        {
+            dictionary.SetItems(values);
+        }
+        else
+        {
+            foreach (var (key, value) in values)
+            {
+                target[key] = value;
+            }
         }
     }
 
@@ -104,6 +138,8 @@ public static class Md3eThemeAdapter
     {
         var dict = new ResourceDictionary();
         PopulateDictionary(dict, palette);
+        dict["SystemAccentColor"] = palette.Primary;
+        dict["SystemAccentColorBrush"] = dict["Primary"];
         return dict;
     }
 

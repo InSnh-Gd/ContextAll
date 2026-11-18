@@ -14,6 +14,26 @@ public sealed class ConnectionViewModel : ViewModelBase
     public const int DefaultQuicPort = 42461;
     public const int GuideStepCount = 4;
 
+    public static readonly IReadOnlyList<GuideStepItem> GuideSteps =
+    [
+        new(
+            "无需账号 · 本地直连",
+            "1. 同网直连，不经云端",
+            "设备连入同一局域网后即可直接建立 QUIC 加密连接，文字和文件都在本地传输，不经过任何云端服务器。"),
+        new(
+            "双向确认 · 安全信任",
+            "2. 6 位配对码双向核对",
+            "首次连接新设备时，双方屏幕会显示同一组 6 位配对码。核对无误并在两端确认，即可建立长期信任。"),
+        new(
+            "按设备控制 · 边界清晰",
+            "3. 按设备控制同步与保存策略",
+            "在「设备」页可为每台已配对设备单独开启或关闭剪贴板同步，也能自由选择收到文件时先确认或直接保存。"),
+        new(
+            "有序排队 · 分块校验",
+            "4. 多文件排队与分块校验",
+            "在「传输」页一次选择或拖入多个文件时，系统会按设备顺序依次发送，并逐块完成 SHA-256 完整性校验。"),
+    ];
+
     public static readonly IReadOnlyList<string> LanPresets =
     [
         "192.168.1.",
@@ -63,6 +83,9 @@ public sealed class ConnectionViewModel : ViewModelBase
                 await StartPairingAsync(deviceId);
             }
         });
+        NextGuideStepCommand = new ShellRelayCommand(NextGuideStep);
+        PreviousGuideStepCommand = new ShellRelayCommand(PreviousGuideStep);
+        CloseGuideCommand = new ShellRelayCommand(CloseGuide);
     }
 
     public event Action<string>? CopyRequested;
@@ -72,6 +95,12 @@ public sealed class ConnectionViewModel : ViewModelBase
     public ICommand ApplyLanPresetCommand { get; }
 
     public ICommand StartPairingCommand { get; }
+
+    public ICommand NextGuideStepCommand { get; }
+
+    public ICommand PreviousGuideStepCommand { get; }
+
+    public ICommand CloseGuideCommand { get; }
 
     public string EndpointInput
     {
@@ -117,12 +146,26 @@ public sealed class ConnectionViewModel : ViewModelBase
         ? $"设备连接状态 ({Devices.Count})"
         : "设备连接状态";
 
-    public IReadOnlyList<EndpointRowItem> EndpointItems =>
-        [.. LocalEndpoints.Select(endpoint => new EndpointRowItem
+    public IReadOnlyList<EndpointRowItem> EndpointItems
+    {
+        get
         {
-            Endpoint = endpoint,
-            CopyCommand = CopyEndpointCommand,
-        })];
+            var endpoints = LocalEndpoints;
+            var count = endpoints.Count;
+            var items = new EndpointRowItem[count];
+            for (var i = 0; i < count; i++)
+            {
+                items[i] = new EndpointRowItem
+                {
+                    Endpoint = endpoints[i],
+                    Position = GroupPositions.Of(i, count),
+                    CopyCommand = CopyEndpointCommand,
+                };
+            }
+
+            return items;
+        }
+    }
 
     public IReadOnlyList<LanPresetItem> LanPresetItems =>
         [.. LanPresets.Select(preset => new LanPresetItem
@@ -205,12 +248,22 @@ public sealed class ConnectionViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(CanGoPreviousGuideStep));
                 OnPropertyChanged(nameof(IsLastGuideStep));
+                OnPropertyChanged(nameof(CurrentGuideStep));
+                OnPropertyChanged(nameof(GuideDots));
+                OnPropertyChanged(nameof(GuideStepCounterText));
             }
         }
     }
 
     public bool CanGoPreviousGuideStep => GuideStepIndex > 0;
     public bool IsLastGuideStep => GuideStepIndex >= GuideStepCount - 1;
+
+    public GuideStepItem CurrentGuideStep => GuideSteps[GuideStepIndex];
+
+    public string GuideStepCounterText => $"步骤 {GuideStepIndex + 1} / {GuideStepCount}";
+
+    public IReadOnlyList<GuideDotItem> GuideDots =>
+        [.. GuideSteps.Select((_, i) => new GuideDotItem { IsActive = i == GuideStepIndex })];
 
     public void ApplyState(LocalShellState state)
     {

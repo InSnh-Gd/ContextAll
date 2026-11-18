@@ -91,7 +91,7 @@ A remote change MUST be stored, with the previous `appliedText`, before the syst
 - **THEN** the stored text is written to the system clipboard and the sequence number does not increase
 
 ### Requirement: Clipboard capture follows the platform
-On Linux the daemon SHALL read and write the clipboard through `ext-data-control-v1`, or through `wlr-data-control-unstable-v1` when the first protocol is absent. When neither protocol is offered, clipboard sync on that device MUST stay disabled while pairing and file transfer continue. The daemon MUST NOT use a GNOME Shell extension or an XWayland client for the clipboard. On Android the daemon MUST read the clipboard only while the interface has input focus, and the background service MUST still place received plain text onto the system clipboard. The Android app MUST NOT register as an input method and MUST NOT open a transparent activity in order to read the clipboard. On Windows the daemon MUST observe plain-text clipboard changes while another application's window is focused.
+On Linux the daemon SHALL read and write the clipboard through `ext-data-control-v1`, or through `wlr-data-control-unstable-v1` when the first protocol is absent. When neither protocol is offered, clipboard sync on that device MUST stay disabled while pairing and file transfer continue. The daemon MUST NOT use a GNOME Shell extension or an XWayland client for the clipboard. On Android the daemon MUST read the clipboard only while the interface has input focus, and the background service MUST still place received plain text onto the system clipboard. The Android app MUST NOT register as an input method. When the optional background auto-capture is off, the app MUST NOT open a transparent activity in order to read the clipboard. When it is on for a debuggable install that can read the system denial log, the app MAY read the clipboard exactly once per change signal and only after a transparent capture activity holds input focus, where the change signal is the system log recording that clipboard access by this package was denied. On Windows the daemon MUST observe plain-text clipboard changes while another application's window is focused.
 
 #### Scenario: Wayland compositor offers neither protocol
 - **WHEN** the Linux daemon finds neither data-control protocol
@@ -100,3 +100,15 @@ On Linux the daemon SHALL read and write the clipboard through `ext-data-control
 #### Scenario: Android interface is in the background
 - **WHEN** a peer's clipboard text arrives while the Android interface has no input focus
 - **THEN** the service places that text on the system clipboard and does not read the clipboard back
+
+#### Scenario: Background auto-capture is disabled
+- **WHEN** the Android user has not enabled background auto-capture
+- **THEN** the app opens no transparent capture activity and does not read the clipboard while its interface lacks focus
+
+#### Scenario: A copy is detected during background auto-capture
+- **WHEN** background auto-capture is enabled and the system logs that clipboard access by this package was denied
+- **THEN** the app opens a transparent capture activity, reads the current clipboard text once when that activity holds focus, and does not act as an input method
+
+#### Scenario: The capture log channel is unavailable
+- **WHEN** background auto-capture is enabled but the app cannot read the system clipboard-denial log for this package
+- **THEN** the app reports capturing as inactive and opens no transparent capture activity

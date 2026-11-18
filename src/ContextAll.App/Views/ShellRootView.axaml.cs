@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using ContextAll.App.Chrome;
@@ -109,11 +110,16 @@ public partial class ShellRootView : UserControl
     public bool IsOnboardingVisible => _onboardingCard.IsVisible;
     public bool IsCorruptModalVisible => _corruptDialog.IsOpen;
 
+    public Thickness ChromeBorderThickness => _chromeBorder.BorderThickness;
+    public bool IsHeaderVisible => _headerBar.IsVisible;
+
     public void ApplyChrome(ChromeMode chrome)
     {
         _headerBar.IsVisible = chrome.ShowIntegratedHeader;
         _headerBar.IsWindowMaximized = chrome.OuterCornerRadius.TopLeft <= 0.0;
         _chromeBorder.CornerRadius = chrome.OuterCornerRadius;
+        _chromeBorder.BorderThickness = chrome.ChromeBorderThickness;
+        _thisDeviceView.ApplyTitleBarStatus(chrome.TitleBarStatus);
     }
 
     public void SetHeaderButtonLayout(WindowButtonLayout layout) =>
@@ -128,15 +134,12 @@ public partial class ShellRootView : UserControl
     private void Refresh()
     {
         var wide = _vm.IsWideLayout;
+        _connectionView.ApplyResponsiveLayout(wide);
+        _thisDeviceView.ApplyResponsiveLayout(wide);
         _rail.IsVisible = wide;
         _dock.IsVisible = !wide;
         _rail.SelectedSection = _vm.SelectedSection;
         _dock.SelectedSection = _vm.SelectedSection;
-
-        _devicesView.IsVisible = _vm.SelectedSection == ShellSection.Devices;
-        _connectionView.IsVisible = _vm.SelectedSection == ShellSection.Connection;
-        _transfersView.IsVisible = _vm.SelectedSection == ShellSection.Transfers;
-        _thisDeviceView.IsVisible = _vm.SelectedSection == ShellSection.ThisDevice;
 
         _headerBar.SubtitleText = _vm.Connected && !string.IsNullOrWhiteSpace(_vm.LocalDisplayName)
             ? _vm.LocalDisplayName

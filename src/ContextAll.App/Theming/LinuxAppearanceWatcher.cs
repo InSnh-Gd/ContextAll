@@ -806,6 +806,7 @@ public sealed class LinuxAppearanceCoordinator : IAsyncDisposable
     private readonly Action<Action> _dispatchToUi;
     private LinuxAppearanceSnapshot _lastDesktopSnapshot;
     private LinuxAppearanceSnapshot _current;
+    private bool _hasAppliedSnapshot;
     private AppearanceModeOverride _modeOverride = AppearanceModeOverride.FollowSystem;
     private AccentSourceOverride _accentOverride = AccentSourceOverride.FollowSystem;
 
@@ -880,11 +881,26 @@ public sealed class LinuxAppearanceCoordinator : IAsyncDisposable
             Variant = effectiveVariant,
             AccentSeed = effectiveAccent,
         };
+        if (_hasAppliedSnapshot && effectiveSnapshot == _current)
+        {
+            return;
+        }
+
+        var canReusePalettes = _hasAppliedSnapshot && effectiveSnapshot with { Variant = _current.Variant } == _current;
+        if (!_hasAppliedSnapshot || effectiveSnapshot.Variant != _current.Variant)
+        {
+            _setThemeVariant(effectiveSnapshot.Variant);
+        }
+
+        if (!canReusePalettes || !Md3eThemeAdapter.TryApplyActiveVariant(_resources, effectiveSnapshot.Variant))
+        {
+            var lightPalette = HctColorScheme.Generate(effectiveSnapshot.AccentSeed, ThemeVariant.Light);
+            var darkPalette = HctColorScheme.Generate(effectiveSnapshot.AccentSeed, ThemeVariant.Dark);
+            Md3eThemeAdapter.ApplyToResourceDictionary(_resources, _materialTheme, effectiveSnapshot, lightPalette, darkPalette);
+        }
+
         _current = effectiveSnapshot;
-        _setThemeVariant(effectiveSnapshot.Variant);
-        var lightPalette = HctColorScheme.Generate(effectiveSnapshot.AccentSeed, ThemeVariant.Light);
-        var darkPalette = HctColorScheme.Generate(effectiveSnapshot.AccentSeed, ThemeVariant.Dark);
-        Md3eThemeAdapter.ApplyToResourceDictionary(_resources, _materialTheme, effectiveSnapshot, lightPalette, darkPalette);
+        _hasAppliedSnapshot = true;
         SnapshotApplied?.Invoke(effectiveSnapshot);
     }
 

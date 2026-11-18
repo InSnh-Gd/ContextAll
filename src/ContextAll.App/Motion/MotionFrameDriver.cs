@@ -1,17 +1,19 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Threading;
 
 namespace ContextAll.App.Motion;
 
-/// <summary>Drives paced ~60fps frame callbacks using <see cref="DispatcherTimer"/> and real wall-clock elapsed time.</summary>
+/// <summary>
+/// Drives vsync-aligned frame callbacks via <see cref="TopLevel.RequestAnimationFrame"/>.
+/// Headless / unattached owners take a single 1/60s step so tests can continue with <c>AdvanceTime</c>.
+/// </summary>
 public sealed class MotionFrameDriver
 {
     private readonly Visual _owner;
     private readonly Func<double, bool> _onTick;
-    private DispatcherTimer? _timer;
     private bool _running;
+    private int _session;
     private long _lastTickTimestamp;
 
     public MotionFrameDriver(Visual owner, Func<double, bool> onTick)
@@ -32,8 +34,7 @@ public sealed class MotionFrameDriver
             return;
         }
 
-        var topLevel = TopLevel.GetTopLevel(_owner);
-        if (topLevel is null)
+        if (TopLevel.GetTopLevel(_owner) is not { } topLevel)
         {
             // Headless or unattached: let caller observe immediate step completion cleanly.
             _onTick(1.0 / 60.0);
@@ -41,37 +42,44 @@ public sealed class MotionFrameDriver
         }
 
         _running = true;
+        _session++;
+        var session = _session;
         _lastTickTimestamp = Stopwatch.GetTimestamp();
-        _timer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, OnTimerTick);
-        _timer.Start();
+        topLevel.RequestAnimationFrame(OnFrame);
+        return;
+
+        void OnFrame(TimeSpan _)
+        {
+            if (!_running || session != _session)
+            {
+                return;
+            }
+
+            if (TopLevel.GetTopLevel(_owner) is not { } current)
+            {
+                Stop();
+                return;
+            }
+
+            var now = Stopwatch.GetTimestamp();
+            var dt = ComputeDeltaSeconds(Stopwatch.GetElapsedTime(_lastTickTimestamp, now));
+            _lastTickTimestamp = now;
+
+            var keepGoing = dt <= 0.0 || _onTick(dt);
+            if (keepGoing && _running && session == _session)
+            {
+                current.RequestAnimationFrame(OnFrame);
+            }
+            else
+            {
+                Stop();
+            }
+        }
     }
 
     public void Stop()
     {
         _running = false;
-        _timer?.Stop();
-    }
-
-    private void OnTimerTick(object? sender, EventArgs e)
-    {
-        if (!_running || TopLevel.GetTopLevel(_owner) is null)
-        {
-            Stop();
-            return;
-        }
-
-        var now = Stopwatch.GetTimestamp();
-        var dt = ComputeDeltaSeconds(Stopwatch.GetElapsedTime(_lastTickTimestamp, now));
-        _lastTickTimestamp = now;
-
-        if (dt <= 0.0)
-        {
-            return;
-        }
-
-        if (!_onTick(dt))
-        {
-            Stop();
-        }
+        _session++;
     }
 }

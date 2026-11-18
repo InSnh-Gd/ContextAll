@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import app.contextall.clipboard.ClipboardAutoCapture
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ class LinkService : Service() {
     override fun onCreate() {
         super.onCreate()
         promoteToForegroundSafely()
+        ClipboardAutoCapture.start(this)
         _isRunning.value = true
     }
 
@@ -37,6 +39,7 @@ class LinkService : Service() {
     }
 
     override fun onDestroy() {
+        ClipboardAutoCapture.stop()
         _isRunning.value = false
         super.onDestroy()
     }

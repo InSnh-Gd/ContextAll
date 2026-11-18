@@ -72,6 +72,8 @@ fun ThisDeviceScreen(
     dynamicColor: Boolean,
     linkServiceRunning: Boolean,
     permissionsGranted: Boolean,
+    autoCaptureEnabled: Boolean,
+    autoCaptureCapturing: Boolean,
     debugMode: Boolean = false,
     showDeveloperSection: Boolean = BuildConfig.DEBUG,
     debugFrameCount: Int = 0,
@@ -82,6 +84,7 @@ fun ThisDeviceScreen(
     onToggleDarkTheme: (Boolean) -> Unit,
     onToggleLinkService: () -> Unit,
     onRequestPermissions: () -> Unit,
+    onToggleAutoCapture: (Boolean) -> Unit,
     onOpenUserGuide: () -> Unit,
     onToggleDebugMode: (Boolean) -> Unit = {},
     onOpenScenarioLab: () -> Unit,
@@ -268,7 +271,7 @@ fun ThisDeviceScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     ExpressiveGroupTile(
                         index = 0,
-                        count = 3,
+                        count = 4,
                         onClick = onToggleLinkService
                     ) {
                         LocalSwitchRow(
@@ -288,7 +291,31 @@ fun ThisDeviceScreen(
 
                     ExpressiveGroupTile(
                         index = 1,
-                        count = 3,
+                        count = 4,
+                        onClick = { onToggleAutoCapture(!autoCaptureEnabled) },
+                        modifier = Modifier.testTag("auto_capture_tile")
+                    ) {
+                        LocalSwitchRow(
+                            icon = Icons.Rounded.ContentCopy,
+                            badgeBg = palette.skyIconBg,
+                            badgeFg = palette.skyIconFg,
+                            title = stringResource(R.string.auto_capture_label),
+                            subtitle = stringResource(
+                                when {
+                                    !autoCaptureEnabled -> R.string.auto_capture_sub_off
+                                    autoCaptureCapturing -> R.string.auto_capture_sub_capturing
+                                    else -> R.string.auto_capture_sub_inactive
+                                }
+                            ),
+                            checked = autoCaptureEnabled,
+                            onCheckedChange = { onToggleAutoCapture(it) },
+                            testTag = "switch_auto_capture"
+                        )
+                    }
+
+                    ExpressiveGroupTile(
+                        index = 2,
+                        count = 4,
                         onClick = onRequestPermissions,
                         modifier = Modifier.testTag("request_permissions_tile")
                     ) {
@@ -320,7 +347,7 @@ fun ThisDeviceScreen(
                         }
                     }
 
-                    ExpressiveGroupTile(index = 2, count = 3) {
+                    ExpressiveGroupTile(index = 3, count = 4) {
                         Row(
                             modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
                             verticalAlignment = Alignment.CenterVertically

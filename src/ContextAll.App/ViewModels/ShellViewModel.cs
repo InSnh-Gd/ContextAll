@@ -14,7 +14,6 @@ public sealed class ShellViewModel : ViewModelBase
     private bool _autoGuideTriggered;
     private ShellSection _selectedSection = ShellSection.Devices;
     private double _width = ShellLayout.TwoColumnWidth;
-    private bool _isRailExpanded;
     private LocalShellState _state = LocalShellState.Empty;
     private bool _isOnboardingBusy;
     private string? _onboardingFeedback;
@@ -90,12 +89,6 @@ public sealed class ShellViewModel : ViewModelBase
     }
 
     public bool IsWideLayout => ShellLayout.TwoColumns(_width);
-
-    public bool IsRailExpanded
-    {
-        get => _isRailExpanded;
-        set => SetField(ref _isRailExpanded, value);
-    }
 
     public LocalConnectionStatus ConnectionStatus => _state.ConnectionStatus;
     public bool Connected => _state.Connected;

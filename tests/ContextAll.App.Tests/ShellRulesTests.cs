@@ -42,8 +42,11 @@ public sealed class ShellRulesTests
         var slnf = File.ReadAllText(Path.Combine(root, "ContextAll.Linux.slnf"));
         Assert.DoesNotContain("App.Windows", slnf, StringComparison.Ordinal);
         var project = File.ReadAllText(Path.Combine(root, "src/ContextAll.App.Windows/ContextAll.App.Windows.csproj"));
-        Assert.Contains("<WindowsPackageType>None</WindowsPackageType>", project, StringComparison.Ordinal);
-        Assert.Contains("<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>", project, StringComparison.Ordinal);
+        Assert.Contains("<TargetFramework>net10.0</TargetFramework>", project, StringComparison.Ordinal);
+        Assert.Contains("ContextAll.App.csproj", project, StringComparison.Ordinal);
+        Assert.Contains("Avalonia.Win32", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseWinUI", project, StringComparison.Ordinal);
+        Assert.DoesNotContain("WindowsAppSDK", project, StringComparison.Ordinal);
         Assert.Contains("<PublishTrimmed>false</PublishTrimmed>", project, StringComparison.Ordinal);
         Assert.Contains("<PublishSingleFile>false</PublishSingleFile>", project, StringComparison.Ordinal);
         var manifest = File.ReadAllText(Path.Combine(root, "app/src/main/AndroidManifest.xml"));

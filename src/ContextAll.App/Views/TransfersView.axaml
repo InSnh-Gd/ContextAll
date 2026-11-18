@@ -11,60 +11,6 @@
                   HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="14">
-        <!-- Session Transfer KPI Strip -->
-        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
-          <Border Grid.Column="0"
-                  CornerRadius="20"
-                  Padding="16,12"
-                  Background="{DynamicResource SurfaceContainerLow}"
-                  BorderBrush="{DynamicResource OutlineVariant}"
-                  BorderThickness="1">
-            <StackPanel Spacing="2">
-              <TextBlock Text="累计发送"
-                         Classes="LabelMedium"
-                         Foreground="{DynamicResource OnSurfaceVariant}" />
-              <TextBlock x:Name="KpiSentValue"
-                         Text="{Binding TotalSentLabel}"
-                         Classes="TitleMediumEmphasized MonoTabular"
-                         Foreground="{DynamicResource Primary}" />
-            </StackPanel>
-          </Border>
-
-          <Border Grid.Column="1"
-                  CornerRadius="20"
-                  Padding="16,12"
-                  Background="{DynamicResource SurfaceContainerLow}"
-                  BorderBrush="{DynamicResource OutlineVariant}"
-                  BorderThickness="1">
-            <StackPanel Spacing="2">
-              <TextBlock Text="累计接收"
-                         Classes="LabelMedium"
-                         Foreground="{DynamicResource OnSurfaceVariant}" />
-              <TextBlock x:Name="KpiReceivedValue"
-                         Text="{Binding TotalReceivedLabel}"
-                         Classes="TitleMediumEmphasized MonoTabular"
-                         Foreground="{DynamicResource Secondary}" />
-            </StackPanel>
-          </Border>
-
-          <Border Grid.Column="2"
-                  CornerRadius="20"
-                  Padding="16,12"
-                  Background="{DynamicResource SurfaceContainerLow}"
-                  BorderBrush="{DynamicResource OutlineVariant}"
-                  BorderThickness="1">
-            <StackPanel Spacing="2">
-              <TextBlock Text="已完成分块 / 次数"
-                         Classes="LabelMedium"
-                         Foreground="{DynamicResource OnSurfaceVariant}" />
-              <TextBlock x:Name="KpiCompletedValue"
-                         Text="{Binding CompletedKpiLabel}"
-                         Classes="TitleMediumEmphasized MonoTabular"
-                         Foreground="{DynamicResource Tertiary}" />
-            </StackPanel>
-          </Border>
-        </Grid>
-
         <Grid x:Name="WorkbenchGrid">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="400" />
@@ -188,13 +134,16 @@
               </Border>
 
               <Border x:Name="NoticeBanner"
+                      Classes="StatusPill"
+                      Classes.Error="{Binding NoticeIsError}"
                       CornerRadius="16"
                       Padding="14,10"
-                      IsVisible="False">
+                      IsVisible="{Binding HasNotice}">
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                   <TextBlock x:Name="NoticeLabel"
                              Grid.Column="0"
                              Classes="BodyMedium"
+                             Text="{Binding NoticeMessage}"
                              TextWrapping="Wrap"
                              VerticalAlignment="Center" />
                   <Button Grid.Column="1"
@@ -427,14 +376,62 @@
             </StackPanel>
           </Border>
         </Grid>
+
+        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+          <Border Grid.Column="0" CornerRadius="20" Padding="16,12"
+                  Background="{DynamicResource SurfaceContainerLow}" BorderBrush="{DynamicResource OutlineVariant}" BorderThickness="1">
+            <StackPanel Spacing="2">
+              <TextBlock Text="累计发送" Classes="LabelMedium" Foreground="{DynamicResource OnSurfaceVariant}" TextWrapping="Wrap" />
+              <TextBlock x:Name="KpiSentValue" Text="{Binding TotalSentLabel}" Classes="TitleMediumEmphasized MonoTabular"
+                         Foreground="{DynamicResource Primary}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="1" CornerRadius="20" Padding="16,12"
+                  Background="{DynamicResource SurfaceContainerLow}" BorderBrush="{DynamicResource OutlineVariant}" BorderThickness="1">
+            <StackPanel Spacing="2">
+              <TextBlock Text="累计接收" Classes="LabelMedium" Foreground="{DynamicResource OnSurfaceVariant}" TextWrapping="Wrap" />
+              <TextBlock x:Name="KpiReceivedValue" Text="{Binding TotalReceivedLabel}" Classes="TitleMediumEmphasized MonoTabular"
+                         Foreground="{DynamicResource Secondary}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="2" CornerRadius="20" Padding="16,12"
+                  Background="{DynamicResource SurfaceContainerLow}" BorderBrush="{DynamicResource OutlineVariant}" BorderThickness="1">
+            <StackPanel Spacing="2">
+              <TextBlock Text="已完成分块 / 次数" Classes="LabelMedium" Foreground="{DynamicResource OnSurfaceVariant}" TextWrapping="Wrap" />
+              <TextBlock x:Name="KpiCompletedValue" Text="{Binding CompletedKpiLabel}" Classes="TitleMediumEmphasized MonoTabular"
+                         Foreground="{DynamicResource Tertiary}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </Grid>
       </StackPanel>
     </ScrollViewer>
 
     <!-- Text / Clipboard-to-File Compose Dialog -->
     <controls:MaterialDialog x:Name="TextFileDialogControl"
-                             Title="作为文本文件发送"
+                             Title="{Binding TextDialogTitle}"
                              PrimaryActionText="立即发送"
                              CancelActionText="取消"
-                             DismissOnScrimClick="True" />
+                             DismissOnScrimClick="True"
+                             IsOpen="{Binding IsTextDialogOpen}">
+      <controls:MaterialDialog.BodyContent>
+        <StackPanel Spacing="10">
+          <TextBox Classes="Filled MonoTabular"
+                   PlaceholderText="可选文件名（留空自动命名为 note-HHmmss.txt）"
+                   Text="{Binding TextFileNameDraft, Mode=TwoWay}" />
+          <TextBox Classes="Filled"
+                   AcceptsReturn="True"
+                   MinHeight="120"
+                   MaxHeight="220"
+                   TextWrapping="Wrap"
+                   PlaceholderText="输入或粘贴要作为文本文件发送的内容…"
+                   Text="{Binding TextContentDraft, Mode=TwoWay}" />
+          <TextBlock x:Name="TextDraftPreviewLabel"
+                     Classes="BodySmall MonoTabular"
+                     Foreground="{DynamicResource Primary}"
+                     Text="{Binding TextDraftPreviewText}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+      </controls:MaterialDialog.BodyContent>
+    </controls:MaterialDialog>
   </Panel>
 </UserControl>

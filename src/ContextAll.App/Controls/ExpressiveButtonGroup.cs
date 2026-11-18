@@ -12,7 +12,7 @@ public sealed record ExpressiveGroupButtonItem(string Id, string Label, bool IsS
 /// <summary>
 /// MD3E connected button group with pill outer corners, segmented inner corners, and press squish feedback.
 /// </summary>
-[TemplatePart("PART_ItemsPanel", typeof(StackPanel))]
+[TemplatePart("PART_ItemsPanel", typeof(Panel))]
 public class ExpressiveButtonGroup : TemplatedControl
 {
     public const double OuterRadius = 20.0;
@@ -23,7 +23,7 @@ public class ExpressiveButtonGroup : TemplatedControl
 
     private readonly List<(ExpressiveGroupButtonItem Item, Button Button, bool IsPressed)> _entries = [];
     private IReadOnlyList<ExpressiveGroupButtonItem> _items = [];
-    private StackPanel? _itemsPanel;
+    private Panel? _itemsPanel;
 
     public event Action<string>? ItemClicked;
 
@@ -39,8 +39,47 @@ public class ExpressiveButtonGroup : TemplatedControl
     /// <summary>Replaces the items rendered in this connected group.</summary>
     public void SetItems(IReadOnlyList<ExpressiveGroupButtonItem> items)
     {
-        _items = items ?? [];
-        RebuildButtons();
+        IReadOnlyList<ExpressiveGroupButtonItem> next = items ?? [];
+        if (ItemsEqual(_items, next))
+        {
+            return;
+        }
+
+        var canReuse = _items.Select(item => item.Id).SequenceEqual(next.Select(item => item.Id));
+        _items = [..next];
+        if (!canReuse)
+        {
+            RebuildButtons();
+            return;
+        }
+
+        for (var index = 0; index < _entries.Count; index++)
+        {
+            var (_, button, isPressed) = _entries[index];
+            var item = _items[index];
+            UpdateButton(button, item, index, isPressed);
+            _entries[index] = (item, button, isPressed);
+        }
+    }
+
+    private static bool ItemsEqual(
+        IReadOnlyList<ExpressiveGroupButtonItem> left,
+        IReadOnlyList<ExpressiveGroupButtonItem> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < left.Count; i++)
+        {
+            if (left[i] != right[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>Computes positional connected radii with active/pressed pill squish.</summary>
@@ -67,7 +106,7 @@ public class ExpressiveButtonGroup : TemplatedControl
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         base.OnApplyTemplate(e);
-        _itemsPanel = e.NameScope.Find<StackPanel>("PART_ItemsPanel");
+        _itemsPanel = e.NameScope.Find<Panel>("PART_ItemsPanel");
         PopulatePanel();
     }
 
@@ -81,15 +120,14 @@ public class ExpressiveButtonGroup : TemplatedControl
             var index = i;
             var button = new Button
             {
-                Content = item.Label,
-                CornerRadius = ComputeItemRadius(i, count, item.IsSelected),
                 Padding = new Thickness(16, 10),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
 
-            button.Classes.Add(item.IsSelected ? "Filled" : "FilledTonal");
+            button.Classes.Add("FilledTonal");
+            UpdateButton(button, item, index, isPressed: false);
             button.PointerPressed += (_, _) => SetEntryPressed(index, true);
             button.PointerReleased += (_, _) => SetEntryPressed(index, false);
             button.PointerCaptureLost += (_, _) => SetEntryPressed(index, false);
@@ -99,6 +137,13 @@ public class ExpressiveButtonGroup : TemplatedControl
         }
 
         PopulatePanel();
+    }
+
+    private void UpdateButton(Button button, ExpressiveGroupButtonItem item, int index, bool isPressed)
+    {
+        button.Content = item.Label;
+        button.Classes.Set("GroupSelected", item.IsSelected);
+        button.CornerRadius = ComputeItemRadius(index, _items.Count, item.IsSelected || isPressed);
     }
 
     private void SetEntryPressed(int index, bool pressed)

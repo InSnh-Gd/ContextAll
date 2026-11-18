@@ -777,6 +777,8 @@ fun ContextAllAppShell(
                                             dynamicColor = state.dynamicColor,
                                             linkServiceRunning = state.linkServiceRunning,
                                             permissionsGranted = state.runtimePermissionsGranted,
+                                            autoCaptureEnabled = state.autoCaptureEnabled,
+                                            autoCaptureCapturing = state.autoCaptureCapturing,
                                             debugMode = isDebugUi,
                                             showDeveloperSection = BuildConfig.DEBUG || isDebugUi,
                                             debugFrameCount = state.debugState.frameLogs.size,
@@ -793,6 +795,7 @@ fun ContextAllAppShell(
                                             onToggleDynamicColor = { viewModel.setDynamicColor(it) },
                                             onToggleDarkTheme = { viewModel.setDarkTheme(it) },
                                             onToggleLinkService = { viewModel.toggleLinkService() },
+                                            onToggleAutoCapture = { viewModel.setAutoCaptureEnabled(it) },
                                             onRequestPermissions = {
                                                 if (requiredRuntimePermissions.isNotEmpty()) {
                                                     permissionsLauncher.launch(requiredRuntimePermissions)
