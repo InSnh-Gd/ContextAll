@@ -256,7 +256,7 @@ public sealed class IdentityAndDaemonTests
         var goodReader = new SocketFrames(good);
         Assert.Equal(FrameTypes.Snapshot, goodReader.Next().Type);
 
-        bad.Send(FrameCodec.Encode(CommandPayload("ab"), 78, 0, 0, 0).Value!);
+        bad.Send(FrameCodec.Encode(CommandPayload("ab"), 91, 0, 0, 0).Value!);
         Assert.True(WaitForClose(bad, 3000));
 
         good.Send(FrameCodec.Encode(CommandPayload("cd"), FrameTypes.SetDisplayName, 0, 0, 0).Value!);

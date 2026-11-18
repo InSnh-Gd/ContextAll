@@ -2,7 +2,8 @@ namespace ContextAll.Protocol;
 
 public static class LocalFrameTypes
 {
-    public static bool IsCommand(byte type) => type is >= FrameTypes.StartPairing and <= FrameTypes.PushClipboardText;
+    public static bool IsCommand(byte type) => type is >= FrameTypes.StartPairing and <= FrameTypes.ConfigureClipboardHistory
+        or FrameTypes.UseClipboardHistory or FrameTypes.ConfigureClipboardGroup or FrameTypes.PushClipboardAttachment or FrameTypes.ConfirmClipboardWrite;
 }
 
 public static class FrameTypes
@@ -25,6 +26,9 @@ public static class FrameTypes
     public const byte FileBitmap = 16;
     public const byte FileSegment = 17;
     public const byte ClipboardChunk = 18;
+    public const byte ClipboardGroupHello = 19;
+    public const byte ClipboardGroupItem = 20;
+    public const byte ClipboardGroupChunk = 21;
 
     public const byte StartPairing = 64;
     public const byte AcceptPairing = 65;
@@ -40,6 +44,8 @@ public static class FrameTypes
     public const byte CancelTransfer = 75;
     public const byte ConnectEndpoint = 76;
     public const byte PushClipboardText = 77;
+    public const byte ReadClipboardHistory = 78;
+    public const byte ConfigureClipboardHistory = 79;
 
     public const byte Snapshot = 80;
     public const byte DeviceChanged = 81;
@@ -48,6 +54,10 @@ public static class FrameTypes
     public const byte FilePrompt = 84;
     public const byte TransferProgress = 85;
     public const byte TransferEnded = 86;
+    public const byte UseClipboardHistory = 87;
+    public const byte ConfigureClipboardGroup = 88;
+    public const byte PushClipboardAttachment = 89;
+    public const byte ConfirmClipboardWrite = 90;
     public const byte CommandResult = 96;
 
     public const byte HighestPriority = 0;
