@@ -46,14 +46,12 @@ public sealed class F16_InProcessQuicTransportTests
         await using var serverConn = await acceptTask;
 
         await client.OpenSessionStreamAsync();
-        await using var serverStream = await serverConn.AcceptInboundStreamAsync();
-
         var payload = "{\"intent\":\"pairing\",\"displayName\":\"AndroidNode\"}"u8.ToArray();
         await client.SendRawFrameAsync(FrameTypes.Hello, 0, 0, 0, payload);
+        await using var serverStream = await serverConn.AcceptInboundStreamAsync();
 
         var header = new byte[FrameLimits.HeaderBytes];
-        var readHeader = await serverStream.ReadAsync(header);
-        Assert.Equal(FrameLimits.HeaderBytes, readHeader);
+        await serverStream.ReadExactlyAsync(header);
 
         var frameRead = FrameCodec.Read(header);
         Assert.True(frameRead.NeedMore);

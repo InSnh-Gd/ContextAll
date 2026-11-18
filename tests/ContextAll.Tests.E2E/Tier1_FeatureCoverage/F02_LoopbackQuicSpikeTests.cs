@@ -87,6 +87,7 @@ public sealed class F02_LoopbackQuicSpikeTests
         await client.OpenSessionStreamAsync();
         Assert.NotNull(client.SessionStream);
         Assert.Equal(QuicStreamType.Bidirectional, client.SessionStream.Type);
+        await client.SessionStream.WriteAsync(new byte[] { 1 });
 
         await using var serverStream = await serverConn.AcceptInboundStreamAsync();
         Assert.NotNull(serverStream);
