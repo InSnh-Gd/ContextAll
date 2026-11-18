@@ -2,15 +2,17 @@ namespace ContextAll.Host.Tests;
 
 public sealed class WaylandClipboardTests
 {
-    [Fact]
-    public void A_wayland_clipboard_round_trip_reads_and_writes_plain_text()
+    [Theory]
+    [InlineData("zwlr_data_control_manager_v1")]
+    [InlineData("ext_data_control_manager_v1")]
+    public void A_wayland_clipboard_round_trip_reads_and_writes_plain_text(string manager)
     {
         var root = Path.Combine(Path.GetTempPath(), "contextall-wl-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        using var compositor = new WlrCompositor(Path.Combine(root, "wayland.sock"));
+        using var compositor = new WlrCompositor(Path.Combine(root, "wayland.sock"), manager);
         using var clipboard = WaylandClipboard.TryOpen(compositor.Path, root);
         Assert.NotNull(clipboard);
-        Assert.True(clipboard!.IsOpen);
+        Assert.True(clipboard.IsOpen);
 
         var seen = new List<string>();
         clipboard.PlainText += text => seen.Add(text);

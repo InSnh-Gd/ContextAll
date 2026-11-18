@@ -63,7 +63,6 @@ public sealed class WaylandClipboard : IDisposable
     uint syncCallback;
     readonly List<(uint Name, string Interface)> globals = [];
     bool chosen;
-    ushort sourceOpcode;
     readonly ManualResetEventSlim ready = new(false);
     bool running = true;
 
@@ -114,7 +113,7 @@ public sealed class WaylandClipboard : IDisposable
 
             var source = nextId++;
             sources[source] = bytes;
-            socket.Send(WaylandWire.Message(manager, sourceOpcode, writer => writer.U32(source)));
+            socket.Send(WaylandWire.Message(manager, 0, writer => writer.U32(source)));
             socket.Send(WaylandWire.Message(source, 0, writer => writer.Text(mime)));
             socket.Send(WaylandWire.Message(source, 0, writer => writer.Text(LocalMime)));
             socket.Send(WaylandWire.Message(device, 0, writer => writer.U32(source)));
@@ -393,15 +392,12 @@ public sealed class WaylandClipboard : IDisposable
             return;
         }
 
-        var ext = preferred == "ext_data_control_manager_v1";
-        sourceOpcode = ext ? (ushort)1 : (ushort)0;
-        var deviceOpcode = ext ? (ushort)0 : (ushort)1;
         seat = nextId++;
         SendBind(seatName, "wl_seat", seat);
         manager = nextId++;
         SendBind(managerName, preferred, manager);
         device = nextId++;
-        socket.Send(WaylandWire.Message(manager, deviceOpcode, writer =>
+        socket.Send(WaylandWire.Message(manager, 1, writer =>
         {
             writer.U32(device);
             writer.U32(seat);

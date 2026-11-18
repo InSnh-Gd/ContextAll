@@ -11,14 +11,16 @@ public sealed class WlrCompositor : IDisposable
     readonly WaylandSocket listener;
     readonly Dictionary<uint, string> pushed = [];
     readonly Thread thread;
+    readonly string managerInterface;
     WaylandSocket? client;
     uint registry;
     uint device;
     bool running = true;
 
-    public WlrCompositor(string path)
+    public WlrCompositor(string path, string managerInterface = "zwlr_data_control_manager_v1")
     {
         Path = path;
+        this.managerInterface = managerInterface;
         listener = WaylandSocket.Listen(path);
         thread = new Thread(Loop) { IsBackground = true };
         thread.Start();
@@ -132,7 +134,7 @@ public sealed class WlrCompositor : IDisposable
                 socket.Send(WaylandWire.Message(registry, 0, writer =>
                 {
                     writer.U32(2);
-                    writer.Text("zwlr_data_control_manager_v1");
+                    writer.Text(managerInterface);
                     writer.U32(1);
                 }));
             }
