@@ -35,4 +35,17 @@ public sealed class FrameOutbox
         frame = new Frame(0, 0, 0, 0, 0, ReadOnlyMemory<byte>.Empty);
         return false;
     }
+
+    public void Discard(Func<Frame, bool> predicate)
+    {
+        foreach (var lane in lanes)
+        {
+            var count = lane.Count;
+            for (var index = 0; index < count; index++)
+            {
+                var frame = lane.Dequeue();
+                if (!predicate(frame)) lane.Enqueue(frame);
+            }
+        }
+    }
 }
