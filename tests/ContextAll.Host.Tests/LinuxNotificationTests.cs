@@ -483,8 +483,7 @@ public sealed class LinuxNotificationTests
     {
         public TempDir()
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "contextall-notify-test-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
+            Path = Directory.CreateTempSubdirectory("ca-notify-").FullName;
         }
 
         public string Path { get; }
