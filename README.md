@@ -65,6 +65,8 @@ dotnet test ContextAll.Tests.slnf -c Release
 | `ContextAll.Tests.slnf` | Linux 可构建的核心项目及测试，不含 Windows |
 | `ContextAll.Linux.slnf` | Linux 桌面与原生共享项目（含 `ContextAll.Native`），不含 Windows |
 
+在 Windows 上发布桌面端时，运行 `dotnet publish src/ContextAll.App.Windows -c Release -r win-x64 --self-contained true`。使用完整的 `publish` 目录，其中包含桌面入口、后台服务 `ContextAll.Host.exe` 和运行时依赖；不要单独复制前端可执行文件。
+
 `ContextAll.Host.Tests` 里的双守护进程测试会用 `unshare` 建网络命名空间和 veth 设备，需要 `ip`、`ethtool`、`libmsquic`，并允许非特权用户命名空间。CI 里的准备步骤见 [`.github/workflows/test.yml`](.github/workflows/test.yml)。
 
 ## 打包与运行

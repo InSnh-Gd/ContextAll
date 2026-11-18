@@ -11,11 +11,21 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ContextAll.App\ContextAll.App.csproj" />
+    <ProjectReference Include="..\ContextAll.Host\ContextAll.Host.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Win32" Version="12.1.4" />
   </ItemGroup>
+
+  <Target Name="IncludeHostDependenciesInPublish" AfterTargets="ComputeFilesToPublish" Condition="'$(SelfContained)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(TargetDir)ContextAll.Host.deps.json">
+        <RelativePath>ContextAll.Host.deps.json</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>
