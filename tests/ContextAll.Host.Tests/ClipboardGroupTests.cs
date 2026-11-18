@@ -25,11 +25,11 @@ public sealed class ClipboardGroupTests
             GroupCommand(member, owner: owner.LocalDeviceId);
             var (sender, receiver) = ownerSends ? (owner, member) : (member, owner);
             var chunks = 0;
-            var (link, _) = LinuxNotificationTests.ConnectViaPipes(receiver, sender, out var disconnect,
+            var (link, senderLink) = LinuxNotificationTests.ConnectViaPipes(receiver, sender, out var disconnect,
                 buffer => buffer.Span[4] != FrameTypes.ClipboardGroupChunk || Interlocked.Increment(ref chunks) == 1);
             try
             {
-                await WaitUntil(() => Ready(receiver, link), timeout.Token);
+                await WaitUntil(() => Ready(receiver, link) && Ready(sender, senderLink), timeout.Token);
                 var payload = new byte[size];
                 new Random(73).NextBytes(payload);
                 Assert.Null(sender.PushClipboardAttachment(new ClipboardAttachment(ClipboardAttachment.FileType, "partial.bin", payload)));
