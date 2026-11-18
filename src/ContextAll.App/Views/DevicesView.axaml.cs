@@ -137,6 +137,22 @@ public partial class DevicesView : UserControl
     private void OnGlobalPushClipboardClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         _vm.OpenClipboardModal();
 
+    private ClipboardHistoryWindow? _historyWindow;
+
+    private void OnClipboardHistoryClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_historyWindow is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        var window = new ClipboardHistoryWindow(_vm.ClipboardHistoryClient);
+        _historyWindow = window;
+        window.Closed += (_, _) => _historyWindow = null;
+        window.Show();
+    }
+
     private async void OnAcceptPairingClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         await _vm.AcceptPairingAsync();
 
