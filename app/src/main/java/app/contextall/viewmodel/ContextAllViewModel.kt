@@ -154,6 +154,7 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         if (clipboardFocused == focused) return
         clipboardFocused = focused
         if (focused) {
+            ClipboardAutoCapture.refreshListener()
             clipboardManager?.addPrimaryClipChangedListener(clipChangedListener)
         } else {
             clipboardManager?.removePrimaryClipChangedListener(clipChangedListener)

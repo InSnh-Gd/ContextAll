@@ -24,7 +24,7 @@ class ClipboardCaptureActivity : Activity() {
     private fun maybeCapture() {
         if (captured) return
         captured = true
-        if (ClipboardAutoCapture.enabled.value && LinkService.isRunning.value) {
+        if (ClipboardAutoCapture.canCapture(this) && LinkService.isRunning.value) {
             val text = readPrimaryClip(this)
             if (text.isNotEmpty()) ClipboardCaptureBus.publish(text)
         }

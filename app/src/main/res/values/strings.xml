@@ -149,7 +149,7 @@
     <string name="auto_capture_label">后台自动采集剪贴板</string>
     <string name="auto_capture_sub_off">默认关闭 · 开启后，即使本应用在后台，检测到别处复制也会自动同步给已配对设备</string>
     <string name="auto_capture_sub_capturing">正在采集 · 已开启并在后台观察复制变化，检测到后会即时同步</string>
-    <string name="auto_capture_sub_inactive">已开启但暂未生效 · 需要可读系统日志（调试安装）且日志通道可用后才开始采集</string>
+    <string name="auto_capture_sub_inactive">尚未采集 · 调试安装须允许读取系统日志和显示在其他应用上层</string>
     <string name="local_permissions_granted_sub">已授权 · 仅用于发现局域网设备与显示传输进度，不获取位置信息</string>
     <string name="local_permissions_request_sub">点击授予通知提醒与局域网设备发现权限</string>
     <string name="local_storage_label">默认接收保存位置</string>

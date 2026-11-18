@@ -2,9 +2,11 @@ package app.contextall.clipboard
 
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +50,8 @@ class ClipboardSignalWatcher(
 
     private suspend fun watch() {
         val proc = try {
-            ProcessBuilder("logcat").redirectErrorStream(true).start()
+            val since = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
+            ProcessBuilder("logcat", "-T", since, "-s", "ClipboardService:E").redirectErrorStream(true).start()
         } catch (_: Exception) {
             _ready.value = false
             return

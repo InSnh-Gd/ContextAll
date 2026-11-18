@@ -1,9 +1,13 @@
 package app.contextall.clipboard
 
 import android.Manifest
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import app.contextall.BuildConfig
 import app.contextall.service.ClipboardCaptureActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +32,10 @@ object ClipboardAutoCapture {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val window = ClipboardSignalWindow()
     private val watcher = ClipboardSignalWatcher(onLine = ::onLogLine)
+    private val denialListener = ClipboardManager.OnPrimaryClipChangedListener {}
+    private var listening = false
+    @Volatile
+    private var running = false
 
     @Volatile
     private var appContext: Context? = null
@@ -38,22 +46,24 @@ object ClipboardAutoCapture {
     private val _enabled = MutableStateFlow(false)
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
 
-    private val _canReadLogs = MutableStateFlow(false)
+    private val permissionsGranted = MutableStateFlow(false)
     val capturing: StateFlow<Boolean> = combine(
         _enabled,
         watcher.ready,
-        _canReadLogs
-    ) { isEnabled, streamReady, hasLogs ->
-        isEnabled && streamReady && hasLogs
+        permissionsGranted
+    ) { isEnabled, streamReady, hasPermissions ->
+        isEnabled && streamReady && hasPermissions
     }.stateIn(scope, SharingStarted.Eagerly, false)
 
     fun start(context: Context) {
         init(context.applicationContext)
-        watcher.start()
+        running = true
+        refreshListener()
     }
 
     fun stop() {
-        watcher.stop()
+        running = false
+        refreshListener()
     }
 
     fun setEnabled(context: Context, value: Boolean) {
@@ -61,6 +71,12 @@ object ClipboardAutoCapture {
         store?.setEnabled(value)
         _enabled.value = value
         window.reset()
+        refreshListener()
+        if (BuildConfig.DEBUG && value && !Settings.canDrawOverlays(context)) {
+            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(intent) }
+        }
     }
 
     private fun init(app: Context) {
@@ -69,27 +85,47 @@ object ClipboardAutoCapture {
         val createdStore = ClipboardAutoCaptureStore(app)
         store = createdStore
         _enabled.value = createdStore.enabled.value
-        _canReadLogs.value = canReadLogs(app)
+    }
+
+    fun refreshListener() {
+        val app = appContext ?: return
+        val clipboard = app.getSystemService(ClipboardManager::class.java) ?: return
+        val hasPermissions = hasCapturePermissions(app)
+        permissionsGranted.value = hasPermissions
+        val shouldListen = running && _enabled.value && hasPermissions
+        if (shouldListen == listening) return
+        listening = shouldListen
+        if (shouldListen) {
+            clipboard.addPrimaryClipChangedListener(denialListener)
+            watcher.start()
+        } else {
+            clipboard.removePrimaryClipChangedListener(denialListener)
+            watcher.stop()
+        }
     }
 
     private fun canReadLogs(context: Context): Boolean = try {
-        context.checkSelfPermission(Manifest.permission.READ_LOGS) ==
+        BuildConfig.DEBUG && context.checkSelfPermission(Manifest.permission.READ_LOGS) ==
             PackageManager.PERMISSION_GRANTED
     } catch (_: Exception) {
         false
     }
 
+    private fun hasCapturePermissions(context: Context): Boolean =
+        canReadLogs(context) && Settings.canDrawOverlays(context)
+
+    fun canCapture(context: Context): Boolean = running && _enabled.value && hasCapturePermissions(context)
+
     private fun onLogLine(line: String) {
         val app = appContext ?: return
-        if (!_enabled.value) return
-        if (!canReadLogs(app)) return
+        if (!canCapture(app)) return
         if (!ClipboardDenialSignal.isDenialFor(line, app.packageName)) return
         if (!window.shouldTrigger(System.currentTimeMillis())) return
         launchCapture(app)
     }
 
     private fun launchCapture(context: Context) {
-        if (!_enabled.value) return
+        if (!canCapture(context)) return
         val intent = Intent(context, ClipboardCaptureActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         runCatching { context.startActivity(intent) }
