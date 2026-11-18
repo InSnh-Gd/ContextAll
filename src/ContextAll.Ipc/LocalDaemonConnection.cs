@@ -26,6 +26,18 @@ public static class LocalDaemonClientExtensions
 
     public static string NewRequestId() => Guid.NewGuid().ToString("N")[..16];
 
+    public static Task<CommandResultPayload> ReadClipboardHistoryAsync(this ILocalDaemonClient client, int offset = 0, CancellationToken ct = default) =>
+        client.SendCommandAsync(FrameTypes.ReadClipboardHistory, new LocalCommandPayload(NewRequestId(), null, null, null, null, null, Offset: offset), ct);
+
+    public static Task<CommandResultPayload> ConfigureClipboardHistoryAsync(this ILocalDaemonClient client, bool? enabled, int? retentionDays, CancellationToken ct = default) =>
+        client.SendCommandAsync(FrameTypes.ConfigureClipboardHistory, new LocalCommandPayload(NewRequestId(), null, null, null, enabled, null, TotalBytes: retentionDays), ct);
+
+    public static Task<CommandResultPayload> UseClipboardHistoryAsync(this ILocalDaemonClient client, string entryId, bool sync, CancellationToken ct = default) =>
+        client.SendCommandAsync(FrameTypes.UseClipboardHistory, new LocalCommandPayload(NewRequestId(), null, null, null, sync, entryId), ct);
+
+    public static Task<CommandResultPayload> ConfigureClipboardGroupAsync(this ILocalDaemonClient client, string? owner, string? member = null, bool? invited = null, CancellationToken ct = default) =>
+        client.SendCommandAsync(FrameTypes.ConfigureClipboardGroup, new LocalCommandPayload(NewRequestId(), member, owner, null, invited, null), ct);
+
     public static Task<CommandResultPayload> SetDisplayNameAsync(this ILocalDaemonClient client, string displayName, CancellationToken ct = default) =>
         client.SendCommandAsync(FrameTypes.SetDisplayName, new LocalCommandPayload(NewRequestId(), null, displayName, null, null, null), ct);
 
