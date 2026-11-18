@@ -216,11 +216,11 @@ public sealed class WindowsDaemonTests
         }
 
         var parse = await Run(shell, ["-NoProfile", "-NonInteractive", "-Command",
-            "$null = [System.Management.Automation.Language.Parser]::ParseFile('" + path.Replace("'", "''") + "', [ref]$null, [ref]$errs); if ($errs) { $errs | ForEach-Object { $_.ToString() }; exit 1 }"]);
-        Assert.Equal(0, parse.Code);
+            "$ErrorActionPreference = 'Stop'; $tokens = $null; $errors = $null; $null = [System.Management.Automation.Language.Parser]::ParseFile('" + path.Replace("'", "''") + "', [ref]$tokens, [ref]$errors); if ($errors) { $errors | ForEach-Object { $_.ToString() }; exit 1 }"]);
+        Assert.True(parse.Code == 0, parse.Text);
 
         var dryRun = await Run(shell, ["-NoProfile", "-NonInteractive", "-File", path, "-WhatIf"]);
-        Assert.Equal(0, dryRun.Code);
+        Assert.True(dryRun.Code == 0, dryRun.Text);
         Assert.Contains("42461", dryRun.Text, StringComparison.Ordinal);
         Assert.Contains("42462", dryRun.Text, StringComparison.Ordinal);
         Assert.Contains("Private", dryRun.Text, StringComparison.Ordinal);
