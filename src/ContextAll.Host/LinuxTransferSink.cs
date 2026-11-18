@@ -20,15 +20,17 @@ public sealed class LinuxTransferSink : ITransferSink
             throw new FileNotFoundException("Inbound temporary transfer file not found.", tempFilePath);
         }
 
+        string computedHex;
         using (var stream = File.OpenRead(tempFilePath))
         {
             var hashBytes = await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false);
-            var computedHex = Convert.ToHexStringLower(hashBytes);
-            if (!string.Equals(computedHex, rootHashHex, StringComparison.OrdinalIgnoreCase))
-            {
-                CleanupPartial(tempFilePath);
-                throw new InvalidOperationException($"Checksum verification failed: expected {rootHashHex}, computed {computedHex}.");
-            }
+            computedHex = Convert.ToHexStringLower(hashBytes);
+        }
+
+        if (!string.Equals(computedHex, rootHashHex, StringComparison.OrdinalIgnoreCase))
+        {
+            CleanupPartial(tempFilePath);
+            throw new InvalidOperationException($"Checksum verification failed: expected {rootHashHex}, computed {computedHex}.");
         }
 
         Directory.CreateDirectory(downloadDirectory);

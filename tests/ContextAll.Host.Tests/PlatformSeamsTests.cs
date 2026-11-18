@@ -91,8 +91,10 @@ public sealed class PlatformSeamsTests
 
         var sink = new LinuxTransferSink(downloadDir);
         var tempFile = Path.Combine(stagingDir, "corrupt.part");
+        var metadataFile = Path.ChangeExtension(tempFile, ".meta.json");
         var content = "corrupt content"u8.ToArray();
         await File.WriteAllBytesAsync(tempFile, content);
+        await File.WriteAllTextAsync(metadataFile, "{}");
 
         var bogusSha256 = new string('0', 64);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -100,6 +102,8 @@ public sealed class PlatformSeamsTests
 
         Assert.Contains("Checksum verification failed", ex.Message);
         Assert.False(File.Exists(tempFile));
+        Assert.False(File.Exists(metadataFile));
+        Assert.False(Directory.Exists(downloadDir));
     }
 
     [Fact]
