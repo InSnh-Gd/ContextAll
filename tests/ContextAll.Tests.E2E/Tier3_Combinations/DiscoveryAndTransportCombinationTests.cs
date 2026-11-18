@@ -13,7 +13,7 @@ public sealed class DiscoveryAndTransportCombinationTests
     public async Task Beacon_Discovery_Yields_Endpoint_For_Quic_Connection()
     {
         var freeBeaconPort = NetworkSandbox.GetFreePort(IPAddress.Loopback);
-        var freeQuicPort = 42461;
+        var freeQuicPort = NetworkSandbox.GetFreePort(IPAddress.Loopback);
 
         using var beaconListener = new UdpBeaconListener(freeBeaconPort, IPAddress.Loopback);
         var digest = new byte[16];
@@ -71,7 +71,7 @@ public sealed class DiscoveryAndTransportCombinationTests
     public async Task Discovery_To_Quic_Handshake_Complete_Cycle()
     {
         var freeBeaconPort = NetworkSandbox.GetFreePort(IPAddress.Loopback);
-        var freeQuicPort = 42461;
+        var freeQuicPort = NetworkSandbox.GetFreePort(IPAddress.Loopback);
 
         // 1. Discovery phase
         using var beaconListener = new UdpBeaconListener(freeBeaconPort, IPAddress.Loopback);
@@ -106,14 +106,12 @@ public sealed class DiscoveryAndTransportCombinationTests
 
         // 3. Stream exchange phase
         await client.OpenSessionStreamAsync();
-        await using var serverStream = await serverConn.AcceptInboundStreamAsync();
-
         var payload = "{\"intent\":\"pairing\",\"displayName\":\"ClientNode\"}"u8.ToArray();
         await client.SendRawFrameAsync(FrameTypes.Hello, 0, 0, FrameTypes.SessionStream, payload);
+        await using var serverStream = await serverConn.AcceptInboundStreamAsync();
 
         var header = new byte[FrameLimits.HeaderBytes];
-        var readBytes = await serverStream.ReadAsync(header);
-        Assert.Equal(FrameLimits.HeaderBytes, readBytes);
+        await serverStream.ReadExactlyAsync(header);
         Assert.Equal(FrameTypes.Hello, header[4]);
     }
 
