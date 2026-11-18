@@ -30,6 +30,10 @@ Android 10+ 只有持有焦点或充当默认输入法才能读剪贴板；`READ
 
 前台服务 `LinkService` 持有日志监视器，逐行读取 `logcat`，把系统对本机记下的「剪贴板访问被拒」当作变化信号。只认 `Denying clipboard access to <包名>` 且包名匹配本机的一行（纯函数 `ClipboardDenialSignal`，测试：`ClipboardDenialSignalTest`），其它行忽略。同一信号进入 `ClipboardSignalWindow` 的冷却窗口（默认 600ms），窗口内忽略、超时后放行、切换开关时 `reset()` 清空（测试：`ClipboardSignalWindowTest`）。
 
-开关开启且去重窗口通过时，`ClipboardAutoCapture` 短暂打开透明 `ClipboardCaptureActivity`，等它真正取得窗口焦点才读一次当前剪贴板，非空文本发布到进程内 `ClipboardCaptureBus`，读后即 `finishAndRemoveTask()`。`ContextAllViewModel` 收集总线并走现有推送路径，复用非空与「最近一次远端应用文本」的防回声判断；它不注册输入法。
+开关开启且去重窗口通过时，`ClipboardAutoCapture` 短暂打开透明 `ClipboardCaptureActivity`，等它真正取得窗口焦点才读一次当前剪贴板，非空、未标敏且非本应用写入的文本发布到进程内 `ClipboardCaptureBus`，读后即 `finishAndRemoveTask()`。`LinkService` 收集总线并走现有推送路径；它不注册输入法。
 
-「正在采集」（`capturing`）只有在三者同时成立时才是真：开关开启、`logcat` 流已经起来、且本机持有 `READ_LOGS`。`README_LOGS` 是 `development` 权限，普通安装拿不到系统拒绝日志时会如实显示「未生效」而不是「正在采集」。
+采集只在调试安装中提供。开启后需允许读取系统日志和显示在其他应用上层；Android 13 及以上系统可能另外要求确认一次性日志访问。撤销授权、关闭开关或停止服务均不再读取。正式包不声明这两项权限。
+
+## 共享组附件续传
+
+已入组设备的连接中断时，接收端暂存尚未完整的附件。重连握手携带该附件的身份、哈希和已收字节数；支持续传的发送端只补发剩余字节，旧版本仍可完整重发。只有全部字节与 SHA-256 校验通过才进入历史。未被重连认领的分段最多保留十分钟；结束进程、移除成员或解除配对后不保留。
