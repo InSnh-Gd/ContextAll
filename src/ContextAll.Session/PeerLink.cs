@@ -28,6 +28,10 @@ public sealed class PeerLink
     bool draining;
     long readyTick = -1;
     Task? writer;
+    bool groupRequested;
+    uint nextGroupStream = FrameTypes.FirstBulkStream;
+    IncomingClipboardItem? groupIncoming;
+    long groupQueuedBytes;
 
     public PeerLink(SessionHost host, IQuicConnection? connection, Stream stream, byte[] remoteSpki, bool initiated)
     {
@@ -52,6 +56,7 @@ public sealed class PeerLink
     public bool Closed => closed;
 
     public bool Entered => entered;
+    internal bool GroupReady { get; private set; }
 
     public bool BothHellos => helloSent && pairing.RemoteHelloSeen;
 
@@ -384,6 +389,176 @@ public sealed class PeerLink
         Post(frames.Select(frame => frame.Type == FrameTypes.CrdtStateVector ? host.WithSyncFlag(frame, host.LocalClipboard(RemoteId)) : frame).ToArray());
     }
 
+    internal void RefreshGroup()
+    {
+        ResetGroupQueue();
+        if (groupRequested)
+        {
+            AnswerGroupRequest();
+        }
+
+        if (!host.ClipboardGroup.IsOwner && host.ClipboardGroup.Owner == RemoteId)
+        {
+            Post(GroupHello(new ClipboardGroupPermit(null, 0, Request: true)));
+        }
+    }
+
+    void ResetGroupQueue()
+    {
+        GroupReady = false;
+        DropIncomingGroupItem();
+        lock (writeGate)
+        {
+            outbox.Discard(frame => frame.Type is FrameTypes.ClipboardGroupItem or FrameTypes.ClipboardGroupChunk);
+            groupQueuedBytes = 0;
+        }
+    }
+
+    internal void LeaveGroup()
+    {
+        ResetGroupQueue();
+        Post(GroupHello(new ClipboardGroupPermit(null, -1)));
+    }
+
+    static Frame GroupHello(ClipboardGroupPermit permit) => FrameMessages.Json(FrameTypes.ClipboardGroupHello,
+        2, 0, FrameTypes.SyncStream, permit, ProtocolJsonContext.Default.ClipboardGroupPermit);
+
+    void AnswerGroupRequest()
+    {
+        var group = host.ClipboardGroup;
+        var permit = group.Admit(RemoteId, group.IsInvited(RemoteId));
+        var alreadyReady = GroupReady;
+        GroupReady = permit is not null;
+        Post(GroupHello(permit ?? new ClipboardGroupPermit(null, 0)));
+        if (!alreadyReady && permit is not null)
+        {
+            host.ReplayGroup(this, permit.Since);
+        }
+    }
+
+    void OnGroupHello(Frame frame)
+    {
+        var permit = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.ClipboardGroupPermit).Value;
+        if (permit is null) return;
+        try
+        {
+            if (permit.Request)
+            {
+                groupRequested = true;
+                AnswerGroupRequest();
+                return;
+            }
+
+            var group = host.ClipboardGroup;
+            if (permit is { Group: null, Since: -1 } && group.IsOwner)
+            {
+                groupRequested = false;
+                ResetGroupQueue();
+                group.Leave(RemoteId);
+                return;
+            }
+
+            if (group.IsOwner || group.Owner != RemoteId) return;
+            var previous = group.Group;
+            var previousSince = group.Since;
+            var alreadyReady = GroupReady;
+            var accepted = group.Accept(RemoteId, permit);
+            if (!accepted || previous != group.Group || previousSince != group.Since)
+            {
+                ResetGroupQueue();
+            }
+
+            GroupReady = accepted;
+            if (GroupReady && (!alreadyReady || previous != group.Group || previousSince != group.Since))
+            {
+                host.ReplayGroup(this, permit.Since);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ResetGroupQueue();
+        }
+    }
+
+    internal void SendGroupItem(ClipboardGroupItem item, byte[] bytes)
+    {
+        var streamId = nextGroupStream++;
+        var frames = new List<Frame>
+        {
+            FrameMessages.Json(FrameTypes.ClipboardGroupItem, 2, 0, streamId, item, ProtocolJsonContext.Default.ClipboardGroupItem),
+        };
+        for (var offset = 0; offset < bytes.Length; offset += FrameLimits.MaxPayloadBytes)
+        {
+            var count = Math.Min(bytes.Length - offset, FrameLimits.MaxPayloadBytes);
+            frames.Add(new Frame(count, FrameTypes.ClipboardGroupChunk, 2, 0, streamId, bytes.AsMemory(offset, count)));
+        }
+
+        lock (writeGate)
+        {
+            const int maxQueuedBytes = 40 * 1024 * 1024;
+            if (closed || draining || groupQueuedBytes + bytes.Length + frames[0].Payload.Length > maxQueuedBytes) return;
+            foreach (var frame in frames)
+            {
+                outbox.Enqueue(frame);
+                groupQueuedBytes += frame.Payload.Length;
+            }
+        }
+
+        poke.Release();
+    }
+
+    void OnGroupItem(Frame frame)
+    {
+        DropIncomingGroupItem();
+        var item = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.ClipboardGroupItem).Value;
+        if (item is null || !host.ClipboardGroup.Allows(RemoteId, item, GroupReady) || host.HasGroupItem(item)) return;
+        if (item.Bytes == 0)
+        {
+            host.ReceiveGroupItem(this, item, []);
+            return;
+        }
+
+        try
+        {
+            groupIncoming = new IncomingClipboardItem(frame.StreamId, item, host.ClipboardStateDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine("clipboard-group-stage-failed");
+        }
+    }
+
+    void OnGroupChunk(Frame frame)
+    {
+        if (groupIncoming is not { } current || frame.StreamId != current.Id) return;
+        try
+        {
+            if (!GroupReady || !current.Append(frame.Payload.Span))
+            {
+                DropIncomingGroupItem();
+                return;
+            }
+
+            if (current.Complete)
+            {
+                var bytes = current.Read();
+                DropIncomingGroupItem();
+                host.ReceiveGroupItem(this, current.Item, bytes);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DropIncomingGroupItem();
+        }
+    }
+
+    internal void DropIncomingGroupItem()
+    {
+        var current = groupIncoming;
+        groupIncoming = null;
+        current?.Dispose();
+    }
+
     public void Collect(List<FilePromptSnapshotPayload> prompts, List<TransferSnapshotPayload> transfers)
     {
         foreach (var slot in book.Incoming)
@@ -624,6 +799,15 @@ public sealed class PeerLink
             case FrameTypes.ClipboardChunk:
                 OnChunk(frame);
                 break;
+            case FrameTypes.ClipboardGroupHello:
+                OnGroupHello(frame);
+                break;
+            case FrameTypes.ClipboardGroupItem:
+                OnGroupItem(frame);
+                break;
+            case FrameTypes.ClipboardGroupChunk:
+                OnGroupChunk(frame);
+                break;
         }
 
         return (Array.Empty<Frame>(), events.ToArray());
@@ -666,6 +850,7 @@ public sealed class PeerLink
         }
 
         PostExpanded(ordered, immediate: true);
+        RefreshGroup();
         host.Publish([host.DeviceEvent(RemoteId, "connected")]);
     }
 
@@ -822,9 +1007,21 @@ public sealed class PeerLink
         }
 
         host.NoteRemoteClipboard(RemoteId, vector.ClipboardSync == true);
-        if (vector.Clock is ClockPayload clock)
+        if (host.ClipboardGroup.Enabled)
         {
-            var remoteClock = new HybridClock(clock.Milliseconds, clock.Counter, clock.Origin);
+            return;
+        }
+
+        if (vector.Clock is ClockPayload clock && (clock.Origin is not { Length: 29 } ||
+            !clock.Origin.StartsWith("ca1", StringComparison.Ordinal) || !clock.Origin.AsSpan(3).ToArray().All(ch => ch is >= 'a' and <= 'z' or >= '2' and <= '7') ||
+            clock.Counter == uint.MaxValue || clock.Milliseconds < 0 || clock.Milliseconds > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 60_000))
+        {
+            return;
+        }
+
+        if (vector.Clock is ClockPayload remoteStamp)
+        {
+            var remoteClock = new HybridClock(remoteStamp.Milliseconds, remoteStamp.Counter, remoteStamp.Origin);
             host.RememberRemoteClock(RemoteId, remoteClock);
             host.Clipboard.ObserveRemoteClock(remoteClock);
         }
@@ -863,11 +1060,7 @@ public sealed class PeerLink
             return [];
         }
 
-        var previous = host.Applied;
-        host.SaveClipboard(previous);
         host.WriteClipboard(host.Clipboard.Text);
-        host.Applied = host.Clipboard.Text;
-        host.SaveClipboard(host.Applied);
         if (host.Clipboard.Notifications != notes)
         {
             File.WriteAllText(host.NotifyLog, "raised");
@@ -880,17 +1073,13 @@ public sealed class PeerLink
     {
         var before = host.Clipboard.ApplyCount;
         var notes = host.Clipboard.Notifications;
-        host.Clipboard.ReceiveChunk(frame.StreamId, frame.Payload.Span, host.Mutual(RemoteId));
+        host.Clipboard.ReceiveChunk(frame.StreamId, frame.Payload.Span, host.Mutual(RemoteId), RemoteId);
         if (host.Clipboard.ApplyCount == before)
         {
             return;
         }
 
-        var previous = host.Applied;
-        host.SaveClipboard(previous);
         host.WriteClipboard(host.Clipboard.Text);
-        host.Applied = host.Clipboard.Text;
-        host.SaveClipboard(host.Applied);
         if (host.Clipboard.Notifications != notes)
         {
             File.WriteAllText(host.NotifyLog, "raised");
@@ -1155,12 +1344,28 @@ public sealed class PeerLink
                         else if (outbox.TryWriteNext(out frame))
                         {
                             have = true;
+                            if (frame.Type is FrameTypes.ClipboardGroupItem or FrameTypes.ClipboardGroupChunk)
+                            {
+                                groupQueuedBytes -= frame.Payload.Length;
+                            }
                         }
                     }
 
                     if (!have)
                     {
                         break;
+                    }
+
+                    if (frame.Type is FrameTypes.CrdtDeltaBatch or FrameTypes.ClipboardChunk or FrameTypes.ClipboardGroupItem or FrameTypes.ClipboardGroupChunk)
+                    {
+                        lock (host.Gate)
+                        {
+                            var group = frame.Type is FrameTypes.ClipboardGroupItem or FrameTypes.ClipboardGroupChunk;
+                            if (group ? !GroupReady : host.ClipboardGroup.Enabled)
+                            {
+                                continue;
+                            }
+                        }
                     }
 
                     if (frame.Type == FrameTypes.FileSegment && pause > 0)

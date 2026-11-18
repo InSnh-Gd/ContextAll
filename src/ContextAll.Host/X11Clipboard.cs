@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using ContextAll.Protocol;
+using ContextAll.Session.Abstractions;
 
 namespace ContextAll.Host;
 
@@ -40,8 +41,12 @@ internal interface IX11Api : IDisposable
     ulong StringAtom { get; }
     ulong AtomTypeAtom { get; }
     ulong PropertyAtom { get; }
+    ulong ImageAtom => 0;
+    ulong UriListAtom => 0;
+    ulong SensitiveAtom => 0;
 
     void SetSelectionOwner(ulong selection, ulong owner, ulong time);
+    ulong GetSelectionOwner(ulong selection) => Window;
     void ConvertSelection(ulong selection, ulong target, ulong property, ulong requestor, ulong time);
     X11PropertyData GetWindowProperty(ulong window, ulong property, bool delete);
     void ChangePropertyBytes(ulong window, ulong property, ulong type, int format, ReadOnlySpan<byte> data);
@@ -67,6 +72,7 @@ public sealed class X11Clipboard : IDisposable
 
     string ownedText = "";
     byte[] ownedUtf8 = [];
+    ulong ownedAttachmentAtom;
     bool ownsSelection;
 
     PendingIncrRead? pendingRead;
@@ -92,6 +98,7 @@ public sealed class X11Clipboard : IDisposable
     }
 
     public event Action<string>? PlainText;
+    public event Action<ClipboardAttachment>? AttachmentChanged;
 
     public bool IsOpen => Volatile.Read(ref disposed) == 0;
 
@@ -126,6 +133,38 @@ public sealed class X11Clipboard : IDisposable
         }
 
         commands.Enqueue(() => ApplyLocalSetText(text, bytes));
+    }
+
+    internal async ValueTask<bool> ApplyTextAsync(string text, CancellationToken ct)
+    {
+        var bytes = Encoding.UTF8.GetBytes(text);
+        if (!IsOpen || bytes.Length > FrameLimits.MaxClipboardBytes)
+        {
+            return false;
+        }
+
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        commands.Enqueue(() =>
+        {
+            if (IsOpen && !ct.IsCancellationRequested)
+            {
+                completion.TrySetResult(ApplyLocalSetText(text, bytes));
+            }
+            else
+            {
+                completion.TrySetResult(false);
+            }
+        });
+        return await completion.Task.WaitAsync(ct).ConfigureAwait(false);
+    }
+
+    internal async ValueTask<bool> ApplyAttachmentAsync(string mime, byte[] data, CancellationToken ct)
+    {
+        var atom = mime == ClipboardAttachment.Image ? api.ImageAtom : api.UriListAtom;
+        if (!IsOpen || atom == 0) return false;
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        commands.Enqueue(() => completion.TrySetResult(IsOpen && !ct.IsCancellationRequested && ApplyLocalSetText("", data, atom)));
+        return await completion.Task.WaitAsync(ct).ConfigureAwait(false);
     }
 
     internal void PumpOnceForTest()
@@ -193,14 +232,17 @@ public sealed class X11Clipboard : IDisposable
         }
     }
 
-    void ApplyLocalSetText(string text, byte[] bytes)
+    bool ApplyLocalSetText(string text, byte[] bytes, ulong attachmentAtom = 0)
     {
+        api.SetSelectionOwner(api.ClipboardAtom, api.Window, 0);
+        ownsSelection = api.GetSelectionOwner(api.ClipboardAtom) == api.Window;
+        if (!ownsSelection) return false;
         ownedText = text;
         ownedUtf8 = bytes;
-        ownsSelection = true;
+        ownedAttachmentAtom = attachmentAtom;
         outboundWrites.Clear();
-        api.SetSelectionOwner(api.ClipboardAtom, api.Window, lastTimestamp);
         api.Flush();
+        return true;
     }
 
     void HandleEvent(X11Event ev)
@@ -278,21 +320,21 @@ public sealed class X11Clipboard : IDisposable
             return;
         }
 
-        if (!IsSupportedTextAtom(notify.Target))
+        if (!IsSupportedTextAtom(notify.Target) && !IsAttachmentAtom(notify.Target))
         {
             api.DeleteProperty(api.Window, notify.Property);
             return;
         }
 
         var data = api.GetWindowProperty(api.Window, notify.Property, delete: true);
-        if (!data.Ok)
+        if (!data.Ok || data.BytesAfter != 0)
         {
             return;
         }
 
         if (data.ActualType == api.IncrAtom)
         {
-            if (data.Words32.Length > 0 && data.Words32[0] > FrameLimits.MaxClipboardBytes)
+            if (data.Words32.Length > 0 && data.Words32[0] > (ulong)MaxBytesFor(notify.Target))
             {
                 return;
             }
@@ -301,7 +343,7 @@ public sealed class X11Clipboard : IDisposable
             return;
         }
 
-        if (data.Bytes.Length > FrameLimits.MaxClipboardBytes)
+        if (data.Bytes.Length > MaxBytesFor(notify.Target))
         {
             return;
         }
@@ -318,7 +360,7 @@ public sealed class X11Clipboard : IDisposable
         }
 
         var chunk = api.GetWindowProperty(api.Window, api.PropertyAtom, delete: true);
-        if (!chunk.Ok)
+        if (!chunk.Ok || chunk.BytesAfter != 0)
         {
             pendingRead = null;
             return;
@@ -331,7 +373,7 @@ public sealed class X11Clipboard : IDisposable
             return;
         }
 
-        if (current.Buffer.Count + chunk.Bytes.Length > FrameLimits.MaxClipboardBytes)
+        if (current.Buffer.Count + chunk.Bytes.Length > MaxBytesFor(current.TargetAtom))
         {
             pendingRead = null;
             return;
@@ -353,7 +395,7 @@ public sealed class X11Clipboard : IDisposable
         var targetProp = req.Property != 0 ? req.Property : req.Target;
         if (req.Target == api.TargetsAtom)
         {
-            ReadOnlySpan<ulong> supported =
+            ReadOnlySpan<ulong> supported = ownedAttachmentAtom != 0 ? [api.TargetsAtom, ownedAttachmentAtom] :
             [
                 api.TargetsAtom,
                 api.Utf8StringAtom,
@@ -367,7 +409,7 @@ public sealed class X11Clipboard : IDisposable
             return;
         }
 
-        if (!IsSupportedTextAtom(req.Target))
+        if (ownedAttachmentAtom != 0 ? req.Target != ownedAttachmentAtom : !IsSupportedTextAtom(req.Target))
         {
             api.SendSelectionNotify(req.Requestor, req.Selection, req.Target, 0, req.Time);
             return;
@@ -448,8 +490,11 @@ public sealed class X11Clipboard : IDisposable
 
     ulong PickPlainTarget(ulong[] atoms)
     {
+        if (api.SensitiveAtom != 0 && atoms.Contains(api.SensitiveAtom)) return 0;
         ReadOnlySpan<ulong> order =
         [
+            api.ImageAtom,
+            api.UriListAtom,
             api.Utf8StringAtom,
             api.TextPlainUtf8Atom,
             api.TextPlainAtom,
@@ -477,6 +522,16 @@ public sealed class X11Clipboard : IDisposable
 
     void EmitDecoded(ulong targetAtom, byte[] bytes)
     {
+        if (IsAttachmentAtom(targetAtom))
+        {
+            if (ClipboardMime.Decode(targetAtom == api.ImageAtom ? ClipboardAttachment.Image : ClipboardMime.UriList, bytes) is { } attachment)
+            {
+                AttachmentChanged?.Invoke(attachment);
+            }
+
+            return;
+        }
+
         string text;
         if (targetAtom == api.StringAtom)
         {
@@ -496,6 +551,10 @@ public sealed class X11Clipboard : IDisposable
 
         PlainText?.Invoke(text);
     }
+
+    bool IsAttachmentAtom(ulong atom) => atom != 0 && (atom == api.ImageAtom || atom == api.UriListAtom);
+
+    int MaxBytesFor(ulong atom) => atom != 0 && atom == api.ImageAtom ? FrameLimits.MaxClipboardAttachmentBytes : FrameLimits.MaxClipboardBytes;
 
     sealed class PendingIncrRead(ulong targetAtom, long deadlineMs)
     {
@@ -595,6 +654,9 @@ internal sealed unsafe class NativeLibraryX11Api : IX11Api
         StringAtom = 31;
         AtomTypeAtom = AtomTypeConst;
         PropertyAtom = Intern("CONTEXTALL_CLIPBOARD_PROP");
+        ImageAtom = Intern(ClipboardAttachment.Image);
+        UriListAtom = Intern(ClipboardMime.UriList);
+        SensitiveAtom = Intern(WaylandClipboard.SensitiveMime);
     }
 
     public ulong Window { get; }
@@ -608,6 +670,12 @@ internal sealed unsafe class NativeLibraryX11Api : IX11Api
     public ulong StringAtom { get; }
     public ulong AtomTypeAtom { get; }
     public ulong PropertyAtom { get; }
+    public ulong ImageAtom { get; }
+    public ulong UriListAtom { get; }
+    public ulong SensitiveAtom { get; }
+
+    public ulong GetSelectionOwner(ulong selection) => NativeLibrary.TryGetExport(x11Lib, "XGetSelectionOwner", out var symbol)
+        ? ((delegate* unmanaged[Cdecl]<nint, ulong, ulong>)symbol)(display, selection) : 0;
 
     public static NativeLibraryX11Api? TryConnect(string displayName)
     {
@@ -750,7 +818,7 @@ internal sealed unsafe class NativeLibraryX11Api : IX11Api
             window,
             property,
             0,
-            FrameLimits.MaxClipboardBytes / 4 + 64,
+            FrameLimits.MaxClipboardAttachmentBytes / 4 + 64,
             delete ? 1 : 0,
             0,
             &actualType,

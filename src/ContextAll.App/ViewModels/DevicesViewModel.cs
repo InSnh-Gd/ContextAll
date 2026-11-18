@@ -10,6 +10,7 @@ namespace ContextAll.App.ViewModels;
 public sealed class DevicesViewModel : ViewModelBase
 {
     private readonly ILocalDaemonClient _client;
+    internal ILocalDaemonClient ClipboardHistoryClient => _client;
     private LocalShellState _state = LocalShellState.Empty;
     private double _width = ShellLayout.TwoColumnWidth;
     private string? _selectedDeviceId;

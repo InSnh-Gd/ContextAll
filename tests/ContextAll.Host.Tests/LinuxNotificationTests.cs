@@ -331,7 +331,10 @@ public sealed class LinuxNotificationTests
         }
     }
 
-    static (PeerLink Left, PeerLink Right) ConnectViaPipes(SessionHost hostA, SessionHost hostB)
+    static (PeerLink Left, PeerLink Right) ConnectViaPipes(SessionHost hostA, SessionHost hostB) =>
+        ConnectViaPipes(hostA, hostB, out _);
+
+    internal static (PeerLink Left, PeerLink Right) ConnectViaPipes(SessionHost hostA, SessionHost hostB, out Func<Task> disconnect)
     {
         var aToB = new Pipe();
         var bToA = new Pipe();
@@ -341,8 +344,14 @@ public sealed class LinuxNotificationTests
         var linkB = new PeerLink(hostB, null, streamB, hostA.LocalSpki, initiated: false);
         hostA.Track(linkA);
         hostB.Track(linkB);
-        _ = linkA.RunAsync();
-        _ = linkB.RunAsync();
+        var runLeft = linkA.RunAsync();
+        var runRight = linkB.RunAsync();
+        disconnect = async () =>
+        {
+            aToB.Reader.CancelPendingRead();
+            bToA.Reader.CancelPendingRead();
+            await Task.WhenAll(runLeft, runRight).WaitAsync(TimeSpan.FromSeconds(5));
+        };
         return (linkA, linkB);
     }
 

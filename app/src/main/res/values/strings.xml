@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="clipboard_history">剪贴板历史</string>
     <string name="app_name">ContextAll</string>
     <string name="brand_logo_content_desc">ContextAll 应用标志</string>
 

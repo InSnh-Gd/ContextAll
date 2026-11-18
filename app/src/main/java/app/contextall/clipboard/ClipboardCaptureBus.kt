@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Process-wide channel that delivers the plain text a transparent capture
- * activity read once it held input focus. The ViewModel collects [captures]
+ * activity read once it held input focus. The link session collects [captures]
  * and pushes them through the existing clipboard sync path.
  */
 object ClipboardCaptureBus {

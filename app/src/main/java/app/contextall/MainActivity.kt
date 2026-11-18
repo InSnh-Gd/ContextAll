@@ -1,6 +1,7 @@
 package app.contextall
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Hub
@@ -76,7 +78,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
 import app.contextall.model.TopTab
 import app.contextall.model.UiEventNotice
 import app.contextall.ui.components.ContextAllCollapsibleBrandBar
@@ -84,6 +86,7 @@ import app.contextall.ui.components.ExpressiveFloatingNavDock
 import app.contextall.ui.components.FloatingDockItem
 import app.contextall.ui.screens.AboutDeviceSubScreen
 import app.contextall.ui.screens.ConnectionScreen
+import app.contextall.ui.screens.ClipboardHistoryDialog
 import app.contextall.ui.screens.DeveloperDebugConsoleSheet
 import app.contextall.ui.screens.DevicesListScreen
 import app.contextall.ui.screens.EmptyDetailPlaceholder
@@ -98,36 +101,61 @@ import app.contextall.viewmodel.ContextAllViewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private val clipboardViewModel by lazy { ViewModelProvider(this)[ContextAllViewModel::class.java] }
+    private var clipboardHistoryRequest by mutableStateOf(0)
+
+    companion object {
+        const val ACTION_CLIPBOARD_HISTORY = "app.contextall.CLIPBOARD_HISTORY"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.action == ACTION_CLIPBOARD_HISTORY) clipboardHistoryRequest++
         enableEdgeToEdge()
         setContent {
-            val vm: ContextAllViewModel = viewModel()
+            val vm = clipboardViewModel
             val state by vm.state.collectAsStateWithLifecycle()
 
             ContextAllTheme(
                 darkTheme = state.darkTheme,
                 dynamicColor = state.dynamicColor
             ) {
-                ContextAllAppShell(viewModel = vm)
+                ContextAllAppShell(viewModel = vm, clipboardHistoryRequest = clipboardHistoryRequest)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == ACTION_CLIPBOARD_HISTORY) clipboardHistoryRequest++
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        clipboardViewModel.setClipboardFocused(hasFocus)
     }
 }
 
 @Composable
 fun ContextAllAppShell(
-    viewModel: ContextAllViewModel
+    viewModel: ContextAllViewModel,
+    clipboardHistoryRequest: Int = 0
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val showOnboardingGuide by viewModel.showOnboardingGuide.collectAsStateWithLifecycle()
+    val foregroundClipboard by viewModel.foregroundClipboard.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var showScenarioLab by remember { mutableStateOf(false) }
     var showManualConnectSheet by remember { mutableStateOf(false) }
     var showAboutSubPage by remember { mutableStateOf(false) }
+    var showClipboardHistory by remember { mutableStateOf(false) }
     var pendingFileTargetPeerId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(clipboardHistoryRequest, state.linkServiceRunning) {
+        if (clipboardHistoryRequest > 0 && state.linkServiceRunning) showClipboardHistory = true
+    }
 
     LaunchedEffect(state.currentTab) {
         if (state.currentTab != TopTab.THIS_DEVICE) {
@@ -343,6 +371,11 @@ fun ContextAllAppShell(
 
     val headerActionButtons: @Composable () -> Unit = {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (state.currentTab == TopTab.DEVICES) {
+                FilledTonalIconButton(onClick = { showClipboardHistory = true }) {
+                    Icon(Icons.Rounded.ContentPaste, contentDescription = "剪贴板历史")
+                }
+            }
             if (isDebugUi) {
                 FilledTonalIconButton(
                     onClick = { showScenarioLab = true },
@@ -899,6 +932,14 @@ fun ContextAllAppShell(
             if (isDebugUi) {
                 showScenarioLab = true
             }
-        }
+        },
+        foregroundClipboardEnabled = foregroundClipboard,
+        onForegroundClipboardChanged = viewModel::setForegroundClipboard
     )
+
+    if (showClipboardHistory) {
+        ClipboardHistoryDialog(command = viewModel::clipboardHistoryCommand, onDismiss = { showClipboardHistory = false },
+            localDeviceId = state.localDeviceId, foregroundClipboard = foregroundClipboard,
+            onForegroundClipboardChanged = viewModel::setForegroundClipboard)
+    }
 }

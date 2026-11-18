@@ -63,7 +63,8 @@ public sealed record ClipboardDocument(
     Dictionary<string, long> Vector,
     HybridClock? Last,
     string AppliedText,
-    long Sequence);
+    long Sequence,
+    bool GroupOnly = false);
 
 public sealed record RestartPlan(
     ClipboardDocument Document,
@@ -117,7 +118,7 @@ public sealed class ClipboardNode
 {
     readonly Dictionary<string, (bool Local, bool Remote)> peers = [];
     readonly Queue<(string Origin, long Seq)> window = new();
-    readonly Dictionary<uint, Assembly> assemblies = [];
+    readonly Dictionary<(string Origin, uint Stream), Assembly> assemblies = [];
     readonly List<DirectedFrame> lastSent = [];
     uint nextStream = FrameTypes.FirstBulkStream;
 
@@ -139,6 +140,9 @@ public sealed class ClipboardNode
     public int Notifications { get; private set; }
 
     public int ApplyCount { get; private set; }
+    public bool GroupOnly { get; private set; }
+
+    public event Action<HybridClock, long, string>? TextReceived;
 
     public Dictionary<string, long> Vector { get; } = [];
 
@@ -162,6 +166,7 @@ public sealed class ClipboardNode
         Clock = document.Clock;
         Last = document.Last;
         Sequence = document.Sequence;
+        GroupOnly = document.GroupOnly;
         Vector.Clear();
         foreach (var pair in document.Vector)
         {
@@ -170,7 +175,7 @@ public sealed class ClipboardNode
     }
 
     public ClipboardDocument ToDocument(string appliedText) =>
-        new(Text, Clock, new Dictionary<string, long>(Vector), Last, appliedText, Sequence);
+        new(Text, Clock, new Dictionary<string, long>(Vector), Last, appliedText, Sequence, GroupOnly);
 
     public IReadOnlyList<DirectedFrame> LastSent => lastSent;
 
@@ -183,7 +188,7 @@ public sealed class ClipboardNode
             ? issued
             : HybridClocks.Issue(remote, remote.Milliseconds, DeviceId);
 
-    public IReadOnlyList<DirectedFrame> OnLocal(ClipboardKind kind, string text, long physicalMs)
+    public IReadOnlyList<DirectedFrame> OnLocal(ClipboardKind kind, string text, long physicalMs, bool groupOnly = false)
     {
         lastSent.Clear();
         if (kind != ClipboardKind.Plain)
@@ -201,7 +206,13 @@ public sealed class ClipboardNode
         Last = clock;
         Clock = clock;
         Text = text;
+        GroupOnly = groupOnly;
         Vector[DeviceId] = Sequence;
+        if (groupOnly)
+        {
+            return lastSent;
+        }
+
         foreach (var (peerId, opt) in peers)
         {
             if (!opt.Local || !opt.Remote)
@@ -229,7 +240,8 @@ public sealed class ClipboardNode
             return frames;
         }
 
-        if (Clock is HybridClock ours && (remoteClock is null || HybridClock.Compare(ours, remoteClock.Value) > 0))
+        if (!GroupOnly && Clock is HybridClock ours && ours.Origin == DeviceId &&
+            (remoteClock is null || HybridClock.Compare(ours, remoteClock.Value) > 0))
         {
             frames.AddRange(EncodeChange(ours, Sequence, Text));
         }
@@ -241,58 +253,62 @@ public sealed class ClipboardNode
     public IReadOnlyList<DirectedFrame> ReceiveDelta(string fromPeer, DeltaPayload delta, bool mutual)
     {
         lastSent.Clear();
-        if (window.Any(entry => entry.Origin == delta.Origin && entry.Seq == delta.Seq))
+        if (!mutual || delta.Origin != fromPeer || delta.Origin == DeviceId || delta.Seq <= 0 ||
+            delta.Counter == uint.MaxValue || delta.Milliseconds < 0 ||
+            window.Any(entry => entry.Origin == delta.Origin && entry.Seq == delta.Seq))
         {
             return lastSent;
         }
 
         if (delta.Text is null)
         {
-            if (!mutual || delta.StreamId is not uint streamId || delta.ByteCount is not long count || delta.Sha256 is not string hash)
+            if (delta.StreamId is not uint streamId || delta.ByteCount is not long count || delta.Sha256 is not string hash)
             {
                 return lastSent;
             }
 
-            if (count <= 0 || count > ClipboardRestart.MaxBytes)
+            if (count <= 0 || count > ClipboardRestart.MaxBytes || assemblies.Count >= 32)
             {
                 return lastSent;
             }
 
-            Remember(delta.Origin, delta.Seq);
             var chunkClock = new HybridClock(delta.Milliseconds, delta.Counter, delta.Origin);
-            DiscardOlder(chunkClock);
-            assemblies[streamId] = new Assembly(chunkClock, delta.Seq, count, hash, new byte[(int)count]);
+            var key = (delta.Origin, streamId);
+            if (!assemblies.ContainsKey(key))
+            {
+                assemblies.Add(key, new Assembly(chunkClock, delta.Seq, hash, new byte[(int)count]));
+            }
             return lastSent;
         }
 
-        Remember(delta.Origin, delta.Seq);
-        if (!mutual)
+        if (Encoding.UTF8.GetByteCount(delta.Text) > ClipboardRestart.MaxBytes)
         {
             return lastSent;
         }
 
-        ApplyIfNewer(new HybridClock(delta.Milliseconds, delta.Counter, delta.Origin), delta.Text, delta.Seq, delta.Origin);
+        Complete(new HybridClock(delta.Milliseconds, delta.Counter, delta.Origin), delta.Text, delta.Seq);
         return lastSent;
     }
 
-    public void ReceiveChunk(uint streamId, ReadOnlySpan<byte> payload, bool mutual)
+    public void ReceiveChunk(uint streamId, ReadOnlySpan<byte> payload, bool mutual, string? fromPeer = null)
     {
-        if (!assemblies.TryGetValue(streamId, out var assembly))
+        var key = fromPeer is null ? assemblies.Keys.FirstOrDefault(item => item.Stream == streamId) : (Origin: fromPeer, Stream: streamId);
+        if (key.Origin is null || !assemblies.TryGetValue(key, out var assembly))
         {
             return;
         }
 
         if (payload.Length < 4)
         {
-            assemblies.Remove(streamId);
+            assemblies.Remove(key);
             return;
         }
 
         var offset = (payload[0] << 24) | (payload[1] << 16) | (payload[2] << 8) | payload[3];
         var data = payload[4..];
-        if (offset < 0 || offset + data.Length > assembly.Buffer.Length)
+        if (offset != assembly.Filled || data.IsEmpty || data.Length > assembly.Buffer.Length - offset)
         {
-            assemblies.Remove(streamId);
+            assemblies.Remove(key);
             return;
         }
 
@@ -304,19 +320,35 @@ public sealed class ClipboardNode
         }
 
         var hash = Convert.ToHexString(PlatformCrypto.Sha256(assembly.Buffer)).ToLowerInvariant();
-        assemblies.Remove(streamId);
+        assemblies.Remove(key);
         if (!mutual || hash != assembly.Hash)
         {
             return;
         }
 
-        var text = Encoding.UTF8.GetString(assembly.Buffer);
-        if (Encoding.UTF8.GetByteCount(text) != assembly.Buffer.Length)
+        try
         {
-            return;
+            var text = new UTF8Encoding(false, true).GetString(assembly.Buffer);
+            Complete(assembly.Clock, text, assembly.Seq);
         }
+        catch (DecoderFallbackException)
+        {
+        }
+    }
 
-        ApplyIfNewer(assembly.Clock, text, assembly.Seq, assembly.Clock.Origin);
+    public void DropAssemblies(string peerId)
+    {
+        foreach (var stream in assemblies.Where(pair => pair.Value.Clock.Origin == peerId).Select(pair => pair.Key).ToArray())
+        {
+            assemblies.Remove(stream);
+        }
+    }
+
+    public bool ApplyGroupText(HybridClock clock, string text, long sequence)
+    {
+        var before = ApplyCount;
+        ApplyIfNewer(clock, text, sequence, clock.Origin, groupOnly: true);
+        return ApplyCount != before;
     }
 
     List<Frame> EncodeChange(HybridClock clock, long sequence, string text)
@@ -378,7 +410,7 @@ public sealed class ClipboardNode
         return SessionFrame(FrameTypes.CrdtStateVector, 1, FrameTypes.SyncStream, json.Value ?? []);
     }
 
-    void ApplyIfNewer(HybridClock clock, string text, long sequence, string origin)
+    void ApplyIfNewer(HybridClock clock, string text, long sequence, string origin, bool groupOnly = false)
     {
         if (Vector.TryGetValue(origin, out var seen) && sequence <= seen)
         {
@@ -390,9 +422,9 @@ public sealed class ClipboardNode
             return;
         }
 
-        DiscardOlder(clock);
         Text = text;
         Clock = clock;
+        GroupOnly = groupOnly;
         Last = HybridClocks.Issue(Last, clock.Milliseconds, DeviceId);
         if (HybridClock.Compare(Last.Value, clock) <= 0)
         {
@@ -403,16 +435,16 @@ public sealed class ClipboardNode
         ApplyCount++;
     }
 
-    void DiscardOlder(HybridClock clock)
+    void Complete(HybridClock clock, string text, long sequence)
     {
-        var stale = assemblies
-            .Where(pair => HybridClock.Compare(clock, pair.Value.Clock) > 0)
-            .Select(pair => pair.Key)
-            .ToArray();
-        foreach (var key in stale)
+        if (window.Contains((clock.Origin, sequence)))
         {
-            assemblies.Remove(key);
+            return;
         }
+
+        Remember(clock.Origin, sequence);
+        ApplyIfNewer(clock, text, sequence, clock.Origin);
+        TextReceived?.Invoke(clock, sequence, text);
     }
 
     void Remember(string origin, long sequence)
@@ -441,7 +473,7 @@ public sealed class ClipboardNode
         return new Frame(payload.Length, type, priority, 0, streamId, payload);
     }
 
-    sealed class Assembly(HybridClock clock, long seq, long count, string hash, byte[] buffer)
+    sealed class Assembly(HybridClock clock, long seq, string hash, byte[] buffer)
     {
         public HybridClock Clock { get; } = clock;
 
@@ -453,6 +485,5 @@ public sealed class ClipboardNode
 
         public int Filled { get; set; }
 
-        public long Count { get; } = count;
     }
 }

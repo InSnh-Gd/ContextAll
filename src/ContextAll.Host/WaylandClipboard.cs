@@ -1,12 +1,16 @@
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using ContextAll.Protocol;
+using ContextAll.Session.Abstractions;
 
 namespace ContextAll.Host;
 
 public sealed class WaylandClipboard : IDisposable
 {
     public const string PlainMime = "text/plain;charset=utf-8";
+    internal const string SensitiveMime = "x-kde-passwordManagerHint";
+    const string LocalMime = "application/x-contextall-owned-selection";
 
     public static bool IsPlainText(string mime) => mime is "text/plain" or PlainMime;
 
@@ -46,14 +50,16 @@ public sealed class WaylandClipboard : IDisposable
 
     readonly WaylandSocket socket;
     readonly Dictionary<uint, string> offers = [];
-    readonly Dictionary<uint, string> sources = [];
+    readonly HashSet<uint> sensitiveOffers = [];
+    readonly System.Collections.Concurrent.ConcurrentDictionary<uint, byte[]> sources = new();
+    readonly System.Collections.Concurrent.ConcurrentDictionary<uint, TaskCompletionSource<bool>> writes = new();
     readonly object gate = new();
     uint nextId = 2;
     uint registry;
     uint seat;
     uint manager;
     uint device;
-    uint selection;
+    volatile uint selection;
     uint syncCallback;
     readonly List<(uint Name, string Interface)> globals = [];
     bool chosen;
@@ -69,6 +75,7 @@ public sealed class WaylandClipboard : IDisposable
     public bool IsOpen { get; private set; }
 
     public event Action<string>? PlainText;
+    public event Action<ClipboardAttachment>? AttachmentChanged;
 
     public static WaylandClipboard? TryOpen(string? display, string? runtimeDirectory)
     {
@@ -92,20 +99,52 @@ public sealed class WaylandClipboard : IDisposable
         }
     }
 
-    public void SetText(string text)
+    public void SetText(string text) => TrySetText(text);
+
+    internal bool TrySetText(string text) => TrySetData(PlainMime, Encoding.UTF8.GetBytes(text));
+
+    internal bool TrySetData(string mime, byte[] bytes)
     {
         lock (gate)
         {
             if (!IsOpen)
             {
-                return;
+                return false;
             }
 
             var source = nextId++;
-            sources[source] = text;
+            sources[source] = bytes;
             socket.Send(WaylandWire.Message(manager, sourceOpcode, writer => writer.U32(source)));
-            socket.Send(WaylandWire.Message(source, 0, writer => writer.Text(PlainMime)));
+            socket.Send(WaylandWire.Message(source, 0, writer => writer.Text(mime)));
+            socket.Send(WaylandWire.Message(source, 0, writer => writer.Text(LocalMime)));
             socket.Send(WaylandWire.Message(device, 0, writer => writer.U32(source)));
+            return true;
+        }
+    }
+
+    internal async ValueTask<bool> ApplyDataAsync(string mime, byte[] bytes, CancellationToken ct)
+    {
+        uint callback = 0;
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            lock (gate)
+            {
+                if (!TrySetData(mime, bytes)) return false;
+                callback = nextId++;
+                writes[callback] = completion;
+                socket.Send(WaylandWire.Message(1, 0, writer => writer.U32(callback)));
+            }
+
+            return await completion.Task.WaitAsync(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        finally
+        {
+            if (callback != 0) writes.TryRemove(callback, out _);
         }
     }
 
@@ -155,11 +194,20 @@ public sealed class WaylandClipboard : IDisposable
         {
             ready.Set();
         }
+        finally
+        {
+            IsOpen = false;
+            foreach (var write in writes.Values) write.TrySetResult(false);
+        }
     }
 
     void Handle(WaylandMessage message)
     {
-        if (message.ObjectId == registry && message.Opcode == 0)
+        if (message.Opcode == 0 && writes.TryRemove(message.ObjectId, out var write))
+        {
+            write.TrySetResult(true);
+        }
+        else if (message.ObjectId == registry && message.Opcode == 0)
         {
             var offset = 0;
             var name = WaylandWire.U32(message.Body, ref offset);
@@ -194,7 +242,14 @@ public sealed class WaylandClipboard : IDisposable
         {
             var offset = 0;
             var mime = WaylandWire.Text(message.Body, ref offset);
-            offers[message.ObjectId] = PreferPlain(offers[message.ObjectId], mime);
+            if (mime is SensitiveMime or LocalMime)
+            {
+                sensitiveOffers.Add(message.ObjectId);
+            }
+            var current = offers[message.ObjectId];
+            offers[message.ObjectId] = mime == ClipboardAttachment.Image ||
+                (mime == ClipboardMime.UriList && current != ClipboardAttachment.Image) ? mime :
+                current is ClipboardAttachment.Image or ClipboardMime.UriList ? current : PreferPlain(current, mime);
         }
         else if (message.ObjectId == device && message.Opcode == 1)
         {
@@ -204,6 +259,7 @@ public sealed class WaylandClipboard : IDisposable
             {
                 socket.Send(WaylandWire.Message(selection, 1));
                 offers.Remove(selection);
+                sensitiveOffers.Remove(selection);
             }
 
             selection = offer;
@@ -213,7 +269,8 @@ public sealed class WaylandClipboard : IDisposable
                 return;
             }
 
-            if (!offers.TryGetValue(offer, out var mime) || !IsPlainText(mime))
+            if (sensitiveOffers.Contains(offer) || !offers.TryGetValue(offer, out var mime) ||
+                (!IsPlainText(mime) && mime is not (ClipboardAttachment.Image or ClipboardMime.UriList)))
             {
                 return;
             }
@@ -231,8 +288,14 @@ public sealed class WaylandClipboard : IDisposable
             {
                 try
                 {
-                    PlainText?.Invoke(ReadAll(read));
+                    var bytes = ReadAll(read, mime == ClipboardAttachment.Image ? FrameLimits.MaxClipboardAttachmentBytes : FrameLimits.MaxClipboardBytes);
+                    if (bytes is not null && offer == selection)
+                    {
+                        if (IsPlainText(mime)) PlainText?.Invoke(new UTF8Encoding(false, true).GetString(bytes));
+                        else if (ClipboardMime.Decode(mime, bytes) is { } attachment && offer == selection) AttachmentChanged?.Invoke(attachment);
+                    }
                 }
+                catch (DecoderFallbackException) { }
                 finally
                 {
                     Native.close(read);
@@ -242,19 +305,23 @@ public sealed class WaylandClipboard : IDisposable
         else if (sources.ContainsKey(message.ObjectId) && message.Opcode == 0)
         {
             var file = socket.TakeFile();
-            if (file < 0 || !sources.TryGetValue(message.ObjectId, out var text))
+            if (file < 0)
             {
                 return;
             }
 
             try
             {
-                var bytes = Encoding.UTF8.GetBytes(text);
+                var offset = 0;
+                var mime = WaylandWire.Text(message.Body, ref offset);
+                if (mime == LocalMime || !sources.TryGetValue(message.ObjectId, out var bytes)) return;
                 var written = 0;
+                var chunk = new byte[64 * 1024];
                 while (written < bytes.Length)
                 {
-                    var slice = bytes[written..];
-                    var count = Native.write(file, slice, (nuint)slice.Length);
+                    var length = Math.Min(chunk.Length, bytes.Length - written);
+                    bytes.AsSpan(written, length).CopyTo(chunk);
+                    var count = Native.write(file, chunk, (nuint)length);
                     if (count <= 0)
                     {
                         break;
@@ -268,16 +335,25 @@ public sealed class WaylandClipboard : IDisposable
                 Native.close(file);
             }
         }
+        else if (message.Opcode == 1 && sources.TryRemove(message.ObjectId, out _))
+        {
+            socket.Send(WaylandWire.Message(message.ObjectId, 1));
+        }
     }
 
-    static string ReadAll(int fd)
+    static byte[]? ReadAll(int fd, int limit)
     {
         var buffer = new byte[4096];
         using var stream = new MemoryStream();
         while (true)
         {
             var count = Native.read(fd, buffer, (nuint)buffer.Length);
-            if (count <= 0)
+            if (count < 0 || stream.Length + (long)count > limit)
+            {
+                return null;
+            }
+
+            if (count == 0)
             {
                 break;
             }
@@ -285,7 +361,7 @@ public sealed class WaylandClipboard : IDisposable
             stream.Write(buffer, 0, (int)count);
         }
 
-        return Encoding.UTF8.GetString(stream.ToArray());
+        return stream.ToArray();
     }
 
     static class Native

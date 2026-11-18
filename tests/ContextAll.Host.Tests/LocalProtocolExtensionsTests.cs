@@ -14,7 +14,11 @@ public sealed class LocalProtocolExtensionsTests
     {
         Assert.True(LocalFrameTypes.IsCommand(FrameTypes.ConnectEndpoint));
         Assert.True(LocalFrameTypes.IsCommand(FrameTypes.PushClipboardText));
-        Assert.False(LocalFrameTypes.IsCommand(78));
+        Assert.True(LocalFrameTypes.IsCommand(FrameTypes.ReadClipboardHistory));
+        Assert.True(LocalFrameTypes.IsCommand(FrameTypes.ConfigureClipboardHistory));
+        Assert.True(LocalFrameTypes.IsCommand(FrameTypes.UseClipboardHistory));
+        Assert.False(LocalFrameTypes.IsCommand(FrameTypes.Snapshot));
+        Assert.False(LocalFrameTypes.IsCommand(91));
         Assert.Equal(1024 * 1024, FrameLimits.MaxClipboardBytes);
 
         var connect = new LocalCommandPayload(

@@ -45,7 +45,16 @@ public sealed record DeltaPayload(
     long? ByteCount,
     string? Sha256);
 
-public sealed record CommandResultPayload(string RequestId, bool Ok, string? Error);
+public sealed record ClipboardHistoryEntry(string Id, string Origin, string Source, string Preview, long CopiedAt);
+
+public sealed record ClipboardGroupPermit(string? Group, long Since, bool Request = false);
+
+public sealed record ClipboardGroupItem(string Group, string Origin, long Sequence, long Milliseconds, uint Counter, int Bytes, string Sha256, bool Replay, long RelayedAt = 0,
+    string? Mime = null, string? Name = null);
+
+public sealed record ClipboardHistoryPage(bool Enabled, int RetentionDays, ClipboardHistoryEntry[] Entries, int? NextOffset, string? GroupOwner = null);
+
+public sealed record CommandResultPayload(string RequestId, bool Ok, string? Error, ClipboardHistoryPage? ClipboardHistory = null);
 
 public sealed record LocalCommandPayload(
     string RequestId,
@@ -149,6 +158,8 @@ public sealed record TransferEndedPayload(string TransferId, string Outcome);
 [JsonSerializable(typeof(ClockPayload))]
 [JsonSerializable(typeof(VectorPayload))]
 [JsonSerializable(typeof(DeltaPayload))]
+[JsonSerializable(typeof(ClipboardGroupPermit))]
+[JsonSerializable(typeof(ClipboardGroupItem))]
 [JsonSerializable(typeof(CommandResultPayload))]
 [JsonSerializable(typeof(LocalCommandPayload))]
 [JsonSerializable(typeof(DeviceSnapshotPayload))]

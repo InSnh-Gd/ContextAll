@@ -24,6 +24,8 @@ public sealed class ClipboardFileModel
     public string AppliedText { get; set; } = "";
 
     public long Sequence { get; set; }
+
+    public bool GroupOnly { get; set; }
 }
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
@@ -84,7 +86,8 @@ public static class ClipboardFiles
                 ? new HybridClock(last, model.LastCounter ?? 0, model.LastOrigin)
                 : null,
             model.AppliedText,
-            model.Sequence);
+            model.Sequence,
+            model.GroupOnly);
     }
 
     public static void Write(string path, ClipboardDocument document)
@@ -108,6 +111,7 @@ public static class ClipboardFiles
             LastOrigin = document.Last?.Origin,
             AppliedText = document.AppliedText,
             Sequence = document.Sequence,
+            GroupOnly = document.GroupOnly,
         };
         var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(model, ClipboardJsonContext.Default.ClipboardFileModel);
         var temp = path + ".tmp";

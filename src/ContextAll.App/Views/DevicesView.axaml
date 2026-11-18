@@ -16,7 +16,7 @@
               Padding="18"
               Margin="0,0,12,0">
         <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
-          <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
               <TextBlock Text="设备" Classes="HeadlineSmallEmphasized" Foreground="{DynamicResource OnSurface}" />
               <TextBlock Text="已配对与附近可连接设备" Classes="BodySmall" Foreground="{DynamicResource OnSurfaceVariant}" />
@@ -34,6 +34,11 @@
                           Foreground="{DynamicResource OnSecondaryContainer}" />
                 <TextBlock Text="推送剪贴板" Classes="LabelLarge" VerticalAlignment="Center" />
               </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Classes="FilledTonal" Click="OnClipboardHistoryClicked"
+                    CornerRadius="20" Padding="10,9" VerticalAlignment="Center"
+                    ToolTip.Tip="剪贴板历史" AutomationProperties.Name="剪贴板历史">
+              <PathIcon Width="16" Height="16" Data="{DynamicResource Material_IconContentPaste}" />
             </Button>
           </Grid>
 

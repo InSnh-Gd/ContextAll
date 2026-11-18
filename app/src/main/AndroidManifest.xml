@@ -21,10 +21,31 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ContextAll">
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.clipboard"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/clipboard_shared_paths" />
+        </provider>
+
         <service
             android:name=".service.LinkService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <service
+            android:name=".service.ClipboardHistoryTile"
+            android:exported="true"
+            android:icon="@android:drawable/ic_menu_agenda"
+            android:label="@string/clipboard_history"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <activity
             android:name=".service.ClipboardCaptureActivity"
