@@ -29,8 +29,7 @@ public sealed class ShellStartupAndPreferencesTests
     [Fact]
     public async Task SingleInstanceShell_activates_existing_instance_and_recovers_stale_socket()
     {
-        var tempRoot = Path.Combine(Path.GetTempPath(), "contextall-shell-sock-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(tempRoot);
+        var tempRoot = Directory.CreateTempSubdirectory("ca-").FullName;
         try
         {
             var socketPath = SingleInstanceShell.SocketPath(tempRoot);

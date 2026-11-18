@@ -400,9 +400,7 @@ public sealed class Md3eThemeAndAppearanceTests
                 CandidateIconDirectories: [systemIcons],
                 RuntimeAliasIconsDirectory: aliasDir));
 
-            var parts = resolved.CursorPath.Split(':', StringSplitOptions.RemoveEmptyEntries);
-            Assert.Equal(aliasDir, parts[0]);
-            Assert.Contains(systemIcons, parts);
+            Assert.Equal($"{aliasDir}:/usr/share/icons:{systemIcons}", resolved.CursorPath);
         }
         finally
         {
