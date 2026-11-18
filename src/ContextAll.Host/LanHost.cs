@@ -57,11 +57,8 @@ public sealed class LanHost : IDisposable
     public static LanHost? TryCreate()
     {
         var paths = HostPaths.ForThisPlatform();
-        var clipboard = LinuxClipboardSource.TryOpen(
-            Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"),
-            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
-            Environment.GetEnvironmentVariable("DISPLAY"));
         var sink = new LinuxTransferSink(paths.DefaultDownloadDirectory);
+        IClipboardSource? clipboard = null;
         try
         {
             var identity = IdentityStore.Start(paths.IdentityDirectory);
@@ -78,6 +75,12 @@ public sealed class LanHost : IDisposable
             }
 
             var discovery = CreateLinuxDiscovery(identity.Material, displayName, QuicLink.Port);
+            clipboard = OperatingSystem.IsWindows()
+                ? WindowsClipboardSource.TryOpen()
+                : LinuxClipboardSource.TryOpen(
+                    Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"),
+                    Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
+                    Environment.GetEnvironmentVariable("DISPLAY"));
             var engine = new SessionHost(
                 paths,
                 clipboard,
@@ -92,6 +95,7 @@ public sealed class LanHost : IDisposable
         }
         catch
         {
+            clipboard?.Dispose();
             return null;
         }
     }
@@ -172,6 +176,11 @@ public sealed class LanHost : IDisposable
             {
                 var pushError = HandleClipboardPush(client, body);
                 client.Post(Result(body.RequestId, pushError is null, pushError));
+            }
+            else if (engine.ClipboardHistoryCommand(body, frame.Type) is { } historyResult)
+            {
+                client.Post(FrameMessages.Json(FrameTypes.CommandResult, 0, 0, FrameTypes.SessionStream,
+                    historyResult, ProtocolJsonContext.Default.CommandResultPayload));
             }
             else
             {
