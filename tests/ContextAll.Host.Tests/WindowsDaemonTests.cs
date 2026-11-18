@@ -30,7 +30,7 @@ public sealed class WindowsDaemonTests
     public async Task Pipe_daemon_serves_two_clients_the_same_snapshot()
     {
         var root = Directory.CreateTempSubdirectory("contextall-pipe-").FullName;
-        var sid = "wd" + Guid.NewGuid().ToString("N");
+        var sid = OperatingSystem.IsWindows() ? LocalChannelClient.CurrentUserSid() : "wd" + Guid.NewGuid().ToString("N");
         using var cts = new CancellationTokenSource();
         var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var serve = DaemonProcess.ServePipe(
@@ -65,7 +65,7 @@ public sealed class WindowsDaemonTests
     public async Task Second_pipe_serve_exits_when_the_name_is_taken()
     {
         var root = Directory.CreateTempSubdirectory("contextall-pipe-").FullName;
-        var sid = "wd" + Guid.NewGuid().ToString("N");
+        var sid = OperatingSystem.IsWindows() ? LocalChannelClient.CurrentUserSid() : "wd" + Guid.NewGuid().ToString("N");
         using var cts = new CancellationTokenSource();
         var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var serve = DaemonProcess.ServePipe(
@@ -84,7 +84,7 @@ public sealed class WindowsDaemonTests
     }
 
     [Fact]
-    public void Pipe_security_grants_the_current_user_and_denies_everyone()
+    public void Pipe_security_grants_only_the_current_user()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -95,20 +95,19 @@ public sealed class WindowsDaemonTests
         const string sid = "S-1-5-21-3623811015-3361044348-30300820-1013";
         var security = PipeAcl.CurrentUserOnly(sid);
         var rules = security.GetAccessRules(true, false, typeof(SecurityIdentifier)).Cast<PipeAccessRule>().ToArray();
-        Assert.Contains(rules, rule =>
+        var rule = Assert.Single(rules);
+        Assert.True(
             rule.AccessControlType == AccessControlType.Allow
             && rule.PipeAccessRights.HasFlag(PipeAccessRights.FullControl)
             && rule.IdentityReference.Value == sid);
-        Assert.Contains(rules, rule =>
-            rule.AccessControlType == AccessControlType.Deny
-            && rule.IdentityReference.Value == "S-1-1-0");
+        Assert.True(security.AreAccessRulesProtected);
     }
 
     [Fact]
     public async Task Windows_serve_starts_without_xdg_variables()
     {
         var root = Directory.CreateTempSubdirectory("contextall-xdg-").FullName;
-        var sid = "wd" + Guid.NewGuid().ToString("N");
+        var sid = OperatingSystem.IsWindows() ? LocalChannelClient.CurrentUserSid() : "wd" + Guid.NewGuid().ToString("N");
         using var cts = new CancellationTokenSource();
         var listening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var serve = DaemonProcess.ServeDefault(

@@ -11,10 +11,9 @@ public static class PipeAcl
     public static PipeSecurity CurrentUserOnly(string userSid)
     {
         var security = new PipeSecurity();
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         var user = new SecurityIdentifier(userSid);
         security.AddAccessRule(new PipeAccessRule(user, PipeAccessRights.FullControl, AccessControlType.Allow));
-        var world = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
-        security.AddAccessRule(new PipeAccessRule(world, PipeAccessRights.FullControl, AccessControlType.Deny));
         return security;
     }
 }
