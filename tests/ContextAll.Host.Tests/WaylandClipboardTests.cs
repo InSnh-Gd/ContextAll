@@ -2,7 +2,7 @@ namespace ContextAll.Host.Tests;
 
 public sealed class WaylandClipboardTests
 {
-    [Theory]
+    [LinuxTheory]
     [InlineData("zwlr_data_control_manager_v1")]
     [InlineData("ext_data_control_manager_v1")]
     public void A_wayland_clipboard_round_trip_reads_and_writes_plain_text(string manager)
@@ -38,5 +38,16 @@ public sealed class WaylandClipboardTests
         }
 
         Assert.Fail("wayland clipboard did not settle");
+    }
+
+    sealed class LinuxTheoryAttribute : TheoryAttribute
+    {
+        public LinuxTheoryAttribute()
+        {
+            if (!OperatingSystem.IsLinux())
+            {
+                Skip = "Wayland clipboard integration requires Linux.";
+            }
+        }
     }
 }
