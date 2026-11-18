@@ -5,6 +5,7 @@ using Xunit;
 
 namespace ContextAll.Host.Tests;
 
+[Collection("DiscoverySockets")]
 public sealed class LocalDaemonConnectionTests
 {
     [Fact]
@@ -58,7 +59,7 @@ public sealed class LocalDaemonConnectionTests
 
             using var cts1 = new CancellationTokenSource();
             var listening1 = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var serve1 = DaemonProcess.Serve(
+            var serve1 = DaemonProcess.ServeDefault(
                 runtimeDir,
                 () => LanHost.CreateIsolated(host1Dir),
                 _ =>
@@ -106,7 +107,7 @@ public sealed class LocalDaemonConnectionTests
             var listening2 = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var host2 = LanHost.CreateIsolated(host2Dir);
             host2.Engine.Apply(new LocalCommandPayload("init1", null, "Reborn Host", null, null, null), FrameTypes.SetDisplayName);
-            var serve2 = DaemonProcess.Serve(
+            var serve2 = DaemonProcess.ServeDefault(
                 runtimeDir,
                 () => host2,
                 _ =>

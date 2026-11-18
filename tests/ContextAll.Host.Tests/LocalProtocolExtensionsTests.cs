@@ -7,6 +7,7 @@ using Xunit;
 
 namespace ContextAll.Host.Tests;
 
+[Collection("DiscoverySockets")]
 public sealed class LocalProtocolExtensionsTests
 {
     [Fact]
