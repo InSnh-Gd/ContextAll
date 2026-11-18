@@ -68,13 +68,16 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     Socket? udp6;
     MdnsDiscovery? mdns;
     readonly IClipboardSource? clipboard;
+    readonly ClipboardHistoryStore clipboardHistory;
     readonly IDiscovery? discovery;
     readonly ITransferSink? transferSink;
     readonly IFirewallProfile? firewall;
     readonly int quicPort;
     PeerLink? prompt;
     string? pendingText;
-    bool pendingWrite;
+    ClipboardAttachment? pendingAttachment;
+    bool clipboardMayBeAttachment;
+    bool flushingClipboard;
     bool disposed;
 
     public event Action<IReadOnlyList<Frame>>? Published;
@@ -131,6 +134,8 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         }
 
         Clipboard = new ClipboardNode(identity.DeviceId);
+        clipboardHistory = OpenHistory(paths.StateDirectory);
+        ClipboardGroup = new ClipboardGroup(LocalDeviceId, paths.StateDirectory);
         var clipboardPath = Path.Combine(paths.StateDirectory, "clipboard.json");
         ClipboardFiles.Listen(clipboardPath, null, false);
         ClipboardPath = clipboardPath;
@@ -186,6 +191,8 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         }
 
         Clipboard = new ClipboardNode(identity.DeviceId);
+        clipboardHistory = OpenHistory(stateDirectory);
+        ClipboardGroup = new ClipboardGroup(LocalDeviceId, stateDirectory);
         var clipboardPath = Path.Combine(stateDirectory, "clipboard.json");
         ClipboardFiles.Listen(clipboardPath, null, false);
         ClipboardPath = clipboardPath;
@@ -221,6 +228,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     public byte[] LocalSpki { get; }
 
     public ClipboardNode Clipboard { get; }
+    public ClipboardGroup ClipboardGroup { get; }
 
     public TransferStore Store { get; }
 
@@ -231,6 +239,241 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     public string Applied { get; set; }
 
     public string ClipboardPath { get; }
+    internal string ClipboardStateDirectory => Path.GetDirectoryName(ClipboardPath) ?? throw new InvalidOperationException("clipboard-state-directory");
+
+    ClipboardHistoryStore OpenHistory(string stateDirectory)
+    {
+        Clipboard.TextReceived += RecordClipboardHistory;
+        return new ClipboardHistoryStore(Path.Combine(stateDirectory, "clipboard-history"), origin =>
+            origin == LocalDeviceId ? DisplayName : trust.TryGetValue(origin, out var entry) ? entry.DisplayName : origin);
+    }
+
+    static long ClipboardNow() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    void RecordClipboardHistory(HybridClock clock, long sequence, string text)
+    {
+        lock (Gate)
+        {
+            try
+            {
+                clipboardHistory.Record(clock, sequence, text, ClipboardNow());
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("clipboard-history-save-failed");
+            }
+        }
+    }
+
+    void CleanClipboardHistory()
+    {
+        lock (Gate)
+        {
+            try
+            {
+                clipboardHistory.Cleanup(ClipboardNow());
+                clipboard?.CleanAttachmentCache(clipboardHistory.RetentionDays);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("clipboard-history-cleanup-failed");
+            }
+        }
+    }
+
+    public ClipboardHistoryPage ReadClipboardHistory(int offset)
+    {
+        lock (Gate)
+        {
+            return clipboardHistory.Read(offset, ClipboardNow()) with { GroupOwner = ClipboardGroup.Owner };
+        }
+    }
+
+    public CommandResultPayload? ClipboardHistoryCommand(LocalCommandPayload body, byte type)
+    {
+        if (type is not (FrameTypes.ReadClipboardHistory or FrameTypes.ConfigureClipboardHistory or FrameTypes.UseClipboardHistory or FrameTypes.ConfigureClipboardGroup))
+        {
+            return null;
+        }
+
+        lock (Gate)
+        {
+            try
+            {
+                if (type == FrameTypes.ReadClipboardHistory)
+                {
+                    return new CommandResultPayload(body.RequestId, true, null, ReadClipboardHistory(body.Offset ?? 0));
+                }
+
+                var error = type switch
+                {
+                    FrameTypes.ConfigureClipboardHistory when body.Enabled == false && ClipboardGroup.Enabled => "leave-group-first",
+                    FrameTypes.ConfigureClipboardHistory => clipboardHistory.Configure(body.Enabled, body.TotalBytes, ClipboardNow()),
+                    FrameTypes.ConfigureClipboardGroup => ConfigureClipboardGroup(body),
+                    _ => UseClipboardHistory(body.TransferId, body.Enabled == true),
+                };
+                return new CommandResultPayload(body.RequestId, error is null, error);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                PlatformCrypto.LogDiagnostic($"clipboard-history-io {ex.GetType().Name} 0x{ex.HResult:X8}");
+                return new CommandResultPayload(body.RequestId, false, "clipboard-history-io");
+            }
+        }
+    }
+
+    string? ConfigureClipboardGroup(LocalCommandPayload body)
+    {
+        if (body.DeviceId is { } member)
+        {
+            if (!ClipboardGroup.IsOwner || !trust.ContainsKey(member) || body.Enabled is not bool invited)
+            {
+                return "invalid-group-member";
+            }
+
+            ClipboardGroup.Invite(member, invited);
+            Live(member)?.RefreshGroup();
+            return null;
+        }
+
+        if (body.DisplayName is not { } owner)
+        {
+            return "invalid-group-owner";
+        }
+
+        owner = owner == "self" ? LocalDeviceId : owner.Trim();
+        if (owner.Length > 0 && owner != LocalDeviceId && !trust.ContainsKey(owner))
+        {
+            return "not-trusted";
+        }
+
+        if (owner.Length > 0)
+        {
+            clipboardHistory.Configure(true, null, ClipboardNow());
+        }
+
+        if (!ClipboardGroup.IsOwner && ClipboardGroup.Owner is { } previous && previous != owner)
+        {
+            Live(previous)?.LeaveGroup();
+        }
+
+        var error = ClipboardGroup.Configure(owner.Length == 0 ? null : owner);
+        foreach (var link in links.Where(link => link.Entered && !link.Closed))
+        {
+            link.RefreshGroup();
+            link.PushClipboard();
+        }
+
+        return error;
+    }
+
+    internal void ReplayGroup(PeerLink link, long since)
+    {
+        if (ClipboardGroup.Group is not { } group) return;
+        try
+        {
+            foreach (var (item, bytes) in clipboardHistory.Replay(group, since, ClipboardGroup.IsOwner ? null : LocalDeviceId, link.RemoteId, ClipboardNow()))
+            {
+                if (!ClipboardGroup.IsOwner || item.Origin == LocalDeviceId || ClipboardGroup.MemberSince(item.Origin) is not null)
+                {
+                    link.SendGroupItem(item, bytes);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine("clipboard-group-replay-failed");
+        }
+    }
+
+    internal bool HasGroupItem(ClipboardGroupItem item) => clipboardHistory.Contains(item);
+
+    internal void ReceiveGroupItem(PeerLink link, ClipboardGroupItem item, byte[] bytes)
+    {
+        if (!ClipboardGroup.Allows(link.RemoteId, item, link.GroupReady) ||
+            !Convert.ToHexString(PlatformCrypto.Sha256(bytes)).Equals(item.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            var clock = new HybridClock(item.Milliseconds, item.Counter, item.Origin);
+            if (ClipboardGroup.IsOwner) item = item with { RelayedAt = ClipboardNow() };
+            if (item.Mime is { } mime && item.Name is { } name)
+            {
+                var attachment = new ClipboardAttachment(mime, name, bytes);
+                if (!attachment.IsValid() || !clipboardHistory.Record(clock, item.Sequence, name, bytes, ClipboardNow(), item)) return;
+                if (!item.Replay && Clipboard.ApplyGroupText(clock, "", item.Sequence))
+                {
+                    pendingText = null;
+                    pendingAttachment = attachment;
+                    SaveClipboard(Applied);
+                }
+            }
+            else
+            {
+                var text = new UTF8Encoding(false, true).GetString(bytes);
+                if (!clipboardHistory.Record(clock, item.Sequence, text, bytes, ClipboardNow(), item)) return;
+                if (!item.Replay && Clipboard.ApplyGroupText(clock, text, item.Sequence)) WriteClipboard(text);
+            }
+
+            if (ClipboardGroup.IsOwner)
+            {
+                SendGroupItem(item, bytes, link.RemoteId);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DecoderFallbackException)
+        {
+            Console.Error.WriteLine("clipboard-group-item-failed");
+        }
+    }
+
+    void SendGroupItem(ClipboardGroupItem item, byte[] bytes, string? except = null)
+    {
+        foreach (var link in links.Where(link => link.GroupReady && !link.Closed && link.RemoteId != except))
+        {
+            if (ClipboardGroup.IsOwner
+                ? ClipboardGroup.MemberSince(link.RemoteId) is long since && item.Milliseconds >= since && item.RelayedAt >= since
+                : link.RemoteId == ClipboardGroup.Owner)
+            {
+                link.SendGroupItem(item, bytes);
+            }
+        }
+    }
+
+    string? UseClipboardHistory(string? id, bool sync)
+    {
+        if (clipboardHistory.ReadAttachment(id, ClipboardNow()) is { } attachment && attachment.IsValid())
+        {
+            if (sync) return PushClipboardAttachment(attachment, fromSystem: false);
+            if (clipboard is not { IsSupported: true }) return "clipboard-unavailable";
+            pendingText = null;
+            pendingAttachment = attachment;
+            return null;
+        }
+
+        var text = clipboardHistory.ReadText(id, ClipboardNow());
+        if (text is null)
+        {
+            return "clipboard-history-missing";
+        }
+
+        if (sync)
+        {
+            ApplyLocalClipboard(text, skipIfUnchanged: false, fromSystem: false);
+            return null;
+        }
+
+        if (clipboard is not { IsSupported: true })
+        {
+            return "clipboard-unavailable";
+        }
+
+        pendingAttachment = null;
+        pendingText = text;
+        return null;
+    }
 
     public static SessionHost CreateIsolated(string root)
     {
@@ -263,12 +506,14 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     {
         run = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, stop.Token);
         var token = run.Token;
+        CleanClipboardHistory();
         if (clipboard is not null)
         {
             Console.Error.WriteLine(clipboard.IsSupported ? "clipboard-ready" : "clipboard-disabled");
             if (clipboard.IsSupported)
             {
                 clipboard.PlainText += OnPlain;
+                clipboard.AttachmentChanged += OnAttachment;
                 clipboard.ClipboardChanged += (mime, data) =>
                 {
                     if (mime == "text/plain;charset=utf-8" || mime.StartsWith("text/plain", StringComparison.OrdinalIgnoreCase))
@@ -276,6 +521,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                         OnPlain(Encoding.UTF8.GetString(data));
                     }
                 };
+                _ = ReconcileStartupClipboardAsync(clipboard, token);
             }
         }
         else
@@ -344,6 +590,27 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         _ = Task.Run(() => DialLoop(token), token);
     }
 
+    async Task ReconcileStartupClipboardAsync(IClipboardSource source, CancellationToken token)
+    {
+        HybridClock? previous;
+        lock (Gate) previous = Clipboard.Clock;
+        try
+        {
+            var text = await source.ReadTextAsync(token).ConfigureAwait(false);
+            lock (Gate)
+            {
+                if (!disposed && !token.IsCancellationRequested && previous == Clipboard.Clock && text is not null)
+                {
+                    OnPlain(text);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+        {
+            Console.Error.WriteLine("clipboard-startup-read-failed");
+        }
+    }
+
     public Frame Snapshot()
     {
         lock (Gate)
@@ -364,7 +631,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     {
         lock (Gate)
         {
-            return LocalClipboard(deviceId) && RemoteClipboard(deviceId);
+            return !ClipboardGroup.Enabled && LocalClipboard(deviceId) && RemoteClipboard(deviceId);
         }
     }
 
@@ -488,6 +755,11 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         lock (Gate)
         {
             trust.Remove(deviceId);
+            ClipboardGroup.Revoke(deviceId);
+            if (!ClipboardGroup.IsOwner && ClipboardGroup.Owner == deviceId)
+            {
+                ClipboardGroup.Configure(null);
+            }
             settings.Trust.RemoveAll(item => item.DeviceId == deviceId);
             routes.ForgetTrust(deviceId);
             remoteClipboard.Remove(deviceId);
@@ -600,6 +872,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     {
         lock (Gate)
         {
+            link.DropIncomingGroupItem();
             if (!links.Remove(link))
             {
                 if (!links.Any(item => item.RemoteId == link.RemoteId && !item.Closed))
@@ -613,6 +886,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             if (!links.Any(item => item.RemoteId == link.RemoteId && !item.Closed))
             {
                 routes.CloseSession(link.RemoteId);
+                Clipboard.DropAssemblies(link.RemoteId);
             }
             if (ReferenceEquals(prompt, link))
             {
@@ -656,7 +930,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             frame.Priority,
             frame.Flags,
             frame.StreamId,
-            vector with { ClipboardSync = enabled },
+            ClipboardGroup.Enabled || Clipboard.GroupOnly ? new VectorPayload([], null, enabled && !ClipboardGroup.Enabled) : vector with { ClipboardSync = enabled },
             ProtocolJsonContext.Default.VectorPayload);
     }
 
@@ -679,29 +953,70 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     {
         lock (Gate)
         {
+            pendingAttachment = null;
             pendingText = text;
-            pendingWrite = true;
+            SaveClipboard(Applied);
         }
     }
 
-    public void FlushClipboard()
+    public void FlushClipboard() => _ = FlushClipboardAsync();
+
+    async Task FlushClipboardAsync()
     {
-        string? text;
         lock (Gate)
         {
-            if (!pendingWrite)
+            if (flushingClipboard || (pendingText is null && pendingAttachment is null))
             {
                 return;
             }
 
-            pendingWrite = false;
-            text = pendingText ?? "";
+            flushingClipboard = true;
         }
 
-        if (clipboard is not null && clipboard.IsSupported)
+        while (true)
         {
-            clipboard.SetText(text);
-            _ = clipboard.SetClipboardAsync("text/plain;charset=utf-8", Encoding.UTF8.GetBytes(text), CancellationToken.None);
+            string? text;
+            ClipboardAttachment? attachment;
+            HybridClock? clock;
+            lock (Gate)
+            {
+                if (disposed || (pendingText is null && pendingAttachment is null) || clipboard is not { IsSupported: true })
+                {
+                    pendingText = null;
+                    pendingAttachment = null;
+                    flushingClipboard = false;
+                    return;
+                }
+
+                text = pendingText;
+                attachment = pendingAttachment;
+                pendingText = null;
+                pendingAttachment = null;
+                clock = Clipboard.Clock;
+            }
+
+            try
+            {
+                var accepted = attachment is not null
+                    ? await clipboard.ApplyAttachmentAsync(attachment, stop.Token).ConfigureAwait(false)
+                    : text is not null && await clipboard.ApplyTextAsync(text, stop.Token).ConfigureAwait(false);
+                if (accepted)
+                {
+                    lock (Gate)
+                    {
+                        if (!disposed && pendingText is null && pendingAttachment is null && Clipboard.Clock == clock)
+                        {
+                            clipboardMayBeAttachment = attachment is not null;
+                            if (text is not null) Applied = text;
+                            SaveClipboard(Applied);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine("clipboard-write-failed");
+            }
         }
     }
 
@@ -969,6 +1284,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             while (!cancellationToken.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(ReconcileSeconds), cancellationToken).ConfigureAwait(false);
+                CleanClipboardHistory();
                 await RebuildNetworkAsync().ConfigureAwait(false);
             }
         }
@@ -1088,6 +1404,11 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
     public string? Apply(LocalCommandPayload body, byte type)
     {
+        if (ClipboardHistoryCommand(body, type) is { } historyResult)
+        {
+            return historyResult.Error;
+        }
+
         if (type != FrameTypes.SendFile)
         {
             var validation = LocalOperator.Validate(type, body);
@@ -1154,6 +1475,14 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                 }
 
                 return PushClipboardText(body.Text);
+            case FrameTypes.PushClipboardAttachment:
+                if (!ClipboardGroup.Enabled || body.Path is not { } path || ClipboardAttachment.ReadFile(path) is not { } attachment)
+                {
+                    return "invalid-clipboard-attachment";
+                }
+
+                if (body.DisplayName == ClipboardAttachment.Image) attachment = attachment with { Mime = ClipboardAttachment.Image };
+                return PushClipboardAttachment(attachment);
             default:
                 return "invalid";
         }
@@ -1307,17 +1636,61 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
 
     void OnPlain(string text) => ApplyLocalClipboard(text, skipIfUnchanged: true);
 
-    void ApplyLocalClipboard(string text, bool skipIfUnchanged)
+    void OnAttachment(ClipboardAttachment attachment) => PushClipboardAttachment(attachment, fromSystem: true);
+
+    public string? PushClipboardAttachment(ClipboardAttachment attachment, bool fromSystem = true)
     {
+        if (!attachment.IsValid()) return "invalid-clipboard-attachment";
+        lock (Gate)
+        {
+            if (!ClipboardGroup.Enabled) return "clipboard-group-required";
+            var now = ClipboardNow();
+            Clipboard.OnLocal(ClipboardKind.Plain, "", now, groupOnly: true);
+            if (fromSystem)
+            {
+                pendingText = null;
+                pendingAttachment = null;
+                clipboardMayBeAttachment = true;
+            }
+
+            SaveClipboard(Applied);
+            if (ClipboardGroup.Group is not { } group || Clipboard.Clock is not HybridClock clock)
+            {
+                return "clipboard-group-not-admitted";
+            }
+
+            var item = new ClipboardGroupItem(group, LocalDeviceId, Clipboard.Sequence, clock.Milliseconds, clock.Counter,
+                attachment.Bytes.Length, Convert.ToHexString(PlatformCrypto.Sha256(attachment.Bytes)), false,
+                ClipboardGroup.IsOwner ? now : 0, attachment.Mime, attachment.Name);
+            try
+            {
+                clipboardHistory.Record(clock, item.Sequence, attachment.Name, attachment.Bytes, now, item);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return "clipboard-history-io";
+            }
+
+            SendGroupItem(item, attachment.Bytes);
+            return null;
+        }
+    }
+
+    void ApplyLocalClipboard(string text, bool skipIfUnchanged, bool fromSystem = true)
+    {
+        if (Encoding.UTF8.GetByteCount(text) > FrameLimits.MaxClipboardBytes)
+        {
+            return;
+        }
+
         List<DirectedFrame> sent = [];
         lock (Gate)
         {
-            if (skipIfUnchanged && text == Applied)
+            if (skipIfUnchanged && !clipboardMayBeAttachment && text == Applied)
             {
                 return;
             }
 
-            var previous = Applied;
             foreach (var link in links)
             {
                 link.PostFrames([]);
@@ -1329,9 +1702,40 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
                 Clipboard.Connect(id, LocalClipboard(id), RemoteClipboard(id));
             }
 
-            sent = Clipboard.OnLocal(ClipboardKind.Plain, text, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).ToList();
-            SaveClipboard(previous);
-            Applied = Clipboard.Text;
+            var now = ClipboardNow();
+            sent = Clipboard.OnLocal(ClipboardKind.Plain, text, now, groupOnly: ClipboardGroup.Enabled).ToList();
+            if (Clipboard.Clock is HybridClock clock)
+            {
+                if (ClipboardGroup.Group is { } group)
+                {
+                    var bytes = Encoding.UTF8.GetBytes(text);
+                    var item = new ClipboardGroupItem(group, LocalDeviceId, Clipboard.Sequence, clock.Milliseconds, clock.Counter,
+                        bytes.Length, Convert.ToHexString(PlatformCrypto.Sha256(bytes)), false, ClipboardGroup.IsOwner ? now : 0);
+                    try
+                    {
+                        clipboardHistory.Record(clock, item.Sequence, text, now, item);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        Console.Error.WriteLine("clipboard-group-item-save-failed");
+                    }
+
+                    SendGroupItem(item, bytes);
+                }
+                else
+                {
+                    RecordClipboardHistory(clock, Clipboard.Sequence, text);
+                }
+            }
+
+            if (fromSystem)
+            {
+                pendingText = null;
+                pendingAttachment = null;
+                clipboardMayBeAttachment = false;
+                Applied = Clipboard.Text;
+            }
+
             SaveClipboard(Applied);
             foreach (var item in sent)
             {
