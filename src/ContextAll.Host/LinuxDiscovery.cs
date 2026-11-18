@@ -169,7 +169,7 @@ public sealed class LinuxDiscovery : IDiscovery
                 var beacon = outcome.Value;
                 var remoteIp = ((IPEndPoint)result.RemoteEndPoint).Address;
                 var remoteAddress = remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4().ToString() : remoteIp.ToString();
-                var devId = DeviceIds.Text(beacon.Digest);
+                var devId = "ca1" + Base32.Encode(beacon.Digest);
 
                 if (devId == deviceId || beacon.Digest.AsSpan().SequenceEqual(digest)) continue;
 

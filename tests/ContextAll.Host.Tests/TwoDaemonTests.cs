@@ -109,15 +109,15 @@ public sealed class TwoDaemonTests
             await WaitLog(daemonB, "clipboard-ready");
             Console.Error.WriteLine("step ready");
 
-            var peerOfA = await WaitSnapshot(left.Runtime, snap => snap.Devices.Length > 0);
-            var peerOfB = await WaitSnapshot(right.Runtime, snap => snap.Devices.Length > 0);
-            var bId = peerOfA.Devices[0].DeviceId;
-            var aId = peerOfB.Devices[0].DeviceId;
+            var aId = (await WaitSnapshot(left.Runtime, snap => snap.LocalDeviceId.Length > 0)).LocalDeviceId;
+            var bId = (await WaitSnapshot(right.Runtime, snap => snap.LocalDeviceId.Length > 0)).LocalDeviceId;
+            await WaitSnapshot(left.Runtime, snap => snap.Devices.Any(device => device.DeviceId == bId));
+            await WaitSnapshot(right.Runtime, snap => snap.Devices.Any(device => device.DeviceId == aId));
             Console.Error.WriteLine("step discovered " + aId + " " + bId);
             Command(left.Runtime, FrameTypes.StartPairing, bId, null, null, null);
             Console.Error.WriteLine("step pairing requested");
-            await WaitSnapshot(left.Runtime, snap => snap.Pairing is not null);
-            await WaitSnapshot(right.Runtime, snap => snap.Pairing is not null);
+            await WaitSnapshot(left.Runtime, snap => snap.Pairing?.DeviceId == bId);
+            await WaitSnapshot(right.Runtime, snap => snap.Pairing?.DeviceId == aId);
             Command(left.Runtime, FrameTypes.AcceptPairing, bId, null, null, null);
             Command(right.Runtime, FrameTypes.AcceptPairing, aId, null, null, null);
             Console.Error.WriteLine("step accepted");
