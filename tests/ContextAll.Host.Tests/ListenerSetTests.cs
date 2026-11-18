@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Quic;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using ContextAll.Effects;
@@ -9,6 +10,38 @@ namespace ContextAll.Host.Tests;
 
 public sealed class ListenerSetTests
 {
+    [Fact]
+    public async Task An_aborted_handshake_does_not_stop_accepting_connections()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var listener = new InterruptedListener();
+        await using var listeners = new ListenerSet(
+            (_, _) => Task.FromResult<IQuicListener>(listener),
+            (_, _) => Task.CompletedTask,
+            _ => { }, timeout.Token);
+        await listeners.RebuildAsync([IPAddress.Loopback]);
+        await listener.SecondAccept.Task.WaitAsync(timeout.Token);
+    }
+
+    sealed class InterruptedListener : IQuicListener
+    {
+        int count;
+        public IPEndPoint LocalEndPoint => new(IPAddress.Loopback, 42461);
+        public TaskCompletionSource SecondAccept { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async ValueTask<IQuicConnection> AcceptConnectionAsync(CancellationToken cancellationToken = default)
+        {
+            var attempt = Interlocked.Increment(ref count);
+            if (attempt == 1) throw new QuicException(QuicError.ConnectionAborted, null, "handshake interrupted");
+            if (attempt == 2) throw new AuthenticationException("handshake failed");
+            SecondAccept.SetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new OperationCanceledException(cancellationToken);
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     [Fact(Timeout = 30000)]
     public async Task A_mutual_listener_accepts_one_stream()
     {

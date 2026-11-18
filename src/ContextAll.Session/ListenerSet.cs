@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Quic;
 using System.Runtime.Versioning;
+using System.Security.Authentication;
 using ContextAll.Effects;
 
 namespace ContextAll.Session;
@@ -152,8 +153,16 @@ public sealed class ListenerSet : IAsyncDisposable
         {
             while (!token.IsCancellationRequested)
             {
-                var connection = await entry.Listener.AcceptConnectionAsync(token).ConfigureAwait(false);
-                _ = Task.Run(() => accepted(connection, token), token);
+                try
+                {
+                    var connection = await entry.Listener.AcceptConnectionAsync(token).ConfigureAwait(false);
+                    _ = Task.Run(() => accepted(connection, token), CancellationToken.None);
+                }
+                catch (Exception ex) when (ex is AuthenticationException || ex is QuicException
+                    { QuicError: QuicError.ConnectionAborted or QuicError.ConnectionTimeout or QuicError.ConnectionIdle or QuicError.TransportError })
+                {
+                    log("quic-handshake-failed " + ex.GetType().Name + " " + ex.Message);
+                }
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or QuicException or IOException)

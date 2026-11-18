@@ -1119,6 +1119,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or QuicException or InvalidOperationException or SocketException or AuthenticationException)
         {
+            PlatformCrypto.LogDiagnostic("quic-connect-failed " + ex.GetType().Name + " " + ex.Message);
             return (false, null, "connect-failed");
         }
     }
