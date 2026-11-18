@@ -206,7 +206,7 @@ public sealed class NativeSessionBridgeTests
     }
 
     [Fact]
-    public void ConnectEndpoint_PairAndSendFile_WithDeferredCommitHandshake()
+    public async Task ConnectEndpoint_PairAndSendFile_WithDeferredCommitHandshake()
     {
         using var quicScope = new ScopedInMemoryQuicBackend();
         using var dirA = new TempDir();
@@ -230,7 +230,7 @@ public sealed class NativeSessionBridgeTests
         while (((bridgeA.CurrentHost?.ActiveListenerCount ?? 0) == 0 || (bridgeB.CurrentHost?.ActiveListenerCount ?? 0) == 0)
                && DateTime.UtcNow < waitListeners)
         {
-            Thread.Sleep(25);
+            await Task.Delay(25);
         }
 
         Assert.True((bridgeA.CurrentHost?.ActiveListenerCount ?? 0) > 0);
@@ -268,7 +268,7 @@ public sealed class NativeSessionBridgeTests
                 }
             }
 
-            Thread.Sleep(40);
+            await Task.Delay(40);
         }
 
         Assert.True(acceptedA || acceptedB);
@@ -288,15 +288,16 @@ public sealed class NativeSessionBridgeTests
                 break;
             }
 
-            Thread.Sleep(40);
+            await Task.Delay(40);
         }
 
         Assert.True(trusted);
 
         // Disable ask-before-save on Receiver B so file auto-accepts and hits deferred MediaStore commit
-        bridgeB.SubmitCommandJson(
+        using var saveSetting = JsonDocument.Parse(bridgeB.SubmitCommandJson(
             FrameTypes.SetAskBeforeSave,
-            $$"""{"requestId":"44440001","deviceId":"{{bridgeA.CurrentHost?.LocalDeviceId}}","enabled":false}""");
+            $$"""{"requestId":"44440001","deviceId":"{{bridgeA.CurrentHost?.LocalDeviceId}}","enabled":false}"""));
+        Assert.True(saveSetting.RootElement.GetProperty("ok").GetBoolean(), saveSetting.RootElement.ToString());
 
         var payloadPath = Path.Combine(dirA.NoBackup, "hello-bridge.txt");
         File.WriteAllText(payloadPath, "ContextAll NativeAOT QUIC Bridge Test Payload!");
@@ -308,15 +309,18 @@ public sealed class NativeSessionBridgeTests
 
         // Receiver B must emit commitInbound event and complete cleanly once CompleteInboundCommit is called
         var committed = false;
+        var receivedEvents = new List<string>();
         var commitDeadline = DateTime.UtcNow.AddSeconds(8);
         while (DateTime.UtcNow < commitDeadline && !committed)
         {
-            var ev = bridgeB.PollEventJson(100);
+            var ev = bridgeB.PollEventJson(0);
             if (ev is null)
             {
+                await Task.Delay(25);
                 continue;
             }
 
+            receivedEvents.Add(ev);
             using var evDoc = JsonDocument.Parse(ev);
             if (evDoc.RootElement.GetProperty("kind").GetString() == "commitInbound")
             {
@@ -331,8 +335,8 @@ public sealed class NativeSessionBridgeTests
             }
         }
 
-        Assert.True(committed);
-        Assert.True(File.Exists(Path.Combine(dirB.Files, "committed-hello.txt")));
+        Assert.True(committed, $"No inbound commit. Receiver: {bridgeB.GetSnapshotJson()}\nEvents: {string.Join("\n", receivedEvents)}");
+        Assert.Equal(File.ReadAllBytes(payloadPath), File.ReadAllBytes(Path.Combine(dirB.Files, "committed-hello.txt")));
     }
 
     [Fact]
