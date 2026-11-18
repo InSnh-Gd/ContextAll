@@ -36,11 +36,10 @@ public sealed class S05_SoftFailureDegradedDiscoveryScenarioTests
         }
 
         var initialSockets = InProcessServiceHarness.SnapshotUnixSockets();
-        var freePort = NetworkSandbox.GetFreePort(IPAddress.Loopback);
-        var serverEndpoint = new IPEndPoint(IPAddress.Loopback, freePort);
         using var serverCert = OpaqueQuicClient.GenerateValidP256Certificate("CN=ServerNode");
 
-        await using var listener = await QuicLink.ListenMutual(serverEndpoint.Address, serverCert, serverEndpoint.Port);
+        await using var listener = await QuicLink.ListenMutual(IPAddress.Loopback, serverCert, port: 0);
+        var serverEndpoint = listener.LocalEndPoint;
 
         const int clientCount = 6;
         var clientTasks = new List<Task>();
@@ -105,7 +104,11 @@ public sealed class S05_SoftFailureDegradedDiscoveryScenarioTests
         // 4. Resource Leak Audit
         await listener.DisposeAsync();
         Assert.Empty(InProcessServiceHarness.SnapshotUnixSockets().Except(initialSockets));
-        var isPortReusable = NetworkSandbox.IsPortAvailable(freePort, IPAddress.Loopback);
-        Assert.True(isPortReusable);
+        var releaseWait = System.Diagnostics.Stopwatch.StartNew();
+        while (!NetworkSandbox.IsPortAvailable(serverEndpoint.Port, serverEndpoint.Address))
+        {
+            Assert.True(releaseWait.Elapsed < TimeSpan.FromSeconds(3), $"UDP port {serverEndpoint.Port} was not released.");
+            await Task.Delay(25);
+        }
     }
 }
