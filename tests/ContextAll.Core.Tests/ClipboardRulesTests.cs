@@ -92,6 +92,7 @@ public sealed class ClipboardRulesTests
         Assert.Equal("hop", b.Text);
         Assert.Equal(0, b.Notifications);
         Assert.DoesNotContain(b.LastSent, item => item.PeerId == cId);
+        Assert.DoesNotContain(b.OnSyncOpen(cId, [], null, mutual: true), frame => frame.Type == FrameTypes.CrdtDeltaBatch);
     }
 
     [Fact]
