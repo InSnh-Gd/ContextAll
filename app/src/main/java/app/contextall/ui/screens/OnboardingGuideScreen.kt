@@ -82,6 +82,7 @@ import app.contextall.ui.components.ExpressiveGapProgressBar
 import app.contextall.ui.components.ExpressiveGroupTile
 import app.contextall.ui.components.ExpressiveIconBadge
 import app.contextall.ui.components.ExpressiveSwitch
+import androidx.compose.material3.Switch
 import app.contextall.ui.theme.JetBrainsMonoFamily
 import app.contextall.ui.theme.LocalExpressivePalette
 import kotlinx.coroutines.launch
@@ -93,7 +94,9 @@ import kotlinx.coroutines.launch
 fun OnboardingGuideOverlay(
     visible: Boolean,
     onDismiss: () -> Unit,
-    onDismissAndOpenLab: () -> Unit
+    onDismissAndOpenLab: () -> Unit,
+    foregroundClipboardEnabled: Boolean = false,
+    onForegroundClipboardChanged: (Boolean) -> Unit = {}
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -232,6 +235,14 @@ fun OnboardingGuideOverlay(
 
                         val isLastPage = pagerState.currentPage == totalSteps - 1
                         if (isLastPage) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("应用打开时自动读取剪贴板")
+                                Switch(checked = foregroundClipboardEnabled, onCheckedChange = onForegroundClipboardChanged)
+                            }
                             Button(
                                 onClick = onDismiss,
                                 shape = CircleShape,

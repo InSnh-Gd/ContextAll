@@ -49,7 +49,8 @@ internal class NativeSessionController(
     initialDisplayName: String,
     initialDebugMode: Boolean,
     private val backend: NativeSessionBackend = NativeSessionJni,
-    private val onApplyRemoteClipboard: (String) -> Unit = {}
+    private val onApplyRemoteClipboard: (String, String?) -> Unit = { _, _ -> },
+    private val onApplyRemoteAttachment: (String, String, String, String?) -> Unit = { _, _, _, _ -> }
 ) : ShellOperator {
     private val appContext = context.applicationContext
     private val discovery = LanDiscoveryController(appContext, scope, backend)
@@ -78,7 +79,7 @@ internal class NativeSessionController(
 
     private val stagedQueuePaths = LinkedHashMap<String, StagedOutboundFile>()
     private var eventPumpJob: Job? = null
-    private var started = false
+    @Volatile private var started = false
 
     val isNativeReady: Boolean
         get() = backend.isAvailable
@@ -332,8 +333,24 @@ internal class NativeSessionController(
         return true
     }
 
-    fun pushLocalPlainClipboard(text: String) {
-        if (text.isEmpty()) {
+    fun pushCapturedClipboard(text: String) = pushLocalPlainClipboard(text, captured = true)
+
+    fun clipboardHistoryCommand(frameType: Int, body: org.json.JSONObject): org.json.JSONObject? {
+        if (!started) return null
+        return runCatching {
+            body.put("requestId", java.util.UUID.randomUUID().toString().replace("-", ""))
+            org.json.JSONObject(backend.submitCommandJson(frameType, body.toString())).also { result ->
+                if (!result.optBoolean("ok")) {
+                    android.util.Log.w("ContextAllClipboard", "Command $frameType failed: ${result.optString("error")}")
+                }
+            }
+        }.onFailure { error ->
+            android.util.Log.w("ContextAllClipboard", "Command $frameType failed: ${error.javaClass.simpleName}")
+        }.getOrNull()
+    }
+
+    fun pushLocalPlainClipboard(text: String, captured: Boolean = false) {
+        if (text.isEmpty() && !captured) {
             emitNotice(UiEventNotice.ClipboardEmpty)
             return
         }
@@ -343,7 +360,7 @@ internal class NativeSessionController(
             return
         }
 
-        if (!started && !start()) return
+        if (!started) return
         backend.pushClipboardText(text)
         val activePeers = _snapshot.value.devices.count { it.isMutualClipboardActive }
         _snapshot.update { cur ->
@@ -454,6 +471,7 @@ internal class NativeSessionController(
         eventPumpJob = scope.launch(Dispatchers.IO) {
             while (isActive && started) {
                 val eventJson = backend.pollEventJson(350) ?: continue
+                if (!isActive || !started) break
                 handleNativeEvent(eventJson)
             }
         }
@@ -481,7 +499,7 @@ internal class NativeSessionController(
             }
             "clipboard" -> {
                 val text = root.str("text") ?: return
-                onApplyRemoteClipboard(text)
+                onApplyRemoteClipboard(text, root.str("writeId"))
                 val firstMutual = _snapshot.value.devices.firstOrNull { it.isMutualClipboardActive }
                 _snapshot.update { cur ->
                     cur.copy(
@@ -494,6 +512,12 @@ internal class NativeSessionController(
                     )
                 }
                 emitNotice(UiEventNotice.ClipboardReceived(firstMutual?.displayName ?: "远端设备", text))
+            }
+            "clipboardAttachment" -> {
+                val mime = root.str("mime") ?: return
+                val name = root.str("name") ?: return
+                val path = root.str("path") ?: return
+                onApplyRemoteAttachment(mime, name, path, root.str("writeId"))
             }
             "commitInbound" -> {
                 val commitId = root.long("commitId") ?: return

@@ -1,11 +1,9 @@
 package app.contextall.viewmodel
 
 import android.app.Application
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
-import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.contextall.BuildConfig
@@ -13,16 +11,15 @@ import app.contextall.OutboundFile
 import app.contextall.ShellOperator
 import app.contextall.core.EndpointValidator
 import app.contextall.core.FrameTypes
+import app.contextall.core.ProtocolLimits
 import app.contextall.lab.LabSnapshot
 import app.contextall.model.LocalCommand
 import app.contextall.model.SeedDataProfile
 import app.contextall.model.SessionSnapshotUi
 import app.contextall.model.TopTab
 import app.contextall.model.UiEventNotice
-import app.contextall.nativebridge.NativeSessionController
 import app.contextall.service.LinkService
 import java.util.UUID
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -55,25 +52,18 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         !uiPrefs.getBoolean(KEY_HAS_SEEN_ONBOARDING, false)
     )
     val showOnboardingGuide: StateFlow<Boolean> = _showOnboardingGuide.asStateFlow()
+    val foregroundClipboard = MutableStateFlow(uiPrefs.getBoolean("foreground_clipboard", false))
 
-    @Volatile
-    private var lastAppliedRemoteClipboard: String? = null
+    fun setForegroundClipboard(enabled: Boolean) {
+        foregroundClipboard.value = enabled
+        uiPrefs.edit().putBoolean("foreground_clipboard", enabled).apply()
+    }
 
-    private val nativeController = NativeSessionController(
-        context = application,
-        scope = viewModelScope,
-        initialDisplayName = initialDeviceDisplayName(),
-        initialDebugMode = BuildConfig.DEBUG,
-        onApplyRemoteClipboard = { text ->
-            viewModelScope.launch(Dispatchers.Main.immediate) {
-                lastAppliedRemoteClipboard = text
-                copyTextToSystemClipboard("ContextAll Remote", text)
-            }
-        }
-    )
+    private val linkSession = LinkService.session(application)
+    private val nativeController = linkSession.controller
 
     private val lab = LabSnapshot(
-        initialDisplayName = initialDeviceDisplayName(),
+        initialDisplayName = linkSession.displayName,
         initialDebugMode = BuildConfig.DEBUG
     )
 
@@ -109,16 +99,23 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     val notices: SharedFlow<UiEventNotice> = _notices.asSharedFlow()
 
     private val clipboardManager = application.getSystemService(ClipboardManager::class.java)
+    private var clipboardFocused = false
+    private var clipboardRevision = 0L
     private val clipChangedListener = ClipboardManager.OnPrimaryClipChangedListener {
-        val clip = clipboardManager?.primaryClip ?: return@OnPrimaryClipChangedListener
-        if (clip.itemCount <= 0) return@OnPrimaryClipChangedListener
-        val text = clip.getItemAt(0).text?.toString().orEmpty()
-        if (text.isEmpty() || text == lastAppliedRemoteClipboard) {
-            lastAppliedRemoteClipboard = null
+        val revision = ++clipboardRevision
+        if (!clipboardFocused || !foregroundClipboard.value || useLab.value || !LinkService.isRunning.value) {
             return@OnPrimaryClipChangedListener
         }
-        if (!useLab.value) {
-            nativeController.pushClipboard(text)
+        val clip = clipboardManager?.primaryClip ?: return@OnPrimaryClipChangedListener
+        if (clip.itemCount != 1 || linkSession.isOwnClipboard(clip) || linkSession.isSensitive(clip)) {
+            return@OnPrimaryClipChangedListener
+        }
+        val item = clip.getItemAt(0)
+        val uri = item.uri
+        if (uri?.scheme == "content") {
+            pushClipboardUri(uri, revision)
+        } else {
+            item.text?.toString()?.let(nativeController::pushCapturedClipboard)
         }
     }
 
@@ -130,21 +127,26 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
                 _notices.tryEmit(notice)
             }
         }
-        clipboardManager?.addPrimaryClipChangedListener(clipChangedListener)
         LinkService.start(application)
         viewModelScope.launch {
             LinkService.isRunning.collect { running ->
                 chrome.update { it.copy(linkServiceRunning = running) }
-                if (!useLab.value) {
-                    nativeController.setLinkServiceState(running)
-                }
             }
         }
     }
 
+    fun setClipboardFocused(focused: Boolean) {
+        if (clipboardFocused == focused) return
+        clipboardFocused = focused
+        if (focused) {
+            clipboardManager?.addPrimaryClipChangedListener(clipChangedListener)
+        } else {
+            clipboardManager?.removePrimaryClipChangedListener(clipChangedListener)
+        }
+    }
+
     override fun onCleared() {
-        clipboardManager?.removePrimaryClipChangedListener(clipChangedListener)
-        nativeController.stop()
+        setClipboardFocused(false)
         lab.stop()
         super.onCleared()
     }
@@ -356,6 +358,14 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
 
     fun pushSystemClipboard() {
         val clip = clipboardManager?.primaryClip
+        if (clip != null && linkSession.isSensitive(clip)) return
+        if (clip?.itemCount == 1 && !useLab.value) {
+            val uri = clip.getItemAt(0).uri
+            if (uri?.scheme == "content") {
+                pushClipboardUri(uri, ++clipboardRevision)
+                return
+            }
+        }
         val text = if (clip != null && clip.itemCount > 0) {
             clip.getItemAt(0).text?.toString().orEmpty()
         } else {
@@ -364,15 +374,64 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         operator().pushClipboard(text)
     }
 
+    private fun pushClipboardUri(uri: Uri, revision: Long) {
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            val group = clipboardHistoryCommand(FrameTypes.READ_CLIPBOARD_HISTORY, org.json.JSONObject())
+                ?.optJSONObject("clipboardHistory") ?: return@launch
+            if (!group.has("groupOwner") || group.isNull("groupOwner") || revision != clipboardRevision || !clipboardFocused) return@launch
+            val folder = java.io.File(app.cacheDir, "clipboard-capture/${UUID.randomUUID()}")
+            try {
+                val staged = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    runCatching {
+                        val resolver = app.contentResolver
+                        val mime = resolver.getType(uri)
+                        val providerName = resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                            ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                        val fileName = providerName?.takeIf { it.isNotBlank() && it.length <= 128 && it.none { ch -> ch == '/' || ch == '\\' || ch.isISOControl() } }
+                            ?.takeUnless { it.startsWith('.') } ?: if (mime == "image/png") "clipboard.png" else "clipboard.bin"
+                        folder.mkdirs()
+                        val file = java.io.File(folder, fileName)
+                        val limit = ProtocolLimits.MAX_CLIPBOARD_ATTACHMENT_BYTES
+                        resolver.openInputStream(uri)?.use { input ->
+                            file.outputStream().use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                var total = 0
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count < 0) break
+                                    total += count
+                                    if (total > limit) return@runCatching null
+                                    output.write(buffer, 0, count)
+                                }
+                            }
+                        } ?: return@runCatching null
+                        org.json.JSONObject().put("path", file.absolutePath).put("displayName", mime)
+                    }.getOrNull()
+                }
+                if (staged != null && clipboardFocused && revision == clipboardRevision) {
+                    clipboardHistoryCommand(FrameTypes.PUSH_CLIPBOARD_ATTACHMENT, staged)
+                }
+            } finally {
+                folder.deleteRecursively()
+            }
+        }
+    }
+
     fun pushCustomClipboardText(text: String) {
-        lastAppliedRemoteClipboard = text
-        clipboardManager?.setPrimaryClip(ClipData.newPlainText("ContextAll", text))
+        copyTextToSystemClipboard("ContextAll", text)
         operator().pushClipboard(text)
     }
 
     fun copyTextToSystemClipboard(label: String, value: String) {
-        clipboardManager?.setPrimaryClip(ClipData.newPlainText(label, value))
+        linkSession.writeClipboard(label, value)
     }
+
+    suspend fun clipboardHistoryCommand(frameType: Int, body: org.json.JSONObject): org.json.JSONObject? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            if (useLab.value || !LinkService.isRunning.value) null
+            else nativeController.clipboardHistoryCommand(frameType, body)
+        }
 
     fun resetIdentity() {
         operator().resetIdentity()
@@ -389,7 +448,7 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
     fun switchSeedProfile(profile: SeedDataProfile) {
         when (profile) {
             SeedDataProfile.DEVELOPER_LAB -> {
-                nativeController.stop()
+                linkSession.setLabMode(true)
                 lab.start()
                 useLab.value = true
             }
@@ -399,9 +458,7 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 lab.stop()
                 useLab.value = false
-                if (LinkService.isRunning.value) {
-                    nativeController.start()
-                }
+                linkSession.setLabMode(false)
                 _notices.tryEmit(UiEventNotice.DebugSeedSwitched(isDeveloperProfile = false))
             }
         }
@@ -431,7 +488,6 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
         lab.simulateRemoteClipboardDelta()
         val latest = lab.snapshot.value.clipboardState.lastSyncedText
         if (latest.isNotEmpty()) {
-            lastAppliedRemoteClipboard = latest
             copyTextToSystemClipboard("ContextAll Remote", latest)
         }
     }
@@ -460,7 +516,7 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
                 entry.summary
             )
         }
-        clipboardManager?.setPrimaryClip(ClipData.newPlainText("ContextAll Frame Trace", formatted))
+        copyTextToSystemClipboard("ContextAll Frame Trace", formatted)
     }
 
     fun clearDebugFrameLogs() {
@@ -481,15 +537,6 @@ class ContextAllViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun nextRequestId(): String =
         UUID.randomUUID().toString().replace("-", "").lowercase()
-
-    private fun initialDeviceDisplayName(): String {
-        val model = Build.MODEL?.trim().orEmpty()
-        return if (model.isNotEmpty() && model.length <= 48) {
-            "$model · ContextAll"
-        } else {
-            "Android · ContextAll"
-        }
-    }
 
     companion object {
         private const val PREFS_NAME = "contextall_ui_prefs"
