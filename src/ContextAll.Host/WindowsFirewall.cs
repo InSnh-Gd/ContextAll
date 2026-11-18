@@ -142,11 +142,14 @@ interface INetworkListManager
 
 [ComImport]
 [Guid("DCB00005-570F-4A9B-8D69-199FDBA5723B")]
-[InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
+[InterfaceType(ComInterfaceType.InterfaceIsDual)]
 interface INetworkConnection
 {
     INetwork GetNetwork();
-
+    short get_IsConnectedToInternet();
+    short get_IsConnected();
+    int GetConnectivity();
+    Guid GetConnectionId();
     Guid GetAdapterId();
 }
 
