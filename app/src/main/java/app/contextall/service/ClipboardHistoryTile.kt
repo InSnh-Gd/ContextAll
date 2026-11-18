@@ -1,5 +1,6 @@
 package app.contextall.service
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -14,11 +15,14 @@ class ClipboardHistoryTile : TileService() {
             if (Build.VERSION.SDK_INT >= 34) {
                 startActivityAndCollapse(openHistoryIntent(this))
             } else {
-                @Suppress("DEPRECATION")
-                startActivityAndCollapse(historyActivity(this))
+                openLegacyHistory()
             }
         }
     }
+
+    @SuppressLint("StartActivityAndCollapseDeprecated")
+    @Suppress("DEPRECATION")
+    private fun openLegacyHistory() = startActivityAndCollapse(historyActivity(this))
 
     companion object {
         private fun historyActivity(context: Context) = Intent(context, MainActivity::class.java)
