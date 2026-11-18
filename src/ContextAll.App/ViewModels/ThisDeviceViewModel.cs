@@ -109,6 +109,7 @@ public sealed class ThisDeviceViewModel : ViewModelBase
     {
         "wayland" => "Wayland 原生",
         "x11" => "X11 回退",
+        "windows" => "Windows 原生",
         _ => "未就绪",
     };
 
