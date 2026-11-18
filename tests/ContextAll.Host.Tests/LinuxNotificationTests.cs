@@ -221,16 +221,18 @@ public sealed class LinuxNotificationTests
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            ConnectViaPipes(hostA.Engine, hostB.Engine);
+            ConnectViaPipes(hostA.Engine, hostB.Engine, out var disconnectPairing);
 
             var pairNote = await WaitForNotificationAsync(sinkB, 1, cts.Token);
             sinkB.EmitAction(pairNote.Id, "reject");
             await WaitUntilAsync(() => SnapshotOf(hostB.Engine).Pairing is null, cts.Token);
+            await disconnectPairing();
             Assert.False(hostB.Engine.IsTrusted(hostA.Engine.LocalDeviceId));
 
             // Re-open pairing link to establish trust and verify file accept + clipboard silence.
             ConnectViaPipes(hostA.Engine, hostB.Engine);
             var secondPairNote = await WaitForNotificationAsync(sinkB, 2, cts.Token);
+            await WaitUntilAsync(() => SnapshotOf(hostA.Engine).Pairing?.DeviceId == hostB.Engine.LocalDeviceId, cts.Token);
             sinkB.EmitAction(secondPairNote.Id, "accept");
             lock (hostA.Gate)
             {
