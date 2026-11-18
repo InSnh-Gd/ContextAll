@@ -31,6 +31,7 @@ public sealed class PeerLink
     bool groupRequested;
     uint nextGroupStream = FrameTypes.FirstBulkStream;
     IncomingClipboardItem? groupIncoming;
+    IncomingClipboardItem? groupPartial;
     long groupQueuedBytes;
 
     public PeerLink(SessionHost host, IQuicConnection? connection, Stream stream, byte[] remoteSpki, bool initiated)
@@ -399,7 +400,7 @@ public sealed class PeerLink
 
         if (!host.ClipboardGroup.IsOwner && host.ClipboardGroup.Owner == RemoteId)
         {
-            Post(GroupHello(new ClipboardGroupPermit(null, 0, Request: true)));
+            Post(GroupHello(new ClipboardGroupPermit(null, 0, Request: true, Resume: OfferGroupResume())));
         }
     }
 
@@ -407,6 +408,7 @@ public sealed class PeerLink
     {
         GroupReady = false;
         DropIncomingGroupItem();
+        DropGroupPartial();
         lock (writeGate)
         {
             outbox.Discard(frame => frame.Type is FrameTypes.ClipboardGroupItem or FrameTypes.ClipboardGroupChunk);
@@ -423,16 +425,27 @@ public sealed class PeerLink
     static Frame GroupHello(ClipboardGroupPermit permit) => FrameMessages.Json(FrameTypes.ClipboardGroupHello,
         2, 0, FrameTypes.SyncStream, permit, ProtocolJsonContext.Default.ClipboardGroupPermit);
 
-    void AnswerGroupRequest()
+    ClipboardGroupResume? OfferGroupResume() => (groupPartial ??= host.ClaimClipboardPartial(RemoteId))?.Resume;
+
+    void DropGroupPartial(bool keepPartial = false)
+    {
+        var partial = groupPartial;
+        groupPartial = null;
+        if (partial is null) return;
+        if (keepPartial) host.KeepClipboardPartial(RemoteId, partial);
+        else partial.Dispose();
+    }
+
+    void AnswerGroupRequest(ClipboardGroupResume? resume = null)
     {
         var group = host.ClipboardGroup;
         var permit = group.Admit(RemoteId, group.IsInvited(RemoteId));
         var alreadyReady = GroupReady;
         GroupReady = permit is not null;
-        Post(GroupHello(permit ?? new ClipboardGroupPermit(null, 0)));
+        Post(GroupHello(permit is null ? new ClipboardGroupPermit(null, 0) : permit with { Resume = OfferGroupResume() }));
         if (!alreadyReady && permit is not null)
         {
-            host.ReplayGroup(this, permit.Since);
+            host.ReplayGroup(this, permit.Since, resume);
         }
     }
 
@@ -445,7 +458,7 @@ public sealed class PeerLink
             if (permit.Request)
             {
                 groupRequested = true;
-                AnswerGroupRequest();
+                AnswerGroupRequest(permit.Resume);
                 return;
             }
 
@@ -454,6 +467,7 @@ public sealed class PeerLink
             {
                 groupRequested = false;
                 ResetGroupQueue();
+                host.ForgetClipboardPartial(RemoteId);
                 group.Leave(RemoteId);
                 return;
             }
@@ -466,12 +480,13 @@ public sealed class PeerLink
             if (!accepted || previous != group.Group || previousSince != group.Since)
             {
                 ResetGroupQueue();
+                host.ForgetClipboardPartial(RemoteId);
             }
 
             GroupReady = accepted;
             if (GroupReady && (!alreadyReady || previous != group.Group || previousSince != group.Since))
             {
-                host.ReplayGroup(this, permit.Since);
+                host.ReplayGroup(this, permit.Since, permit.Resume);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -480,14 +495,14 @@ public sealed class PeerLink
         }
     }
 
-    internal void SendGroupItem(ClipboardGroupItem item, byte[] bytes)
+    internal void SendGroupItem(ClipboardGroupItem item, byte[] bytes, int start = 0)
     {
         var streamId = nextGroupStream++;
         var frames = new List<Frame>
         {
-            FrameMessages.Json(FrameTypes.ClipboardGroupItem, 2, 0, streamId, item, ProtocolJsonContext.Default.ClipboardGroupItem),
+            FrameMessages.Json(FrameTypes.ClipboardGroupItem, 2, 0, streamId, item with { Offset = start }, ProtocolJsonContext.Default.ClipboardGroupItem),
         };
-        for (var offset = 0; offset < bytes.Length; offset += FrameLimits.MaxPayloadBytes)
+        for (var offset = start; offset < bytes.Length; offset += FrameLimits.MaxPayloadBytes)
         {
             var count = Math.Min(bytes.Length - offset, FrameLimits.MaxPayloadBytes);
             frames.Add(new Frame(count, FrameTypes.ClipboardGroupChunk, 2, 0, streamId, bytes.AsMemory(offset, count)));
@@ -496,7 +511,7 @@ public sealed class PeerLink
         lock (writeGate)
         {
             const int maxQueuedBytes = 40 * 1024 * 1024;
-            if (closed || draining || groupQueuedBytes + bytes.Length + frames[0].Payload.Length > maxQueuedBytes) return;
+            if (closed || draining || groupQueuedBytes + bytes.Length - start + frames[0].Payload.Length > maxQueuedBytes) return;
             foreach (var frame in frames)
             {
                 outbox.Enqueue(frame);
@@ -512,6 +527,20 @@ public sealed class PeerLink
         DropIncomingGroupItem();
         var item = ControlJson.Decode(frame.Payload.Span, ProtocolJsonContext.Default.ClipboardGroupItem).Value;
         if (item is null || !host.ClipboardGroup.Allows(RemoteId, item, GroupReady) || host.HasGroupItem(item)) return;
+        if (item.Offset != 0)
+        {
+            if (groupPartial is { } partial && partial.TryResume(frame.StreamId, item))
+            {
+                groupIncoming = partial;
+                groupPartial = null;
+            }
+            return;
+        }
+        if (groupPartial?.Item is { } previous && previous.Group == item.Group &&
+            previous.Origin == item.Origin && previous.Sequence == item.Sequence)
+        {
+            DropGroupPartial();
+        }
         if (item.Bytes == 0)
         {
             host.ReceiveGroupItem(this, item, []);
@@ -552,11 +581,14 @@ public sealed class PeerLink
         }
     }
 
-    internal void DropIncomingGroupItem()
+    internal void DropIncomingGroupItem(bool keepPartial = false)
     {
         var current = groupIncoming;
         groupIncoming = null;
-        current?.Dispose();
+        if (keepPartial) DropGroupPartial(keepPartial: current?.Resume is null);
+        if (current is null) return;
+        if (keepPartial) host.KeepClipboardPartial(RemoteId, current);
+        else current.Dispose();
     }
 
     public void Collect(List<FilePromptSnapshotPayload> prompts, List<TransferSnapshotPayload> transfers)

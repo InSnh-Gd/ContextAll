@@ -29,9 +29,24 @@ internal sealed class IncomingClipboardItem : IDisposable
         stream = new FileStream(Path.Combine(directory, Guid.NewGuid().ToString("N")), options);
     }
 
-    public uint Id { get; }
-    public ClipboardGroupItem Item { get; }
+    public uint Id { get; private set; }
+    public ClipboardGroupItem Item { get; private set; }
     public bool Complete => stream.Length == Item.Bytes;
+    public ClipboardGroupResume? Resume => Item.Mime is not null && stream.Length > 0 && !Complete
+        ? new(Item.Group, Item.Origin, Item.Sequence, Item.Sha256, checked((int)stream.Length)) : null;
+
+    public bool TryResume(uint id, ClipboardGroupItem item)
+    {
+        if (item.Offset <= 0 || item.Offset != stream.Length ||
+            item with { Replay = false, RelayedAt = 0, Offset = 0 } != Item with { Replay = false, RelayedAt = 0, Offset = 0 })
+        {
+            return false;
+        }
+
+        Id = id;
+        Item = item with { Offset = 0 };
+        return true;
+    }
 
     public bool Append(ReadOnlySpan<byte> bytes)
     {

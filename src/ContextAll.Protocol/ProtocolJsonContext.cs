@@ -47,10 +47,12 @@ public sealed record DeltaPayload(
 
 public sealed record ClipboardHistoryEntry(string Id, string Origin, string Source, string Preview, long CopiedAt);
 
-public sealed record ClipboardGroupPermit(string? Group, long Since, bool Request = false);
+public sealed record ClipboardGroupResume(string Group, string Origin, long Sequence, string Sha256, int Offset);
+
+public sealed record ClipboardGroupPermit(string? Group, long Since, bool Request = false, ClipboardGroupResume? Resume = null);
 
 public sealed record ClipboardGroupItem(string Group, string Origin, long Sequence, long Milliseconds, uint Counter, int Bytes, string Sha256, bool Replay, long RelayedAt = 0,
-    string? Mime = null, string? Name = null);
+    string? Mime = null, string? Name = null, int Offset = 0);
 
 public sealed record ClipboardHistoryPage(bool Enabled, int RetentionDays, ClipboardHistoryEntry[] Entries, int? NextOffset, string? GroupOwner = null);
 

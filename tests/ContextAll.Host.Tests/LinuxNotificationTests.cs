@@ -334,12 +334,13 @@ public sealed class LinuxNotificationTests
     static (PeerLink Left, PeerLink Right) ConnectViaPipes(SessionHost hostA, SessionHost hostB) =>
         ConnectViaPipes(hostA, hostB, out _);
 
-    internal static (PeerLink Left, PeerLink Right) ConnectViaPipes(SessionHost hostA, SessionHost hostB, out Func<Task> disconnect)
+    internal static (PeerLink Left, PeerLink Right) ConnectViaPipes(SessionHost hostA, SessionHost hostB, out Func<Task> disconnect,
+        Func<ReadOnlyMemory<byte>, bool>? forwardRight = null)
     {
         var aToB = new Pipe();
         var bToA = new Pipe();
         var streamA = new DuplexPipeStream(bToA.Reader.AsStream(), aToB.Writer.AsStream());
-        var streamB = new DuplexPipeStream(aToB.Reader.AsStream(), bToA.Writer.AsStream());
+        var streamB = new DuplexPipeStream(aToB.Reader.AsStream(), bToA.Writer.AsStream(), forwardRight);
         var linkA = new PeerLink(hostA, null, streamA, hostB.LocalSpki, initiated: true);
         var linkB = new PeerLink(hostB, null, streamB, hostA.LocalSpki, initiated: false);
         hostA.Track(linkA);
@@ -441,7 +442,7 @@ public sealed class LinuxNotificationTests
         }
     }
 
-    sealed class DuplexPipeStream(Stream readStream, Stream writeStream) : Stream
+    sealed class DuplexPipeStream(Stream readStream, Stream writeStream, Func<ReadOnlyMemory<byte>, bool>? forward = null) : Stream
     {
         public override bool CanRead => true;
         public override bool CanSeek => false;
@@ -458,7 +459,7 @@ public sealed class LinuxNotificationTests
             readStream.ReadAsync(buffer, offset, count, cancellationToken);
         public override void Write(byte[] buffer, int offset, int count) => writeStream.Write(buffer, offset, count);
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
-            writeStream.WriteAsync(buffer, cancellationToken);
+            forward?.Invoke(buffer) == false ? ValueTask.CompletedTask : writeStream.WriteAsync(buffer, cancellationToken);
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
             writeStream.WriteAsync(buffer, offset, count, cancellationToken);
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();

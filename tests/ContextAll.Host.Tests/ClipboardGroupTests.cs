@@ -6,6 +6,62 @@ namespace ContextAll.Host.Tests;
 
 public sealed class ClipboardGroupTests
 {
+    [Theory]
+    [InlineData(true, FrameLimits.MaxPayloadBytes + 321)]
+    [InlineData(false, FrameLimits.MaxPayloadBytes + 321)]
+    [InlineData(true, FrameLimits.MaxClipboardAttachmentBytes)]
+    public async Task Reconnect_sends_only_the_missing_attachment_bytes(bool ownerSends, int size)
+    {
+        var root = Directory.CreateTempSubdirectory("contextall-clipboard-resume-");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            using var owner = SessionHost.CreateIsolated(Path.Combine(root.FullName, "owner"));
+            using var member = SessionHost.CreateIsolated(Path.Combine(root.FullName, "member"));
+            Trust(owner, member);
+            Trust(member, owner);
+            GroupCommand(owner, owner: "self");
+            GroupCommand(owner, member: member.LocalDeviceId, invited: true);
+            GroupCommand(member, owner: owner.LocalDeviceId);
+            var (sender, receiver) = ownerSends ? (owner, member) : (member, owner);
+            var chunks = 0;
+            var (link, _) = LinuxNotificationTests.ConnectViaPipes(receiver, sender, out var disconnect,
+                buffer => buffer.Span[4] != FrameTypes.ClipboardGroupChunk || Interlocked.Increment(ref chunks) == 1);
+            try
+            {
+                await WaitUntil(() => Ready(receiver, link), timeout.Token);
+                var payload = new byte[size];
+                new Random(73).NextBytes(payload);
+                Assert.Null(sender.PushClipboardAttachment(new ClipboardAttachment(ClipboardAttachment.FileType, "partial.bin", payload)));
+                var incoming = Path.Combine(receiver.ClipboardStateDirectory, "clipboard-incoming");
+                await WaitUntil(() => Directory.Exists(incoming) && Directory.EnumerateFiles(incoming)
+                    .Any(path => new FileInfo(path).Length == FrameLimits.MaxPayloadBytes), timeout.Token);
+                await disconnect();
+
+                var replayBytes = 0;
+                (link, _) = LinuxNotificationTests.ConnectViaPipes(receiver, sender, out disconnect, buffer =>
+                {
+                    if (buffer.Span[4] == FrameTypes.ClipboardGroupChunk)
+                    {
+                        Interlocked.Add(ref replayBytes, buffer.Length - FrameLimits.HeaderBytes);
+                    }
+                    return true;
+                });
+                var entry = await HistoryEntry(receiver, "partial.bin", timeout.Token);
+                Assert.Equal(payload, File.ReadAllBytes(Path.Combine(receiver.ClipboardStateDirectory, "clipboard-history", entry.Id + ".txt")));
+                Assert.Equal(size - FrameLimits.MaxPayloadBytes, Volatile.Read(ref replayBytes));
+            }
+            finally
+            {
+                await disconnect();
+            }
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public async Task A_group_relays_a_file_and_catches_up_after_reconnect_without_applying_old_content()
     {

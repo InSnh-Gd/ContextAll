@@ -56,6 +56,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     readonly System.Collections.Generic.HashSet<string> dialing = [];
     readonly List<PeerLink> links = [];
     readonly List<OnLinkPrefix> prefixes = [];
+    readonly Dictionary<string, (IncomingClipboardItem Item, long Expires)> clipboardPartials = [];
     readonly CancellationTokenSource stop = new();
     readonly SemaphoreSlim rebuildGate = new(1, 1);
     CancellationTokenSource? run;
@@ -272,6 +273,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             try
             {
                 clipboardHistory.Cleanup(ClipboardNow());
+                foreach (var pair in clipboardPartials.Where(pair => pair.Value.Expires <= ClipboardNow()).ToArray())
+                {
+                    ForgetClipboardPartial(pair.Key);
+                }
                 clipboard?.CleanAttachmentCache(clipboardHistory.RetentionDays);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -332,6 +337,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             }
 
             ClipboardGroup.Invite(member, invited);
+            if (!invited) ForgetClipboardPartial(member);
             Live(member)?.RefreshGroup();
             return null;
         }
@@ -357,6 +363,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             Live(previous)?.LeaveGroup();
         }
 
+        if (owner != ClipboardGroup.Owner)
+        {
+            foreach (var peer in clipboardPartials.Keys.ToArray()) ForgetClipboardPartial(peer);
+        }
         var error = ClipboardGroup.Configure(owner.Length == 0 ? null : owner);
         foreach (var link in links.Where(link => link.Entered && !link.Closed))
         {
@@ -367,7 +377,34 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         return error;
     }
 
-    internal void ReplayGroup(PeerLink link, long since)
+    internal IncomingClipboardItem? ClaimClipboardPartial(string peer)
+    {
+        if (!clipboardPartials.Remove(peer, out var partial)) return null;
+        if (partial.Expires > ClipboardNow() && ClipboardGroup.Allows(peer, partial.Item.Item, active: true))
+        {
+            return partial.Item;
+        }
+        partial.Item.Dispose();
+        return null;
+    }
+
+    internal void ForgetClipboardPartial(string peer)
+    {
+        if (clipboardPartials.Remove(peer, out var partial)) partial.Item.Dispose();
+    }
+
+    internal void KeepClipboardPartial(string peer, IncomingClipboardItem item)
+    {
+        ForgetClipboardPartial(peer);
+        if (!disposed && item.Resume is not null && ClipboardGroup.Allows(peer, item.Item, active: true))
+        {
+            if (clipboardPartials.Count >= 8) ForgetClipboardPartial(clipboardPartials.MinBy(pair => pair.Value.Expires).Key);
+            clipboardPartials.Add(peer, (item, ClipboardNow() + 10 * 60_000));
+        }
+        else item.Dispose();
+    }
+
+    internal void ReplayGroup(PeerLink link, long since, ClipboardGroupResume? resume)
     {
         if (ClipboardGroup.Group is not { } group) return;
         try
@@ -376,7 +413,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
             {
                 if (!ClipboardGroup.IsOwner || item.Origin == LocalDeviceId || ClipboardGroup.MemberSince(item.Origin) is not null)
                 {
-                    link.SendGroupItem(item, bytes);
+                    var offset = resume is { Offset: > 0 } && item.Mime is not null && resume.Offset < bytes.Length &&
+                        resume.Group == item.Group && resume.Origin == item.Origin && resume.Sequence == item.Sequence &&
+                        resume.Sha256 == item.Sha256 ? resume.Offset : 0;
+                    link.SendGroupItem(item, bytes, offset);
                 }
             }
         }
@@ -756,6 +796,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         {
             trust.Remove(deviceId);
             ClipboardGroup.Revoke(deviceId);
+            ForgetClipboardPartial(deviceId);
             if (!ClipboardGroup.IsOwner && ClipboardGroup.Owner == deviceId)
             {
                 ClipboardGroup.Configure(null);
@@ -872,7 +913,7 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
     {
         lock (Gate)
         {
-            link.DropIncomingGroupItem();
+            link.DropIncomingGroupItem(keepPartial: true);
             if (!links.Remove(link))
             {
                 if (!links.Any(item => item.RemoteId == link.RemoteId && !item.Closed))
@@ -1132,6 +1173,10 @@ public sealed class SessionHost : IAsyncDisposable, IDisposable
         }
 
         disposed = true;
+        lock (Gate)
+        {
+            foreach (var peer in clipboardPartials.Keys.ToArray()) ForgetClipboardPartial(peer);
+        }
         stop.Cancel();
         run?.Cancel();
         if (discovery is not null)
