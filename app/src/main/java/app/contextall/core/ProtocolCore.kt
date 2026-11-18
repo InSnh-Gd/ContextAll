@@ -22,6 +22,8 @@ object FrameTypes {
     const val ACCEPT_FILE: Int = 73
     const val REJECT_FILE: Int = 74
     const val CANCEL_TRANSFER: Int = 75
+    const val READ_CLIPBOARD_HISTORY: Int = 78
+    const val CONFIGURE_CLIPBOARD_HISTORY: Int = 79
 
     const val SNAPSHOT: Int = 80
     const val DEVICE_CHANGED: Int = 81
@@ -30,6 +32,10 @@ object FrameTypes {
     const val FILE_PROMPT: Int = 84
     const val TRANSFER_PROGRESS: Int = 85
     const val TRANSFER_ENDED: Int = 86
+    const val USE_CLIPBOARD_HISTORY: Int = 87
+    const val CONFIGURE_CLIPBOARD_GROUP: Int = 88
+    const val PUSH_CLIPBOARD_ATTACHMENT: Int = 89
+    const val CONFIRM_CLIPBOARD_WRITE: Int = 90
     const val COMMAND_RESULT: Int = 96
 }
 
@@ -38,6 +44,7 @@ object ProtocolLimits {
     const val SEGMENT_SIZE: Int = MAX_PAYLOAD_BYTES - 36 // 65,500 bytes
     const val MAX_FILE_BYTES: Long = 1_000_000_000L
     const val MAX_CLIPBOARD_BYTES: Int = 1024 * 1024 // 1 MiB
+    const val MAX_CLIPBOARD_ATTACHMENT_BYTES: Int = 10 * 1024 * 1024
     const val PROMPT_TIMEOUT_MS: Long = 60_000L
     const val WINDOW_SEGMENTS: Int = 8
     const val DEFAULT_QUIC_PORT: Int = 42461
