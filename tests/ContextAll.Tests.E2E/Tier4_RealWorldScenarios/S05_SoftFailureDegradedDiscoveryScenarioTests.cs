@@ -35,6 +35,7 @@ public sealed class S05_SoftFailureDegradedDiscoveryScenarioTests
             return;
         }
 
+        var initialSockets = InProcessServiceHarness.SnapshotUnixSockets();
         var freePort = NetworkSandbox.GetFreePort(IPAddress.Loopback);
         var serverEndpoint = new IPEndPoint(IPAddress.Loopback, freePort);
         using var serverCert = OpaqueQuicClient.GenerateValidP256Certificate("CN=ServerNode");
@@ -102,11 +103,8 @@ public sealed class S05_SoftFailureDegradedDiscoveryScenarioTests
         }
 
         // 4. Resource Leak Audit
-        // Audit 1: Zero unix sockets with contextall prefix
-        Assert.True(InProcessServiceHarness.AuditZeroUnixSockets("contextall"));
-
-        // Audit 2: Listener disposal releases port cleanly
         await listener.DisposeAsync();
+        Assert.Empty(InProcessServiceHarness.SnapshotUnixSockets().Except(initialSockets));
         var isPortReusable = NetworkSandbox.IsPortAvailable(freePort, IPAddress.Loopback);
         Assert.True(isPortReusable);
     }

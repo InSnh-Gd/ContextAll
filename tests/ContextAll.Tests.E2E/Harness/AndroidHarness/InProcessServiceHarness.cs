@@ -74,30 +74,15 @@ public sealed class InProcessServiceHarness : IAsyncDisposable
     /// <summary>
     /// Audits /proc/net/unix to verify zero Unix domain sockets are opened by the in-process service.
     /// </summary>
-    public static bool AuditZeroUnixSockets(string searchFilter = "contextall")
-    {
-        if (!File.Exists("/proc/net/unix"))
-        {
-            return true;
-        }
+    public static bool AuditZeroUnixSockets(string searchFilter = "contextall") =>
+        SnapshotUnixSockets(searchFilter).Length == 0;
 
-        try
-        {
-            var lines = File.ReadAllLines("/proc/net/unix");
-            foreach (var line in lines)
-            {
-                if (line.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-        catch
-        {
-            return true;
-        }
-    }
+    public static string[] SnapshotUnixSockets(string searchFilter = "contextall") =>
+        OperatingSystem.IsLinux()
+            ? File.ReadLines("/proc/net/unix")
+                .Where(line => line.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
+                .ToArray()
+            : [];
 
     static LanHost CreateIsolatedHost(string root)
     {
