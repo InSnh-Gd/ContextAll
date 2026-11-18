@@ -203,10 +203,10 @@ public sealed class WindowsDaemonTests
     }
 
     [Fact]
-    public void Firewall_script_parses_and_dry_run_lists_both_ports()
+    public async Task Firewall_script_parses_and_dry_run_lists_both_ports()
     {
         var path = Path.Combine(RepoRoot(), "packaging/windows/install-firewall.ps1");
-        var shell = ResolvePowerShell();
+        var shell = await ResolvePowerShell();
         if (shell is null)
         {
             var script = File.ReadAllText(path);
@@ -215,11 +215,12 @@ public sealed class WindowsDaemonTests
             return;
         }
 
-        var parse = Run(shell, ["-NoProfile", "-NonInteractive", "-Command",
+        var parse = await Run(shell, ["-NoProfile", "-NonInteractive", "-Command",
             "$null = [System.Management.Automation.Language.Parser]::ParseFile('" + path.Replace("'", "''") + "', [ref]$null, [ref]$errs); if ($errs) { $errs | ForEach-Object { $_.ToString() }; exit 1 }"]);
         Assert.Equal(0, parse.Code);
 
-        var dryRun = Run(shell, ["-NoProfile", "-NonInteractive", "-File", path, "-WhatIf"]);
+        var dryRun = await Run(shell, ["-NoProfile", "-NonInteractive", "-File", path, "-WhatIf"]);
+        Assert.Equal(0, dryRun.Code);
         Assert.Contains("42461", dryRun.Text, StringComparison.Ordinal);
         Assert.Contains("42462", dryRun.Text, StringComparison.Ordinal);
         Assert.Contains("Private", dryRun.Text, StringComparison.Ordinal);
@@ -272,24 +273,14 @@ public sealed class WindowsDaemonTests
         return directory?.FullName ?? throw new InvalidOperationException("repo");
     }
 
-    static string? ResolvePowerShell()
+    static async Task<string?> ResolvePowerShell()
     {
         foreach (var name in new[] { "pwsh", "powershell" })
         {
             try
             {
-                var probe = Process.Start(new ProcessStartInfo(name, "-NoProfile -NonInteractive -Command exit 0")
-                {
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                });
-                if (probe is null)
-                {
-                    continue;
-                }
-
-                probe.WaitForExit(3000);
-                if (probe.ExitCode == 0)
+                var probe = await Run(name, ["-NoProfile", "-NonInteractive", "-Command", "exit 0"]);
+                if (probe.Code == 0)
                 {
                     return name;
                 }
@@ -302,7 +293,7 @@ public sealed class WindowsDaemonTests
         return null;
     }
 
-    static (int Code, string Text) Run(string fileName, IReadOnlyList<string> arguments)
+    static async Task<(int Code, string Text)> Run(string fileName, IReadOnlyList<string> arguments)
     {
         var start = new ProcessStartInfo(fileName)
         {
@@ -315,10 +306,19 @@ public sealed class WindowsDaemonTests
         }
 
         using var process = Process.Start(start) ?? throw new InvalidOperationException(fileName);
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit(15000);
-        return (process.ExitCode, output + error);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var error = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+            return (process.ExitCode, await output + await error);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw new TimeoutException($"{fileName} did not complete within 30 seconds.");
+        }
     }
 
     sealed class FakeFirewallProfile : IFirewallProfile
